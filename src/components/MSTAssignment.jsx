@@ -91,7 +91,7 @@ import {
 
 
 
- 
+
 
 
 
@@ -369,20 +369,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       )}
 
-      <SectionSurface className="mb-4">
-        <SectionHeader
-          title="Danh sách gán MST"
-          description="Quản lý mapping MST, tìm nhanh theo công ty, rồi xuất hoặc lưu working set hiện tại."
-          meta={
-            <>
-              <span className="ds-pill">{filtered.length} dòng đang hiển thị</span>
-              {leadViewEnabled ? <span className="ds-pill">Lead-view</span> : null}
-              {selectedFileName ? <span className="ds-pill">Đã chọn: {selectedFileName}</span> : null}
-            </>
-          }
-        />
+      <div className="mb-4 bg-white/40 backdrop-blur-md rounded-xl p-4 shadow-sm border border-gray-100">
+        <div className="flex items-center gap-3 mb-4">
+          {leadViewEnabled ? <span className="bg-teal-100 text-teal-800 text-xs font-semibold px-2 py-1 rounded-md">Chế độ Lead-view</span> : null}
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-md">{filtered.length} bản ghi</span>
+          {selectedFileName ? <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded-md max-w-[200px] truncate">File: {selectedFileName}</span> : null}
+        </div>
         <SectionToolbar
           className="items-start"
+
           mainClassName="items-end"
           actionsClassName="items-end"
           actions={
@@ -501,11 +496,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           )}
         </SectionToolbar>
         {canEdit ? (
-          <p className="text-xs text-gray-500">
-            * Khi lưu, quy tắc mới chỉ áp dụng cho tờ khai có ngày khai báo từ ngày này trở đi.
+          <p className="text-[11px] text-gray-400 font-medium italic mt-2">
+            * Thời gian "Áp dụng từ ngày" chỉ tác động vào tờ khai mới kể từ mốc này.
           </p>
         ) : null}
-      </SectionSurface>
+      </div>
 
       <MstAssignmentStaffFilterPanel
         quickFavorites={quickFavorites}
@@ -542,7 +537,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       {showAddForm ? (
         <MstAssignmentAddFormPanel
-        StaffComboboxComponent={MstAssignmentStaffCombobox}
+          StaffComboboxComponent={MstAssignmentStaffCombobox}
           draft={draft}
           addError={addError}
           rosterTeams={rosterTeams}

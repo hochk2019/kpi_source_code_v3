@@ -1,6 +1,6 @@
 export function createRulesPersistenceStore({
   getItem = () => null,
-  setItem = () => {},
+  setItem = () => { },
   safeParse = (_json, fallback) => fallback,
   createDefaultRuleCollection = () => ({}),
   rulesKey = "kpi_rules_v2",
@@ -10,8 +10,8 @@ export function createRulesPersistenceStore({
       return safeParse(getItem(rulesKey), createDefaultRuleCollection());
     },
 
-    setRules(value) {
-      setItem(rulesKey, JSON.stringify(value));
+    async setRules(value) {
+      await setItem(rulesKey, JSON.stringify(value));
     },
   };
 }

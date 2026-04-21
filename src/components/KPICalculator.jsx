@@ -184,7 +184,7 @@ const KPICalculator = ({
 
   return (
 
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
       <AppShellFrame
         sections={navigationSections}
         value={tabValue}

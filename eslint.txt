@@ -1,0 +1,11 @@
+
+E:\GPT\kpi_source_code_v4\src\lib\rules.js
+  1043:21  error  'persistCollection' is not defined  no-undef
+  1101:21  error  'persistCollection' is not defined  no-undef
+  1587:21  error  'persistCollection' is not defined  no-undef
+
+E:\GPT\kpi_source_code_v4\src\lib\storageClient.js
+  60:19  error  Parsing error: Expecting Unicode escape sequence \uXXXX
+
+Γ£û 4 problems (4 errors, 0 warnings)
+

@@ -5,8 +5,8 @@ export const MST_ASSIGNMENT_STATUS = Object.freeze({
 
 export function createMSTAssignmentStore({
   getItem = () => null,
-  setItem = () => {},
-  removeItem = () => {},
+  setItem = () => { },
+  removeItem = () => { },
   pushAuditLog = null,
   normalizeStr = (value) => String(value ?? "").trim(),
   normalizeMST = (value) => String(value ?? "").replace(/\D/g, ""),
@@ -120,7 +120,7 @@ export function createMSTAssignmentStore({
     return normalized.slice(0, limit);
   }
 
-  function appendMSTHistoryEntries(entries) {
+  async function appendMSTHistoryEntries(entries) {
     if (!entries?.length) return;
 
     const existing = getMSTHistoryEntries();
@@ -133,7 +133,7 @@ export function createMSTAssignmentStore({
       })
       .slice(0, historyLimit);
 
-    setItem(mstHistoryKey, JSON.stringify(merged));
+    await setItem(mstHistoryKey, JSON.stringify(merged));
   }
 
   function sanitizeMSTRow(rowInput) {
@@ -276,7 +276,7 @@ export function createMSTAssignmentStore({
     return entries;
   }
 
-  function migrateLegacyMSTRows() {
+  async function migrateLegacyMSTRows() {
     const rawValue = getItem(legacyMstKey);
     if (rawValue === null || rawValue === undefined) {
       return null;
@@ -292,7 +292,7 @@ export function createMSTAssignmentStore({
       const legacyTotal = Array.isArray(legacyRows) ? legacyRows.length : 0;
 
       if (!legacyTotal) {
-        removeItem(legacyMstKey);
+        await removeItem(legacyMstKey);
         if (typeof pushAuditLog === "function") {
           pushAuditLog({
             actor: "system",
@@ -309,7 +309,7 @@ export function createMSTAssignmentStore({
       const skippedInvalid = legacyTotal - convertedCount;
 
       if (!convertedCount) {
-        removeItem(legacyMstKey);
+        await removeItem(legacyMstKey);
         if (typeof pushAuditLog === "function") {
           pushAuditLog({
             actor: "system",
@@ -340,15 +340,15 @@ export function createMSTAssignmentStore({
 
       if (added > 0) {
         const nextRows = Array.from(currentMap.values()).sort(compareMSTRows);
-        setItem(mstKey, JSON.stringify(nextRows));
+        await setItem(mstKey, JSON.stringify(nextRows));
       }
 
-      removeItem(legacyMstKey);
+      await removeItem(legacyMstKey);
       if (typeof pushAuditLog === "function") {
         pushAuditLog({
           actor: "system",
           action: "mst.migrate.v1-v2",
-          detail: `Di chuyển ${added}/${legacyTotal} bản ghi gán MST từ khoá cũ sang định dạng giai đoạn mới`,
+          detail: `Di chuyển ${added}/${legacyTotal} bản ghi gán MST từ khoá cũ sang định dạng mới`,
           meta: {
             legacyTotal,
             converted: convertedCount,
@@ -367,7 +367,7 @@ export function createMSTAssignmentStore({
         pushAuditLog({
           actor: "system",
           action: "mst.migrate.v1-v2",
-          detail: "Lỗi khi migrate gán MST sang định dạng giai đoạn mới",
+          detail: "Lỗi khi migrate gán MST sang định dạng mới",
           result: "error",
           note: err?.message || "unknown",
         });
@@ -381,7 +381,7 @@ export function createMSTAssignmentStore({
       return;
     }
     legacyMSTMigrated = true;
-    migrateLegacyMSTRows();
+    migrateLegacyMSTRows().catch(() => { });
   }
 
   function getMSTRowsRaw() {
@@ -395,16 +395,16 @@ export function createMSTAssignmentStore({
     return rows.map(sanitizeMSTRow).filter(Boolean).sort(compareMSTRows);
   }
 
-  function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
+  async function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
     const previous = getMSTMap();
     const sanitized = Array.isArray(rows) ? rows.map((row) => sanitizeMSTRow(row)).filter(Boolean) : [];
     sanitized.sort(compareMSTRows);
 
     const changes = diffMSTRows(previous, sanitized, actor);
-    setItem(mstKey, JSON.stringify(sanitized));
+    await setItem(mstKey, JSON.stringify(sanitized));
 
     if (changes.length) {
-      appendMSTHistoryEntries(changes);
+      await appendMSTHistoryEntries(changes);
     }
 
     if (typeof pushAuditLog === "function") {
@@ -418,7 +418,7 @@ export function createMSTAssignmentStore({
     return sanitized.length;
   }
 
-  function saveMSTRow(rowInput, { originalKey = null, actor = "system", detail = "" } = {}) {
+  async function saveMSTRow(rowInput, { originalKey = null, actor = "system", detail = "" } = {}) {
     const sanitized = sanitizeMSTRow(rowInput);
     if (!sanitized) {
       return { ok: false, reason: "invalid" };
@@ -464,8 +464,8 @@ export function createMSTAssignmentStore({
       return { ok: false, reason: "no-change", row: sanitized, key: nextKey };
     }
 
-    setItem(mstKey, JSON.stringify(nextRows));
-    appendMSTHistoryEntries(changes);
+    await setItem(mstKey, JSON.stringify(nextRows));
+    await appendMSTHistoryEntries(changes);
 
     if (typeof pushAuditLog === "function") {
       pushAuditLog({

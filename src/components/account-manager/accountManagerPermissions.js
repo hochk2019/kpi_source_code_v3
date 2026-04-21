@@ -100,10 +100,10 @@ export const PERMISSION_CATEGORY_ORDER = Object.freeze([
 ]);
 
 export const CONTROL_CLASS =
-  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+  "w-full rounded-xl border border-slate-200/60 bg-white/40 px-3 py-2 text-sm text-slate-800 shadow-sm placeholder-slate-400 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200 dark:focus:bg-slate-800 transition-all";
 
 export const GROUP_TOGGLE_BUTTON_CLASS =
-  "inline-flex items-center gap-1 rounded border border-transparent px-2 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] transition hover:border-[color:var(--ds-border-subtle)] hover:bg-[color:var(--ds-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ds-accent-ring)] focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center gap-1 rounded-xl border border-slate-200/60 bg-white/40 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-400 dark:hover:bg-slate-700";
 
 function getPermissionCategoryOrder(category) {
   const index = PERMISSION_CATEGORY_ORDER.indexOf(category);

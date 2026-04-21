@@ -1,4 +1,12 @@
 import React, { useMemo } from 'react';
+import {
+  Bot,
+  ShieldAlert,
+  Settings2,
+  MessageSquare,
+  History,
+  Activity,
+} from 'lucide-react';
 
 import AiAssistantChatPanel from '@/components/ai-assistant/panels/AiAssistantChatPanel.jsx';
 import AiAssistantConfigPanel from '@/components/ai-assistant/panels/AiAssistantConfigPanel.jsx';
@@ -224,11 +232,11 @@ const ASSISTANT_MODES = [
 ];
 
 const CONTROL_CLASS =
-  'rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0';
+  'rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2 text-sm text-slate-800 shadow-sm transition-all focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:bg-slate-800';
 const CONTROL_CLASS_COMPACT =
-  'rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0';
+  'rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-1 text-sm text-slate-800 shadow-sm transition-all focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:bg-slate-800';
 const SECONDARY_BUTTON_CLASS =
-  'rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60';
+  'rounded-lg border border-slate-200/60 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700';
 const SUMMARY_RANGE_OPTIONS = [
   { value: 'this_month', label: 'Tháng này' },
   { value: 'last_month', label: 'Tháng trước' },
@@ -277,11 +285,23 @@ export default function AiAssistant({ currentUser }) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {!canUse ? (
-        <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Tài khoản hiện chưa được cấp quyền sử dụng trợ lý AI. Vui lòng liên hệ quản trị viên để được kích hoạt quyền
-          <span className="font-medium"> aiAssistUse</span>.
+        <div className="rounded-xl border border-amber-200/60 bg-amber-50/80 backdrop-blur-sm px-5 py-4 shadow-sm dark:border-amber-500/20 dark:bg-amber-900/10">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-lg bg-amber-100 p-2 dark:bg-amber-500/20">
+              <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Chưa có quyền truy cập</h3>
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-400/80">
+                Tài khoản hiện chưa được cấp quyền sử dụng trợ lý AI. Vui lòng liên hệ quản trị viên để được kích hoạt quyền{' '}
+                <code className="rounded bg-amber-200/60 px-1.5 py-0.5 text-xs font-mono font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
+                  aiAssistUse
+                </code>.
+              </p>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -303,7 +323,7 @@ export default function AiAssistant({ currentUser }) {
             summaryRangeOptions={SUMMARY_RANGE_OPTIONS}
           />
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
             <AiAssistantStatusSidebar
               canManage={canManage}
               configState={configState}

@@ -133,7 +133,7 @@ export default function AccountManager() {
 
   useEffect(() => {
 
-    refresh().catch(() => {});
+    refresh().catch(() => { });
 
   }, [refresh]);
 
@@ -321,7 +321,7 @@ export default function AccountManager() {
     permissionAccountUsername,
     groupedPermissions,
     collapsedPermissionGroups,
-]);
+  ]);
 
   const filteredAccounts = useMemo(() => {
 
@@ -619,15 +619,15 @@ export default function AccountManager() {
 
         ? {
 
-            memberId: normalize(option.id),
+          memberId: normalize(option.id),
 
-            memberName: normalize(option.name),
+          memberName: normalize(option.name),
 
-            teamId: normalize(option.teamId),
+          teamId: normalize(option.teamId),
 
-            teamName: normalize(option.teamName),
+          teamName: normalize(option.teamName),
 
-          }
+        }
 
         : { memberId: "", memberName: "", teamId: "", teamName: "" };
 
@@ -1190,23 +1190,30 @@ export default function AccountManager() {
 
   return (
 
-    <div className="space-y-6">
+    <div className="account-manager-view space-y-6">
+      {/* Master Header */}
+      <div className="group/hq-header relative mb-6">
+        <div className="relative overflow-hidden rounded-2xl border border-teal-700/10 bg-white/60 p-6 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-teal-700/20 hover:bg-white/80 dark:border-teal-400/20 dark:bg-slate-900/60 dark:hover:bg-slate-900/80">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-teal-50/40 via-transparent to-primary/5 dark:from-teal-900/20 dark:to-transparent" />
 
-      <div className="ds-callout ds-callout--info text-sm">
-
-        <p>
-
-          Quản lý tài khoản đăng nhập cho hệ thống KPI, gán quyền và nhân viên phụ trách theo từng tổ đội.
-
-        </p>
-
-        <p className="text-xs text-[color:var(--ds-text-muted)]">Mọi thao tác đều được ghi nhận trong mục Nhật ký để dễ dàng truy vết.</p>
-
+          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-1.5 max-w-2xl">
+              <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                Quản trị Tài khoản Hệ thống
+              </h2>
+              <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                Quản lý tài khoản đăng nhập cho hệ thống KPI, gán quyền và nhân viên phụ trách theo từng tổ đội.
+              </p>
+              <div className="mt-2 flex items-center gap-3 text-[0.8rem] text-slate-500 dark:text-slate-400">
+                <span className="hidden sm:inline-block">Mọi thao tác đều được ghi nhận trong màn hình Giám sát.</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-
-
-      <SectionSurface className="space-y-6">
+      {/* Account Creation Form Container */}
+      <div className="relative overflow-hidden rounded-2xl border border-amber-500/10 bg-white/40 p-6 shadow-sm backdrop-blur-md dark:border-amber-400/10 dark:bg-slate-900/40">
         <AccountCreateFormPanel
           form={form}
           error={error}
@@ -1228,55 +1235,59 @@ export default function AccountManager() {
           onExpandAllPermissionGroups={expandAllPermissionGroups}
           onPermissionChange={updateFormPermission}
         />
-      </SectionSurface>
+      </div>
 
 
 
-      <SectionSurface className="space-y-4">
+      {/* Account List Container */}
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/60 p-6 shadow-sm backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/60">
+        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/40 dark:border-slate-700/40 pb-5">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              Danh sách tài khoản
+              <span className="flex items-center gap-1.5 rounded-full bg-slate-100/50 px-2.5 py-0.5 border border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-700/50 text-xs text-slate-500 font-normal">
+                {visibleAccounts}/{totalAccounts} hiển thị
+              </span>
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Theo dõi quyền truy cập và trạng thái gắn nhân viên.</p>
+          </div>
 
-        <SectionHeader
-          title="Danh sách tài khoản"
-          description="Theo dõi quyền truy cập và trạng thái gắn nhân viên."
-          meta={<StatusBadge tone="info">{visibleAccounts}/{totalAccounts} tài khoản</StatusBadge>}
-        />
+          <div className="w-full sm:max-w-xs relative">
+            <input
+              className="w-full rounded-xl border border-slate-200/60 bg-white/40 px-3 py-2 pl-9 text-sm text-slate-800 placeholder-slate-400 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200 dark:focus:bg-slate-800 transition-all"
+              placeholder="Tìm theo tài khoản, họ tên..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {hasSearch && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
 
-        <SectionToolbar>
-
-          <SearchField
-            label="Tìm tài khoản"
-            hideLabel
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            onClear={hasSearch ? () => setSearchTerm("") : undefined}
-            placeholder="Tìm nhanh theo tài khoản, họ tên, vai trò hoặc quyền…"
-            className="min-w-[220px] flex-1"
+        <div className="overflow-hidden rounded-xl border border-slate-200/50 bg-white/30 dark:border-slate-700/50 dark:bg-slate-800/30">
+          <DataTable
+            columns={accountColumns}
+            data={filteredAccounts}
+            rowKey={(account) => account.username}
+            density="comfortable"
+            zebra
+            stickyHeader
+            ariaLabel="Danh sách tài khoản KPI"
+            caption={`Danh sách ${visibleAccounts} trên ${totalAccounts} tài khoản sau khi lọc.`}
+            emptyState={renderAccountsEmpty}
           />
-
-        </SectionToolbar>
-
-        <DataTable
-
-          columns={accountColumns}
-
-          data={filteredAccounts}
-
-          rowKey={(account) => account.username}
-
-          density="comfortable"
-
-          zebra
-
-          stickyHeader
-
-          ariaLabel="Danh sách tài khoản KPI"
-
-          caption={`Danh sách ${visibleAccounts} trên ${totalAccounts} tài khoản sau khi lọc.`}
-
-          emptyState={renderAccountsEmpty}
-
-        />
-
-      </SectionSurface>
+        </div>
+      </div>
 
 
 

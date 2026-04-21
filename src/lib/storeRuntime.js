@@ -150,11 +150,11 @@ function readUILayoutConfig() {
 
 
 
-function writeUILayoutConfig(config) {
+async function writeUILayoutConfig(config) {
 
   const target = config && typeof config === "object" && !Array.isArray(config) ? config : {};
 
-  setItem(UI_LAYOUT_KEY, JSON.stringify(target));
+  await setItem(UI_LAYOUT_KEY, JSON.stringify(target));
 
   return target;
 
@@ -862,7 +862,7 @@ export function toISODate(d, options = {}) {
 
 export function isExportByNumber(soTk) {
 
-  const s = (soTk ?? "").toString().replace(/\D/g,"");
+  const s = (soTk ?? "").toString().replace(/\D/g, "");
 
   return /^30\\d{9,10}$/.test(s);
 
@@ -870,7 +870,7 @@ export function isExportByNumber(soTk) {
 
 export function isImportByNumber(soTk) {
 
-  const s = (soTk ?? "").toString().replace(/\D/g,"");
+  const s = (soTk ?? "").toString().replace(/\D/g, "");
 
   return /^10\\d{9,10}$/.test(s);
 
@@ -878,9 +878,9 @@ export function isImportByNumber(soTk) {
 
 // fallback theo loáº¡i hÃ¬nh
 
-const EXPORT_TYPES = new Set(["B11","B12","B13","E42","E52","E62","E82","G22","G23","G24","G61","H21"]);
+const EXPORT_TYPES = new Set(["B11", "B12", "B13", "E42", "E52", "E62", "E82", "G22", "G23", "G24", "G61", "H21"]);
 
-const IMPORT_TYPES = new Set(["E11","E13","E15","E21","E31","E41","A11","A12","A41","A42","G13","G12","G51","H11"]);
+const IMPORT_TYPES = new Set(["E11", "E13", "E15", "E21", "E31", "E41", "A11", "A12", "A41", "A42", "G13", "G12", "G51", "H11"]);
 
 export function isExportByType(loaiHinh) {
 
@@ -1308,7 +1308,7 @@ function extractEffectiveDateFromDeclRow(row) {
 
 
 
-function persistAndAnnotateDeclRows(rows) {
+async function persistAndAnnotateDeclRows(rows) {
 
   const normalized = writeDeclRows(rows);
 
@@ -1324,7 +1324,7 @@ function persistAndAnnotateDeclRows(rows) {
 
   if (changed) {
 
-    setItem(DECL_KEY, JSON.stringify(annotated));
+    await setItem(DECL_KEY, JSON.stringify(annotated));
 
     return annotated;
 
@@ -1345,7 +1345,7 @@ export function previewDeclRows(newRows, { overwrite = false, actor = "system" }
 
 
 
-export function saveDeclRows(
+export async function saveDeclRows(
   newRows,
   { overwrite = false, actor = "system", detail = "", allowReviewedOverride = false } = {}
 ) {
@@ -1373,7 +1373,7 @@ export async function saveDeclRowDiffs(
 
 
 
-export function updateDeclRowFields(
+export async function updateDeclRowFields(
   rowKey,
   updates,
   { actor = "system", detail = "", allowReviewedOverride = false } = {}
@@ -1385,25 +1385,25 @@ export function updateDeclRowFields(
   });
 }
 
-export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
+export async function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
   return declMutationStore.softDeleteDeclRows(keys, { actor, detail });
 }
 
-export function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
+export async function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
   return declMutationStore.hardDeleteDeclRows(keys, { actor, detail });
 }
 
-export function restoreDeclRows(keys, { actor = "system", detail = "" } = {}) {
+export async function restoreDeclRows(keys, { actor = "system", detail = "" } = {}) {
   return declMutationStore.restoreDeclRows(keys, { actor, detail });
 }
 
-export function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {
+export async function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {
   return declMutationStore.markDeclRowsReviewed(keys, { actor, note });
 }
 
 
 
-export function unmarkDeclRowsReviewed(keys, { actor = "system", note = "Bỏ đánh dấu rà soát" } = {}) {
+export async function unmarkDeclRowsReviewed(keys, { actor = "system", note = "Bỏ đánh dấu rà soát" } = {}) {
   return declMutationStore.unmarkDeclRowsReviewed(keys, { actor, note });
 }
 

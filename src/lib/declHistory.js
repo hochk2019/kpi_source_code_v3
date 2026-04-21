@@ -12,7 +12,7 @@ const DECL_HISTORY_FIELD_GROUP = Object.freeze({
 
 export function createDeclHistoryStore({
   getItem = () => null,
-  setItem = () => {},
+  setItem = () => { },
   normalizeStr = (value) => String(value ?? '').trim(),
   safeParse = (_json, fallback) => fallback,
   historyKey = DECL_HISTORY_KEY,
@@ -183,8 +183,8 @@ export function createDeclHistoryStore({
 
     const sourceRows =
       rawStore.rows &&
-      typeof rawStore.rows === 'object' &&
-      !Array.isArray(rawStore.rows)
+        typeof rawStore.rows === 'object' &&
+        !Array.isArray(rawStore.rows)
         ? rawStore.rows
         : {};
 
@@ -194,8 +194,8 @@ export function createDeclHistoryStore({
 
       const entries = Array.isArray(list)
         ? list
-            .map((entry) => normalizeDeclHistoryEntry(normalizedKey, entry))
-            .filter(Boolean)
+          .map((entry) => normalizeDeclHistoryEntry(normalizedKey, entry))
+          .filter(Boolean)
         : [];
 
       if (entries.length) {
@@ -238,7 +238,7 @@ export function createDeclHistoryStore({
       }
     }
 
-    setItem(historyKey, JSON.stringify({ rows }));
+    setItem(historyKey, JSON.stringify({ rows })).catch((e) => console.error('Background persistDeclHistoryStore failed', e));
     return { rows };
   }
 

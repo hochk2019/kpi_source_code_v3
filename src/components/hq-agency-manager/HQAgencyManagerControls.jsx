@@ -33,142 +33,140 @@ export default function HQAgencyManagerControls({
   totalPages,
 }) {
   return (
-    <>
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Danh sách Đại lý Hải quan hợp tác</h2>
+    <div className="hq-agency-controls mb-6 group/hq-header relative">
+      <div className="relative overflow-hidden rounded-2xl border border-teal-700/10 bg-white/60 p-5 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-teal-700/20 hover:bg-white/80 dark:border-teal-400/20 dark:bg-slate-900/60 dark:hover:bg-slate-900/80">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-teal-50/40 via-transparent to-primary/5 dark:from-teal-900/20 dark:to-transparent" />
 
-          <p className="text-sm text-gray-500">
-            Gán tên Đại lý theo từng MST để tự động chú thích khi import tờ khai.
-          </p>
+        <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex flex-col gap-1.5 max-w-2xl">
+            <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              Danh sách Đại lý Hải quan
+              {dirty && <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Có thay đổi chưa lưu" />}
+            </h2>
+            <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+              Gán Đại lý tự động cho các tờ khai import. Hỗ trợ nhập liệu nhiều đại lý bằng dấu phẩy (,).
+            </p>
 
-          <p className="text-xs text-gray-500">
-            Một MST có thể gắn nhiều đại lý; hãy nhập và ngăn cách bằng dấu phẩy (,).
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          {dirty && <span className="text-amber-600">Có thay đổi chưa lưu</span>}
-
-          <button type="button" onClick={onReload} className="rounded border px-3 py-1">
-            Tải lại
-          </button>
-
-          {canEdit && (
-            <button
-              type="button"
-              onClick={onSave}
-              className="rounded bg-amber-500 px-3 py-1 text-white hover:bg-amber-600"
-              disabled={!hasRows}
-            >
-              Lưu cấu hình
-            </button>
-          )}
-        </div>
-      </header>
-
-      {isReadOnly && (
-        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
-          Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị để thêm hoặc chỉnh sửa danh
-          sách Đại lý HQ.
-        </div>
-      )}
-
-      {loadError && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-          {loadError}
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-secondary)]">
-        {historyOverview.total === 0 ? (
-          <span>Chưa ghi nhận lịch sử đồng bộ Đại lý HQ.</span>
-        ) : (
-          <>
-            <span>
-              <strong className="font-semibold text-[color:var(--ds-text-primary)]">
-                {historyOverview.total}
-              </strong>{" "}
-              bản ghi lịch sử được lưu.
-            </span>
-
-            <span>
-              24 giờ qua:{" "}
-              <strong className="font-semibold text-[color:var(--ds-text-primary)]">
-                {historyOverview.last24h}
-              </strong>
-            </span>
-
-            {historyOverview.lastTimestamp && (
-              <span>
-                Cập nhật gần nhất:{" "}
-                <strong className="font-semibold text-[color:var(--ds-text-primary)]">
-                  {formatHistoryTimestamp(historyOverview.lastTimestamp)}
-                </strong>
-                {historyOverview.lastActor ? ` • ${historyOverview.lastActor}` : ""}
-                {historyOverview.lastMst ? ` • MST ${historyOverview.lastMst}` : ""}
-              </span>
+            {/* Quick Stats / History Snippet */}
+            {historyOverview.total > 0 && (
+              <div className="mt-2 flex items-center gap-3 text-[0.8rem] text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 rounded-full bg-slate-100/50 px-2.5 py-0.5 border border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-700/50">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">{historyOverview.total}</span> bản ghi
+                </span>
+                <span className="flex items-center gap-1.5 rounded-full bg-slate-100/50 px-2.5 py-0.5 border border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-700/50">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">+{historyOverview.last24h}</span> / 24h
+                </span>
+                {historyOverview.lastTimestamp && (
+                  <span className="hidden sm:inline-block">
+                    Update: <span className="font-medium text-slate-700 dark:text-slate-300">{formatHistoryTimestamp(historyOverview.lastTimestamp)}</span>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={onRefreshHistory}
+                  className="hover:text-primary hover:underline transition-colors ml-1"
+                >
+                  Làm mới
+                </button>
+              </div>
             )}
-          </>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="file"
+              className="hidden"
+              data-testid="hq-file-input"
+              ref={fileRef}
+              accept=".xls,.xlsx"
+              onChange={onFilePick}
+              disabled={isReadOnly}
+            />
+
+            {canEdit && (
+              <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  title={selectedFile ? `Đã chọn: ${selectedFile}` : 'Upload file Excel (MST, Công ty, Đại lý HQ)'}
+                >
+                  {selectedFile ? 'Đổi File' : 'Chọn File XLS'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onImport}
+                  className="px-3 py-1.5 text-sm font-semibold bg-slate-800 text-white hover:bg-slate-900 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white"
+                  disabled={isReadOnly || !selectedFile}
+                >
+                  Import
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={onAddRow}
+                  className="rounded-xl border border-slate-200/60 px-4 py-1.5 text-sm font-medium text-slate-700 bg-white/50 hover:bg-slate-50 transition-all shadow-sm dark:border-slate-700/60 dark:text-slate-200 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                >
+                  + Thêm dòng
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onReload}
+                className="rounded-xl border border-slate-200/60 px-4 py-1.5 text-sm font-medium text-slate-700 bg-white/50 hover:bg-slate-50 transition-all shadow-sm dark:border-slate-700/60 dark:text-slate-200 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+              >
+                Tải lại
+              </button>
+
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={onSave}
+                  className="rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-5 py-1.5 text-sm font-semibold text-white shadow-sm hover:from-teal-700 hover:to-teal-600 focus:ring-2 focus:ring-teal-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!hasRows}
+                >
+                  Lưu cấu hình
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Warning / Error Banners */}
+        {(isReadOnly || loadError) && (
+          <div className="relative z-10 mt-4 rounded-xl border border-amber-200/50 bg-amber-50/50 p-3 text-sm text-amber-800 backdrop-blur-sm dark:border-amber-900/30 dark:bg-amber-900/20 dark:text-amber-200">
+            {isReadOnly ? "Chế độ chỉ xem. Cần quyền quản trị để chỉnh sửa." : loadError}
+          </div>
         )}
 
-        <button
-          type="button"
-          onClick={onRefreshHistory}
-          className="ml-auto rounded border border-[color:var(--ds-border-strong)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]"
-        >
-          Làm mới lịch sử
-        </button>
-      </div>
+        {/* Filter Bar */}
+        <div className="relative z-10 mt-5 pt-5 border-t border-slate-200/40 dark:border-slate-700/40 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <div className="relative">
+              <input
+                className="w-full rounded-xl border border-slate-200/60 bg-white/40 px-3 py-1.5 pl-9 text-sm text-slate-800 placeholder-slate-400 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200 dark:focus:bg-slate-800 transition-all"
+                placeholder="Tìm MST, Công ty..."
+                value={search}
+                onChange={(event) => onSearchChange(event.target.value)}
+              />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="file"
-          className="hidden"
-          data-testid="hq-file-input"
-          ref={fileRef}
-          accept=".xls,.xlsx"
-          onChange={onFilePick}
-          disabled={isReadOnly}
-        />
-
-        {canEdit && (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="rounded border px-3 py-1.5"
-          >
-            Chọn file Excel
-          </button>
-        )}
-
-        {selectedFile && <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>}
-
-        {canEdit && (
-          <button
-            type="button"
-            onClick={onImport}
-            className="rounded bg-black px-3 py-1.5 text-white disabled:opacity-50"
-            disabled={isReadOnly}
-          >
-            Import Excel
-          </button>
-        )}
-
-        {canEdit && (
-          <button type="button" onClick={onAddRow} className="rounded border px-3 py-1.5">
-            Thêm dòng mới
-          </button>
-        )}
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
           <FilterSelect
             value={agencyFilter}
             onChange={onAgencyFilterChange}
             options={agencySelectOptions}
             emptyLabel="Tất cả đại lý"
-            placeholder="Lọc theo đại lý"
-            triggerClassName="min-w-[180px]"
+            placeholder="Lọc đại lý"
+            triggerClassName="min-w-[160px] rounded-xl border-slate-200/60 bg-white/40 hover:bg-white/60 dark:border-slate-700/60 dark:bg-slate-800/40"
           />
 
           <FilterSelect
@@ -176,37 +174,42 @@ export default function HQAgencyManagerControls({
             onChange={onStatusFilterChange}
             options={STATUS_FILTER_OPTIONS}
             placeholder="Trạng thái"
-            triggerClassName="min-w-[180px]"
-          />
-
-          <input
-            className="w-64 rounded border px-2 py-1"
-            placeholder="Tìm theo MST, Công ty hoặc Đại lý"
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
+            triggerClassName="min-w-[160px] rounded-xl border-slate-200/60 bg-white/40 hover:bg-white/60 dark:border-slate-700/60 dark:bg-slate-800/40"
           />
 
           <button
             type="button"
             onClick={onResetFilters}
-            className="rounded border px-2 py-1 text-sm text-gray-600"
+            className="rounded-xl px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100/50 transition-colors dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50"
           >
             Xóa lọc
           </button>
 
-          <span className="text-sm text-gray-500">
-            {filteredCount} dòng • Trang {safePage}/{totalPages}
-          </span>
-
-          <button type="button" onClick={onPrevPage} className="rounded border px-2 py-1">
-            « Trước
-          </button>
-
-          <button type="button" onClick={onNextPage} className="rounded border px-2 py-1">
-            Sau »
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-500 bg-slate-100/50 dark:bg-slate-800/50 px-2.5 py-1 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+              {filteredCount} mục • {safePage}/{totalPages}
+            </span>
+            <div className="flex rounded-xl border border-slate-200/60 bg-white/40 shadow-sm dark:border-slate-700/60 dark:bg-slate-800/40 overflow-hidden">
+              <button
+                type="button"
+                onClick={onPrevPage}
+                disabled={safePage <= 1}
+                className="px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors dark:text-slate-300 dark:hover:bg-slate-700 border-r border-slate-200/60 dark:border-slate-700/60"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                onClick={onNextPage}
+                disabled={safePage >= totalPages}
+                className="px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                »
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

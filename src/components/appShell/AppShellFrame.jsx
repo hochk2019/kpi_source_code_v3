@@ -3,6 +3,9 @@ import React from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 import AppShellWorkflowGuide from '@/components/appShell/AppShellWorkflowGuide.jsx';
 
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip.jsx';
+import { Info } from 'lucide-react';
+
 function getInitialExpandedSectionId(sections, currentSectionId) {
   return currentSectionId || sections[0]?.id || null;
 }
@@ -102,12 +105,17 @@ export default function AppShellFrame({
         data-shell-layout={isCompactLayout ? 'compact' : 'full'}
       >
         <aside className="ds-app-shell__sidebar" aria-label="Điều hướng ứng dụng">
-          <div className="ds-app-shell__brand">
-            <p className="ds-app-shell__eyebrow">Điều hướng điều hành</p>
-            <h1 className="ds-app-shell__brand-title">Bảng điều hành KPI</h1>
-            <p className="ds-app-shell__brand-copy">
-              Điều hướng theo domain để giữ shell gọn, rõ ngữ cảnh và giảm thời gian tìm đúng workflow.
-            </p>
+          <div className="ds-app-shell__brand flex items-center justify-between">
+            <div className="flex flex-col">
+              <p className="ds-app-shell__eyebrow">Hệ thống Điều hành</p>
+              <h1 className="ds-app-shell__brand-title">KPI Command</h1>
+            </div>
+            <button
+              className="text-gray-400 hover:text-blue-500 transition-colors"
+              title="Điều hướng theo domain để giữ shell gọn, rõ ngữ cảnh và giảm thời gian tìm đúng workflow."
+            >
+              <Info className="w-5 h-5" />
+            </button>
           </div>
 
           <div className="ds-app-shell__compact-status" aria-label="Tổng quan compact shell">
@@ -181,16 +189,20 @@ export default function AppShellFrame({
           <header className="ds-app-shell__hero">
             <div className="ds-app-shell__hero-copy">
               <p className="ds-app-shell__eyebrow">{currentSection?.label || 'Điều hướng'}</p>
-              <div className="ds-app-shell__hero-title-row">
+              <div className="ds-app-shell__hero-title-row flex items-center gap-2">
                 <h2 className="ds-app-shell__hero-title">{currentTabLabel}</h2>
-                <span className="ds-app-shell__role-pill">{role}</span>
+                <span className="ds-app-shell__role-pill ml-2">{role}</span>
+                <button
+                  className="text-gray-400 hover:text-blue-500 transition-colors ml-2"
+                  title={currentTabDescription}
+                >
+                  <Info className="w-5 h-5" />
+                </button>
               </div>
-              <p className="ds-app-shell__hero-description">{currentTabDescription}</p>
             </div>
 
             <div className="ds-app-shell__hero-meta" aria-label="Ngữ cảnh hiện tại">
               <span className="ds-app-shell__meta-pill">Người dùng {username}</span>
-              <span className="ds-app-shell__meta-pill">Workflow {currentTab?.label || 'Tổng quan'}</span>
               {typeof onOpenCommandCenter === 'function' ? (
                 <button
                   type="button"

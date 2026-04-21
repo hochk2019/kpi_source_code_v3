@@ -4,7 +4,7 @@ const AGENCY_SPLIT_REGEX = /[\s,;|\n]+/;
 
 export function createHQAgencyStore({
   getItem = () => null,
-  setItem = () => {},
+  setItem = () => { },
   pushAuditLog = null,
   normalizeStr = (value) => String(value ?? "").trim(),
   normalizeMST = (value) => String(value ?? "").replace(/\D/g, ""),
@@ -56,12 +56,12 @@ export function createHQAgencyStore({
     );
     const agents = parseAgencyList(
       record?.agents ??
-        record?.agent ??
-        record?.agency ??
-        record?.dai_ly ??
-        record?.dai_ly_hq ??
-        record?.["Đại lý HQ"] ??
-        record?.["Dai ly HQ"],
+      record?.agent ??
+      record?.agency ??
+      record?.dai_ly ??
+      record?.dai_ly_hq ??
+      record?.["Đại lý HQ"] ??
+      record?.["Dai ly HQ"],
     );
 
     return {
@@ -209,7 +209,7 @@ export function createHQAgencyStore({
     return list.slice(0, limit);
   }
 
-  function appendHQHistoryEntries(entries) {
+  async function appendHQHistoryEntries(entries) {
     if (!Array.isArray(entries) || entries.length === 0) return;
 
     const existing = getHQHistoryEntries();
@@ -218,7 +218,7 @@ export function createHQAgencyStore({
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, historyLimit);
 
-    setItem(hqHistoryKey, JSON.stringify(merged));
+    await setItem(hqHistoryKey, JSON.stringify(merged));
   }
 
   function getHQHistoryForMST(mst, limit = 50) {
@@ -268,11 +268,11 @@ export function createHQAgencyStore({
       if (desiredAgent) {
         const currentAgent = normalizeStr(
           row?.agency ??
-            row?.dai_ly ??
-            row?.dai_ly_hq ??
-            row?.["Đại lý HQ"] ??
-            row?.["Dai ly HQ"] ??
-            "",
+          row?.dai_ly ??
+          row?.dai_ly_hq ??
+          row?.["Đại lý HQ"] ??
+          row?.["Dai ly HQ"] ??
+          "",
         );
         if (currentAgent !== desiredAgent) {
           ensureClone();
@@ -293,7 +293,7 @@ export function createHQAgencyStore({
     });
   }
 
-  function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
+  async function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
     const previousRows = getHQAgencies();
     const sanitized = Array.isArray(rows) ? rows.map(sanitizeAgencyRow).filter(Boolean) : [];
     const dedup = new Map();
@@ -320,11 +320,11 @@ export function createHQAgencyStore({
       return a.mst.localeCompare(b.mst);
     });
 
-    setItem(hqKey, JSON.stringify(finalRows));
+    await setItem(hqKey, JSON.stringify(finalRows));
 
     const historyEntries = diffHQAgencyRows(previousRows, finalRows, actor);
     if (historyEntries.length > 0) {
-      appendHQHistoryEntries(historyEntries);
+      await appendHQHistoryEntries(historyEntries);
     }
 
     if (typeof pushAuditLog === "function") {
@@ -348,10 +348,10 @@ export function createHQAgencyStore({
     });
 
     if (mstChanged) {
-      upsertMSTRows(syncedMst, {
+      await Promise.resolve(upsertMSTRows(syncedMst, {
         actor,
         detail: "Đồng bộ tên công ty theo Đại lý HQ",
-      });
+      }));
     }
 
     const existingDecls = getDeclRows();
@@ -359,17 +359,17 @@ export function createHQAgencyStore({
     const declChanged = reannotatedDecls.some((row, index) => row !== existingDecls[index]);
 
     if (declChanged) {
-      saveDeclRows(reannotatedDecls, {
+      await Promise.resolve(saveDeclRows(reannotatedDecls, {
         overwrite: true,
         actor,
         detail: "Đồng bộ Đại lý HQ với dữ liệu tờ khai hiện có",
-      });
+      }));
     }
 
     return finalRows.length;
   }
 
-  function saveHQAgencyRow(row, { actor = "system", previousMst = "", detail = "" } = {}) {
+  async function saveHQAgencyRow(row, { actor = "system", previousMst = "", detail = "" } = {}) {
     const sanitized = sanitizeAgencyRow(row);
     if (!sanitized) {
       throw new Error("Mã số thuế không hợp lệ khi lưu đại lý HQ");
@@ -394,7 +394,7 @@ export function createHQAgencyStore({
       agent: sanitized.agent,
     });
 
-    upsertHQAgencies(preserved, {
+    await upsertHQAgencies(preserved, {
       actor,
       detail: detail || `Cập nhật đại lý HQ cho MST ${targetMst}`,
     });
@@ -402,7 +402,7 @@ export function createHQAgencyStore({
     return sanitized;
   }
 
-  function deleteHQAgencyRow(mst, { actor = "system", detail = "" } = {}) {
+  async function deleteHQAgencyRow(mst, { actor = "system", detail = "" } = {}) {
     const target = normalizeMST(mst);
     if (!target) return 0;
 
@@ -410,7 +410,7 @@ export function createHQAgencyStore({
     const next = current.filter((row) => row?.mst !== target);
     if (next.length === current.length) return 0;
 
-    upsertHQAgencies(next, {
+    await upsertHQAgencies(next, {
       actor,
       detail: detail || `Xóa đại lý HQ cho MST ${target}`,
     });

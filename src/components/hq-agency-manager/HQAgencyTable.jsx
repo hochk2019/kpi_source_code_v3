@@ -31,25 +31,25 @@ export default function HQAgencyTable({
 }) {
   return (
     <>
-      <div className="overflow-auto rounded border">
+      <div className="overflow-auto rounded-xl border border-slate-200/60 bg-white/40 shadow-sm backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/40">
         <table className="min-w-full text-sm">
-          <thead className="bg-[color:var(--ds-surface-muted)]">
+          <thead className="border-b border-slate-200/60 bg-slate-50/50 text-slate-500 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-400">
             <tr>
               <th
-                className="group relative px-2 py-1 pr-4 text-left"
+                className="group relative px-4 py-3 text-left font-medium tracking-wide"
                 style={getColumnStyle("index")}
               >
                 STT
                 {renderResizeHandle("index")}
               </th>
 
-              <th className="group relative px-2 py-1 pr-4 text-left" style={getColumnStyle("mst")}>
+              <th className="group relative px-4 py-3 text-left font-medium tracking-wide" style={getColumnStyle("mst")}>
                 Mã số thuế
                 {renderResizeHandle("mst")}
               </th>
 
               <th
-                className="group relative px-2 py-1 pr-4 text-left"
+                className="group relative px-4 py-3 text-left font-medium tracking-wide"
                 style={getColumnStyle("company")}
               >
                 Công ty
@@ -57,12 +57,12 @@ export default function HQAgencyTable({
               </th>
 
               <th
-                className="group relative px-2 py-1 pr-5 text-left"
+                className="group relative px-4 py-3 text-left font-medium tracking-wide"
                 style={getColumnStyle("agency")}
               >
-                Đại lý HQ
+                Đại lý hải quan
                 <span
-                  className="ml-1 text-xs text-gray-400"
+                  className="ml-1 text-xs text-slate-400"
                   title="Nhập nhiều đại lý và ngăn cách bằng dấu phẩy (,) hoặc xuống dòng khi cần."
                 >
                   ⓘ
@@ -72,7 +72,7 @@ export default function HQAgencyTable({
 
               {canEdit && (
                 <th
-                  className="group relative px-2 py-1 pr-4 text-left"
+                  className="group relative px-4 py-3 text-left font-medium tracking-wide"
                   style={getColumnStyle("actions")}
                 >
                   Xóa
@@ -82,7 +82,7 @@ export default function HQAgencyTable({
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y divide-slate-100/50 dark:divide-slate-800/50">
             {pageRows.map((row, idx) => {
               const rowIndex = rows.indexOf(row);
               const globalIndex = (safePage - 1) * PAGE_SIZE + idx + 1;
@@ -127,24 +127,24 @@ export default function HQAgencyTable({
 
               return (
                 <React.Fragment key={rowKey}>
-                  <tr className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
-                    <td className="px-2 py-1" style={getColumnStyle("index")}>
-                      <div className="min-h-[24px]">{globalIndex}</div>
+                  <tr className="hover:bg-slate-50/50 transition-colors dark:hover:bg-slate-800/50">
+                    <td className="px-4 py-3 align-top" style={getColumnStyle("index")}>
+                      <div className="min-h-[24px] text-slate-500 font-medium">{globalIndex}</div>
                     </td>
 
-                    <td className="px-2 py-1" style={getColumnStyle("mst")}>
+                    <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-300" style={getColumnStyle("mst")}>
                       {isReadOnly ? (
-                        <span className="block whitespace-nowrap">{row.mst}</span>
+                        <span className="block whitespace-nowrap font-medium">{row.mst}</span>
                       ) : (
                         <input
-                          className="w-full min-w-0 rounded border px-2 py-1"
+                          className="w-full min-w-0 rounded-xl border border-slate-200/60 bg-white/40 px-3 py-1.5 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:focus:bg-slate-800 transition-all"
                           value={row.mst}
                           onChange={(event) => onChangeField(rowIndex, "mst", event.target.value)}
                         />
                       )}
                     </td>
 
-                    <td className="px-2 py-1" style={getColumnStyle("company")}>
+                    <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-300" style={getColumnStyle("company")}>
                       {isReadOnly ? (
                         <span
                           className={
@@ -157,7 +157,7 @@ export default function HQAgencyTable({
                         </span>
                       ) : (
                         <input
-                          className="w-full min-w-0 rounded border px-2 py-1"
+                          className="w-full min-w-0 rounded-xl border border-slate-200/60 bg-white/40 px-3 py-1.5 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:focus:bg-slate-800 transition-all"
                           value={row.company}
                           onChange={(event) =>
                             onChangeField(rowIndex, "company", event.target.value)
@@ -166,7 +166,7 @@ export default function HQAgencyTable({
                       )}
                     </td>
 
-                    <td className="px-2 py-1 align-top" style={getColumnStyle("agency")}>
+                    <td className="px-4 py-3 align-top" style={getColumnStyle("agency")}>
                       <div className="flex flex-col gap-2">
                         <div className="flex flex-wrap items-start gap-2">
                           {isReadOnly ? (
@@ -175,7 +175,7 @@ export default function HQAgencyTable({
                             </span>
                           ) : (
                             <input
-                              className="w-full min-w-0 rounded border px-2 py-1"
+                              className="w-full min-w-0 rounded-xl border border-slate-200/60 bg-white/40 px-3 py-1.5 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:focus:bg-slate-800 transition-all text-sm"
                               value={row.agent}
                               onChange={(event) =>
                                 onChangeField(rowIndex, "agent", event.target.value)
@@ -187,7 +187,7 @@ export default function HQAgencyTable({
 
                           {canEdit && agencyOptions.length > 0 && (
                             <select
-                              className="rounded border px-2 py-1 text-xs text-gray-600"
+                              className="rounded-xl border border-slate-200/60 bg-slate-50/50 px-2 py-1 text-xs text-slate-600 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-400"
                               value=""
                               onChange={(event) => {
                                 onQuickAddAgent(rowIndex, event.target.value);
@@ -213,7 +213,7 @@ export default function HQAgencyTable({
                           <button
                             type="button"
                             onClick={() => historyKey && onToggleHistory(historyKey)}
-                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-xs text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-xl border border-slate-200/60 bg-white/40 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-400 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={historyButtonDisabled}
                             title={historyButtonTitle}
                           >
@@ -236,7 +236,7 @@ export default function HQAgencyTable({
                             <button
                               type="button"
                               onClick={() => onSaveRow(rowIndex)}
-                              className="rounded bg-emerald-500 px-3 py-0.5 text-xs font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                              className="rounded-xl bg-gradient-to-r from-teal-500 to-teal-400 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:from-teal-600 hover:to-teal-500 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 dark:disabled:from-slate-700 dark:disabled:to-slate-700"
                               disabled={!canCommitRow}
                               title={
                                 !state.draft.mst
@@ -254,11 +254,11 @@ export default function HQAgencyTable({
                     </td>
 
                     {canEdit && (
-                      <td className="px-2 py-1" style={getColumnStyle("actions")}>
+                      <td className="px-4 py-3 align-top" style={getColumnStyle("actions")}>
                         <button
                           type="button"
                           onClick={() => onDeleteRow(rowIndex)}
-                          className="inline-flex w-full items-center justify-center rounded bg-red-500 px-2 py-0.5 text-xs text-white"
+                          className="inline-flex w-full items-center justify-center rounded-xl bg-red-50/50 px-2 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 hover:text-red-700 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
                         >
                           Xóa
                         </button>

@@ -29,7 +29,7 @@ function normalizeAuditNote(value) {
 
 export function createAuditLogStore({
   getItem = () => null,
-  setItem = () => {},
+  setItem = () => { },
   safeParse = (_json, fallback) => fallback,
   shallowClone = (value) => value,
   auditKey = "audit_logs_v1",
@@ -42,7 +42,7 @@ export function createAuditLogStore({
 
   function writeAuditLogs(list) {
     const payload = Array.isArray(list) ? list : [];
-    setItem(auditKey, JSON.stringify(payload));
+    setItem(auditKey, JSON.stringify(payload)).catch((e) => console.error('Background writeAuditLogs failed', e));
     return payload;
   }
 

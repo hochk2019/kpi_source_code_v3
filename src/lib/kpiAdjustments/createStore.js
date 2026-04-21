@@ -17,8 +17,8 @@ import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "../../../shared/kpiAdjustments.j
 
 export function createKpiAdjustmentStore({
   getItem = () => null,
-  setItem = () => {},
-  refreshSharedKeys = () => {},
+  setItem = () => { },
+  refreshSharedKeys = () => { },
   pushAuditLog = null,
   normalizeStr = (value) => String(value ?? "").trim(),
   normalizeMST = (value) => String(value ?? "").replace(/\D/g, ""),
@@ -68,15 +68,15 @@ export function createKpiAdjustmentStore({
       });
   }
 
-  function persistAdjustments(list) {
-    setItem(KPI_ADJUSTMENTS_KEY, JSON.stringify(list));
+  async function persistAdjustments(list) {
+    await setItem(KPI_ADJUSTMENTS_KEY, JSON.stringify(list));
   }
 
   function getKpiAdjustments() {
     return getAllAdjustments();
   }
 
-  function saveKpiAdjustment(entry, { actor = "system", permissions = {} } = {}) {
+  async function saveKpiAdjustment(entry, { actor = "system", permissions = {} } = {}) {
     const permissionSet = permissions || {};
     const canSubmit = permissionSet.adjustSubmit === true;
     const canApprove = permissionSet.adjustApprove === true;
@@ -182,7 +182,7 @@ export function createKpiAdjustmentStore({
       adjustments.unshift(normalized);
     }
 
-    persistAdjustments(adjustments);
+    await persistAdjustments(adjustments);
 
     if (typeof pushAuditLog === "function") {
       pushAuditLog({
@@ -201,7 +201,7 @@ export function createKpiAdjustmentStore({
     return normalized;
   }
 
-  function updateKpiAdjustmentStatus(id, status, { actor = "system", note = "", permissions = {} } = {}) {
+  async function updateKpiAdjustmentStatus(id, status, { actor = "system", note = "", permissions = {} } = {}) {
     const normalizedStatus = normalizeStr(status).toLowerCase();
     if (!KPI_ADJUSTMENT_STATUS_SET.has(normalizedStatus)) {
       throw new Error("Trạng thái điểm KPI bổ sung không hợp lệ");
@@ -245,7 +245,7 @@ export function createKpiAdjustmentStore({
     selected.history = clampHistory(history, helperBag);
 
     adjustments[index] = selected;
-    persistAdjustments(adjustments);
+    await persistAdjustments(adjustments);
 
     if (typeof pushAuditLog === "function") {
       pushAuditLog({
@@ -259,7 +259,7 @@ export function createKpiAdjustmentStore({
     return selected;
   }
 
-  function removeKpiAdjustment(id, { actor = "system", permissions = {} } = {}) {
+  async function removeKpiAdjustment(id, { actor = "system", permissions = {} } = {}) {
     if (!permissions.adjustApprove && !permissions.adjustSubmit) {
       throw new Error("Bạn không có quyền xoá điểm KPI bổ sung");
     }
@@ -271,7 +271,7 @@ export function createKpiAdjustmentStore({
     }
 
     const [removed] = adjustments.splice(index, 1);
-    persistAdjustments(adjustments);
+    await persistAdjustments(adjustments);
 
     if (typeof pushAuditLog === "function") {
       pushAuditLog({

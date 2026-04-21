@@ -4,13 +4,10 @@ import DataImporterSummaryCards from "@/components/dataImporter/DataImporterSumm
 import DataImporterUpdatedRowsBanner from "@/components/dataImporter/DataImporterUpdatedRowsBanner.jsx";
 import DataImporterWorkflowGuide from "@/components/dataImporter/DataImporterWorkflowGuide.jsx";
 import {
-  SectionHeader,
-  SectionSurface,
-} from "@/components/designSystem/shellPrimitives.jsx";
-import {
   buildWorkflowGuideState,
   getWorkflowStageStatus,
 } from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
+import { Info } from "lucide-react";
 
 const DataImporterCoCodeConfigPanel = lazy(
   () => import("@/components/dataImporter/DataImporterCoCodeConfigPanel.jsx"),
@@ -48,24 +45,28 @@ const DataImporterSyncConfigPanel = lazy(
 
 function WorkflowStageSection({ ariaLabel, title, description, status, children, ...props }) {
   return (
-    <SectionSurface
+    <div
       aria-label={ariaLabel}
-      className={`space-y-3 p-4 ${status.cardClass}`}
+      className={`rounded-2xl p-6 shadow-sm border border-gray-200/50 bg-white/40 backdrop-blur-md space-y-4 ${status.cardClass}`}
       {...props}
     >
-      <SectionHeader
-        title={title}
-        description={description}
-        meta={
-          <span
-            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${status.badgeClass}`}
-          >
-            {status.label}
-          </span>
-        }
-      />
-      {children}
-    </SectionSurface>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-gray-900 tracking-tight">{title}</h2>
+          {description && (
+            <div title={description} className="text-gray-400 hover:text-teal-600 transition-colors cursor-help">
+              <Info size={16} />
+            </div>
+          )}
+        </div>
+        <span
+          className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${status.badgeClass}`}
+        >
+          {status.label}
+        </span>
+      </div>
+      <div>{children}</div>
+    </div>
   );
 }
 

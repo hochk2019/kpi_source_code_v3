@@ -1,62 +1,53 @@
 import React from "react";
-
 import KPIAdjustments from "@/components/KPIAdjustments.jsx";
 import {
   APP_SHELL_WORKFLOW_TARGETS,
   getAppTabRootId,
 } from "@/components/appShell/appShellWorkflowState.js";
-import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.jsx";
-
-function WorkflowLinkButton({ children, onClick }) {
-  if (typeof onClick !== "function") {
-    return null;
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full border border-[color:var(--ds-border-subtle)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)]"
-    >
-      {children}
-    </button>
-  );
-}
+import { Info } from "lucide-react";
 
 export default function KPIAdjustmentsWorkflowPanel({ currentUser = null, onNavigate }) {
   return (
-    <div id={getAppTabRootId("adjustments")} className="space-y-4">
-      <SectionSurface id={APP_SHELL_WORKFLOW_TARGETS.adjustments.scope} tabIndex={-1}>
-        <SectionHeader
-          title="1. Chọn kỳ điều chỉnh"
-          description="Khóa kỳ, phạm vi doanh nghiệp và mục tiêu rà soát trước khi mở bảng điều chỉnh sâu."
-          actions={<WorkflowLinkButton onClick={() => onNavigate?.("reports", "dashboard")}>Xem tác động KPI</WorkflowLinkButton>}
-        />
-        <p className="text-sm text-[color:var(--ds-text-secondary)]">
-          Điều chỉnh KPI được neo vào workflow ba bước: chọn kỳ, rà soát declaration, rồi xác nhận
-          tác động trên report center thay vì xử lý như một bảng standalone.
-        </p>
-      </SectionSurface>
+    <div id={getAppTabRootId("adjustments")} className="space-y-6">
 
-      <SectionSurface id={APP_SHELL_WORKFLOW_TARGETS.adjustments.review} tabIndex={-1}>
-        <SectionHeader
-          title="2. Workspace điều chỉnh"
-          description="Rà soát declaration, MST và lý do cộng trừ trong cùng workspace điều chỉnh."
-        />
+      {/* Lumina Ivory Master Header */}
+      <div className="flex items-center justify-between p-6 rounded-2xl bg-white/60 backdrop-blur-md border border-gray-200/50 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Điều chỉnh KPI</h1>
+            <div title="Rà soát declaration, MST và hiệu chỉnh điểm trước khi đối chiếu báo cáo cuối." className="text-gray-400 hover:text-teal-600 transition-colors cursor-help">
+              <Info size={18} />
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">
+            Quản lý, điều chỉnh và xét duyệt KPIs cộng trừ ngoài hệ thống.
+          </p>
+        </div>
+
+        <div className="flex gap-3 relative z-10">
+          <button
+            type="button"
+            onClick={() => onNavigate?.("reports", "dashboard")}
+            className="px-4 py-2 rounded-xl border border-gray-200 bg-white/80 hover:bg-teal-50 text-sm font-medium text-gray-700 transition-all shadow-sm"
+          >
+            Tác động KPI
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.("reports", "export")}
+            className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-sm font-medium text-white transition-all shadow-sm shadow-teal-500/20"
+          >
+            Mở Report Center
+          </button>
+        </div>
+      </div>
+
+      {/* Main Workspace Frame */}
+      <div id={APP_SHELL_WORKFLOW_TARGETS.adjustments.review} tabIndex={-1} className="rounded-2xl bg-white/40 ring-1 ring-gray-200/50 p-2 shadow-sm">
         <KPIAdjustments currentUser={currentUser} />
-      </SectionSurface>
+      </div>
 
-      <SectionSurface id={APP_SHELL_WORKFLOW_TARGETS.adjustments.publish} tabIndex={-1}>
-        <SectionHeader
-          title="3. Xuất bản tác động"
-          description="Sau khi chốt adjustment, đối chiếu lại dashboard KPI hoặc chuyển sang report center để export."
-          actions={<WorkflowLinkButton onClick={() => onNavigate?.("reports", "export")}>Mở report center</WorkflowLinkButton>}
-        />
-        <p className="text-sm text-[color:var(--ds-text-secondary)]">
-          Bước publish được tách rõ ở shell để điều chỉnh KPI luôn có điểm kết thúc rõ ràng: kiểm
-          chứng số liệu trên báo cáo trước khi kết thúc ca vận hành.
-        </p>
-      </SectionSurface>
     </div>
   );
 }

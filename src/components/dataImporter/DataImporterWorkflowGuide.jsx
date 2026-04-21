@@ -50,78 +50,44 @@ export default function DataImporterWorkflowGuide({
   });
 
   return (
-    <section className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-1">
-          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--ds-text-muted)]">
-            Workflow nhập liệu
-          </div>
-          <div className="text-lg font-semibold text-[color:var(--ds-text-primary)]">
+    <section className="relative overflow-hidden p-6 rounded-2xl bg-white/60 backdrop-blur-md border border-gray-200/50 shadow-sm mb-2">
+      <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+
+      <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Quản lý Nhập liệu</h1>
+          <p className="text-sm font-medium text-gray-500 mt-1">
             {headline}
-          </div>
+          </p>
         </div>
-        <div className="inline-flex w-fit items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200">
-          {`Bước ${currentStep}/3`}
+
+        <div className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700 ring-1 ring-inset ring-teal-600/20">
+          GIAI ĐOẠN {currentStep}/3
         </div>
       </div>
 
       {actions.length > 0 && (
-        <div className="mt-4 flex flex-col gap-2 rounded-lg border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/60 p-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--ds-text-muted)]">
-            Bước kế tiếp đề xuất
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {actions.map((action) => {
-              const isPrimary = action.variant === "primary";
-              return (
-                <button
-                  key={action.label}
-                  type="button"
-                  onClick={action.onClick}
-                  disabled={action.disabled}
-                  className={`rounded px-3 py-1.5 text-sm font-medium transition ${
-                    isPrimary
-                      ? "bg-black text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
-                      : "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] hover:bg-[color:var(--ds-surface-muted)]"
+        <div className="mt-4 relative z-10 flex flex-wrap gap-3 items-center">
+          <span className="text-xs uppercase tracking-widest text-gray-400 font-semibold mr-2">Hành động:</span>
+          {actions.map((action) => {
+            const isPrimary = action.variant === "primary";
+            return (
+              <button
+                key={action.label}
+                type="button"
+                onClick={action.onClick}
+                disabled={action.disabled}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm ${isPrimary
+                    ? "bg-teal-600 text-white hover:bg-teal-700 shadow-teal-500/20 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none"
+                    : "border border-gray-200 bg-white/80 hover:bg-teal-50 text-gray-700"
                   }`}
-                >
-                  {action.label}
-                </button>
-              );
-            })}
-          </div>
+              >
+                {action.label}
+              </button>
+            );
+          })}
         </div>
       )}
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        {steps.map((step) => {
-          const status = getWorkflowStageStatus(step.number, currentStep);
-          return (
-            <a
-              key={step.number}
-              href={`#${step.targetId}`}
-              aria-current={step.number === currentStep ? "step" : undefined}
-              className={`block rounded-lg border p-3 transition-colors hover:border-[color:var(--ds-border-strong)] ${status.cardClass}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
-                    {step.title}
-                  </div>
-                  <div className="text-xs leading-5 text-[color:var(--ds-text-muted)]">
-                    {step.detail}
-                  </div>
-                </div>
-                <span
-                  className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${status.badgeClass}`}
-                >
-                  {status.label}
-                </span>
-              </div>
-            </a>
-          );
-        })}
-      </div>
     </section>
   );
 }

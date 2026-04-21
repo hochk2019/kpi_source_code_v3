@@ -135,9 +135,9 @@ export function createKpiAdjustmentSettingsStore({
     };
   }
 
-  function writeAdjustmentSettings(settings) {
+  async function writeAdjustmentSettings(settings) {
     const payload = cloneAdjustmentSettings(settings || {});
-    setItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify(payload));
+    await setItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify(payload));
     refreshSharedKeys([KPI_ADJUSTMENT_SETTINGS_KEY]);
     return payload;
   }
@@ -146,7 +146,7 @@ export function createKpiAdjustmentSettingsStore({
     return cloneAdjustmentSettings(readAdjustmentSettings());
   }
 
-  function saveKpiAdjustmentSettings(patch, { actor = "system", permissions = {} } = {}) {
+  async function saveKpiAdjustmentSettings(patch, { actor = "system", permissions = {} } = {}) {
     if (!permissions.adjustApprove) {
       throw new Error("Bạn không có quyền cấu hình điểm KPI bổ sung");
     }
@@ -300,7 +300,7 @@ export function createKpiAdjustmentSettingsStore({
       updatedBy: actor,
     };
 
-    writeAdjustmentSettings(next);
+    await writeAdjustmentSettings(next);
 
     if (typeof pushAuditLog === "function") {
       pushAuditLog({

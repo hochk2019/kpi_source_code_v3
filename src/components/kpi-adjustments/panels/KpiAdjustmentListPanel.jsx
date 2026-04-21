@@ -14,7 +14,7 @@ function copyLookupValue(value) {
     return;
   }
 
-  navigator.clipboard.writeText(normalizedValue).catch(() => {});
+  navigator.clipboard.writeText(normalizedValue).catch(() => { });
 }
 
 function openWorkflowLookup(tab, focus, value) {
@@ -76,12 +76,12 @@ export default function KpiAdjustmentListPanel({
   const canGoNext = page < pageCount;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold text-foreground">Danh sách điểm KPI +/-</CardTitle>
-        <CardDescription>Lọc và duyệt các đề xuất cộng/trừ điểm.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="bg-white/40 backdrop-blur-md rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Danh sách điểm KPI +/-</h3>
+        <p className="text-sm text-gray-500">Lọc và duyệt các đề xuất cộng/trừ điểm.</p>
+      </div>
+      <div>
         <div className="grid gap-4 text-sm md:grid-cols-4">
           <div>
             <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.filterMonth}>
@@ -416,7 +416,7 @@ export default function KpiAdjustmentListPanel({
             </tbody>
           </table>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

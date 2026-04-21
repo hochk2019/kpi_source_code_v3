@@ -113,11 +113,11 @@ function normalizeNote(value) {
 
 const CONTROL_CLASS =
 
-  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+  "w-full rounded-xl border border-slate-200/60 bg-white/40 px-3 py-2 text-sm text-slate-800 shadow-sm placeholder-slate-400 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200 dark:focus:bg-slate-800 transition-all";
 
 const CONTROL_CLASS_COMPACT =
 
-  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1.5 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+  "w-full rounded-xl border border-slate-200/60 bg-white/40 px-2 py-1.5 text-sm text-slate-800 shadow-sm placeholder-slate-400 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200 dark:focus:bg-slate-800 transition-all";
 
 
 
@@ -973,11 +973,29 @@ export default function AuditLog({ currentUser }) {
 
   return (
 
-    <div className="space-y-6">
+    <div className="audit-log-view space-y-6">
 
-      <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
+      {/* Master Header */}
+      <div className="group/hq-header relative mb-6">
+        <div className="relative overflow-hidden rounded-2xl border border-teal-700/10 bg-white/60 p-6 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-teal-700/20 hover:bg-white/80 dark:border-teal-400/20 dark:bg-slate-900/60 dark:hover:bg-slate-900/80">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-teal-50/40 via-transparent to-primary/5 dark:from-teal-900/20 dark:to-transparent" />
+          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-1.5 max-w-2xl">
+              <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">Nhật ký Hệ thống</h2>
+              <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">Lưu trữ lịch sử thao tác người dùng, truy vết hoạt động cấu hình hệ thống và quản lý trạng thái sao lưu dữ liệu.</p>
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-3 mt-4 lg:mt-0">
+              <button type="button" onClick={refreshLogs} className="inline-flex items-center gap-2 rounded-xl border border-slate-200/60 bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800">Làm mới</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/60 p-6 shadow-sm backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/60 space-y-4">
+
+        <h3 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-200/40 dark:border-slate-700/40 pb-4">Quản lý Sao lưu CSDL</h3>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
 
           <div>
 
@@ -1554,94 +1572,70 @@ export default function AuditLog({ currentUser }) {
           />
 
           <button
-
             type="button"
-
             onClick={handleDownload}
-
-            className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm font-medium text-[color:var(--ds-text-primary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
-
+            className="rounded-xl border border-slate-200/60 bg-white/50 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-
             Tải CSV
-
           </button>
 
           <button
-
             type="button"
-
             onClick={handleResetFilters}
-
-            className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
-
+            className="rounded-xl border border-slate-200/60 bg-white/50 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-
             Xóa bộ lọc
-
           </button>
 
           <span className="flex-1" />
 
           <button
-
             type="button"
-
             onClick={refresh}
-
-            className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
-
+            className="rounded-xl border border-slate-200/60 bg-white/50 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-
             Tải lại
-
           </button>
 
           <button
-
             type="button"
-
             onClick={handleClear}
-
-            className="rounded border border-red-400 px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-500/10"
-
+            className="rounded-xl border border-red-200 bg-red-50/50 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100 hover:text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
           >
-
             Xóa nhật ký
-
           </button>
 
         </div>
 
 
 
-        <div className="overflow-x-auto rounded border border-[color:var(--ds-border-subtle)]">
+        <div className="overflow-hidden rounded-xl border border-slate-200/50 bg-white/30 dark:border-slate-700/50 dark:bg-slate-800/30">
 
-          <table className="min-w-full divide-y divide-[color:var(--ds-border-subtle)] text-sm text-[color:var(--ds-text-primary)]">
+          <table className="min-w-full divide-y divide-slate-200/40 text-sm text-slate-600 dark:divide-slate-700/40 dark:text-slate-300">
 
-            <thead className="bg-[color:var(--ds-surface-muted)] text-left text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
+            <thead className="bg-slate-50/50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
 
               <tr>
 
-                <th className="px-3 py-2">Thời gian</th>
+                <th className="px-4 py-3">Thời gian</th>
 
-                <th className="px-3 py-2">Loại</th>
+                <th className="px-4 py-3">Loại</th>
 
-                <th className="px-3 py-2">Hành động</th>
+                <th className="px-4 py-3">Hành động</th>
 
-                <th className="px-3 py-2">Người thực hiện</th>
+                <th className="px-4 py-3">Người thực hiện</th>
 
-                <th className="px-3 py-2">Kết quả</th>
+                <th className="px-4 py-3">Kết quả</th>
 
-                <th className="px-3 py-2">Nội dung</th>
+                <th className="px-4 py-3">Nội dung</th>
 
-                <th className="px-3 py-2">Ghi chú</th>
+                <th className="px-4 py-3">Ghi chú</th>
 
               </tr>
 
             </thead>
 
-            <tbody className="divide-y divide-[color:var(--ds-border-subtle)]">
+            <tbody className="divide-y divide-slate-200/40 dark:divide-slate-700/40 bg-white/10">
 
               {filteredLogs.length === 0 ? (
 
@@ -1663,7 +1657,7 @@ export default function AuditLog({ currentUser }) {
 
                     key={`${entry.ts}-${index}`}
 
-                    className={index % 2 === 0 ? "bg-[color:var(--ds-surface-card)]" : "bg-[color:var(--ds-surface-muted)]"}
+                    className={`transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/50 ${index % 2 === 0 ? "bg-white/40 dark:bg-slate-900/40" : "bg-transparent"}`}
 
                   >
 
@@ -1681,19 +1675,17 @@ export default function AuditLog({ currentUser }) {
 
                         <span
 
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${entry.result === 'success'
 
-                            entry.result === 'success'
+                            ? 'bg-emerald-500/15 text-emerald-300'
 
-                              ? 'bg-emerald-500/15 text-emerald-300'
-
-                              : entry.result === 'failure'
+                            : entry.result === 'failure'
 
                               ? 'bg-red-500/15 text-red-300'
 
                               : 'bg-slate-500/20 text-slate-200'
 
-                          }`}
+                            }`}
 
                         >
 

@@ -67,9 +67,8 @@ export default function AccountCreateFormPanel({
             clearGroupLabel="Tùy chọn chung"
             clearLabel="Không gắn nhân viên"
             showClearWhenEmpty
-            buttonClassName={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${
-              staffOptions.length === 0 ? "cursor-not-allowed opacity-60" : ""
-            }`}
+            buttonClassName={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${staffOptions.length === 0 ? "cursor-not-allowed opacity-60" : ""
+              }`}
             popoverClassName="w-[320px] p-0"
             groupHeadingFormatter={(team) => team.name}
           />
@@ -168,10 +167,10 @@ export default function AccountCreateFormPanel({
 
         {error ? <div className="md:col-span-2 text-sm text-red-600">{error}</div> : null}
 
-        <div className="md:col-span-2 flex flex-wrap gap-3">
+        <div className="md:col-span-2 flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-200/40 dark:border-slate-700/40">
           <button
             type="submit"
-            className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            className="rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-teal-700 hover:to-teal-600 focus:ring-2 focus:ring-teal-500/50"
             data-tooltip="Tạo tài khoản mới với thông tin và quyền đã chọn"
           >
             Tạo tài khoản
@@ -179,7 +178,7 @@ export default function AccountCreateFormPanel({
           <button
             type="button"
             onClick={onReset}
-            className="rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
+            className="rounded-xl border border-slate-200/60 bg-white/50 px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800"
             data-tooltip="Xóa nội dung biểu mẫu và nhập lại từ đầu"
           >
             Nhập lại

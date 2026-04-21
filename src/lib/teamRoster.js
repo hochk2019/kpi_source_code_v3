@@ -43,24 +43,24 @@ function deepCloneRoster(roster) {
     version: roster?.version ?? 1,
     teams: Array.isArray(roster?.teams)
       ? roster.teams.map((team) => ({
-          id: team.id,
-          name: team.name,
-          members: Array.isArray(team.members)
-            ? team.members.map((member) => ({
-                id: member.id,
-                name: member.name,
-                notes: member.notes ?? "",
-              }))
-            : [],
-        }))
+        id: team.id,
+        name: team.name,
+        members: Array.isArray(team.members)
+          ? team.members.map((member) => ({
+            id: member.id,
+            name: member.name,
+            notes: member.notes ?? "",
+          }))
+          : [],
+      }))
       : [],
   };
 }
 
 export function createTeamRosterStore({
   getItem = () => null,
-  setItem = () => {},
-  subscribe = () => () => {},
+  setItem = () => { },
+  subscribe = () => () => { },
   pushAuditLog = null,
   safeParse = (_json, fallback) => fallback,
   normalizeStr = (value) => String(value ?? "").replace(/\s+/g, " ").trim(),
@@ -166,7 +166,7 @@ export function createTeamRosterStore({
     const raw = safeParse(getItem(teamKey), null);
     const sanitized = sanitizeRoster(raw);
     if (!raw || !raw.teams) {
-      setItem(teamKey, JSON.stringify(sanitized));
+      setItem(teamKey, JSON.stringify(sanitized)).catch(console.error);
     }
     return sanitized;
   }
@@ -174,7 +174,7 @@ export function createTeamRosterStore({
   function subscribeTeamRoster(listener) {
     const callback = typeof listener === "function" ? listener : null;
     if (!callback) {
-      return () => {};
+      return () => { };
     }
 
     const emit = () => {
@@ -195,7 +195,7 @@ export function createTeamRosterStore({
     };
   }
 
-  function setTeamRoster(next, { actor = "system", detail = "" } = {}) {
+  async function setTeamRoster(next, { actor = "system", detail = "" } = {}) {
     const normalizedInput =
       Array.isArray(next?.teams) || Array.isArray(next)
         ? next
@@ -206,7 +206,7 @@ export function createTeamRosterStore({
         ? { version: 1, teams: normalizedInput }
         : normalizedInput,
     );
-    setItem(teamKey, JSON.stringify(sanitized));
+    await setItem(teamKey, JSON.stringify(sanitized));
 
     if (typeof pushAuditLog === "function") {
       pushAuditLog({

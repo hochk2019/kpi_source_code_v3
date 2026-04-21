@@ -164,7 +164,7 @@ function isSameColumnConfig(a, b) {
 export function createImportColumnConfigStore({
   readUILayoutConfig = () => ({}),
   writeUILayoutConfig = (config) => config,
-  subscribeKey = () => () => {},
+  subscribeKey = () => () => { },
   pushAuditLog = null,
   uiLayoutKey = "",
 } = {}) {
@@ -185,7 +185,7 @@ export function createImportColumnConfigStore({
     return current;
   }
 
-  function saveImportColumnConfig({ hidden, widths } = {}, { actor = "system" } = {}) {
+  async function saveImportColumnConfig({ hidden, widths } = {}, { actor = "system" } = {}) {
     const layout = readUILayoutConfig();
     const importSection = layout && typeof layout.importData === "object" ? layout.importData : {};
     const current = normalizeImportColumnConfig(importSection.columns);
@@ -210,7 +210,7 @@ export function createImportColumnConfigStore({
       },
     };
 
-    writeUILayoutConfig(nextLayout);
+    await writeUILayoutConfig(nextLayout);
 
     if (typeof pushAuditLog === "function") {
       const visibleBaseColumns = IMPORT_COLUMN_IDS.length - hiddenBaseCount;
@@ -232,7 +232,7 @@ export function createImportColumnConfigStore({
   function subscribeImportColumnConfig(listener) {
     const fn = typeof listener === "function" ? listener : null;
     if (!fn) {
-      return () => {};
+      return () => { };
     }
 
     const emit = () => {
@@ -276,7 +276,7 @@ export function getImportColumnConfig() {
   return importColumnConfigRuntimeStore.getImportColumnConfig();
 }
 
-export function saveImportColumnConfig(config, options) {
+export async function saveImportColumnConfig(config, options) {
   return importColumnConfigRuntimeStore.saveImportColumnConfig(config, options);
 }
 

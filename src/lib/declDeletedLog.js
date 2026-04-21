@@ -3,7 +3,7 @@ export const DECL_DELETED_LOG_LIMIT = 500;
 
 export function createDeclDeletedLogStore({
   getItem = () => null,
-  setItem = () => {},
+  setItem = () => { },
   normalizeStr = (value) => String(value ?? '').trim(),
   normalizeDeclarationNumber = (value) =>
     String(value ?? '')
@@ -42,22 +42,22 @@ export function createDeclDeletedLogStore({
     );
     const mst = normalizeDeletedLogString(
       entry.mst ??
-        entry.ma_so_thue ??
-        entry.tax_code ??
-        entry.ma_so_thue_dn ??
-        entry.mst_dn ??
-        defaults.mst ??
-        '',
+      entry.ma_so_thue ??
+      entry.tax_code ??
+      entry.ma_so_thue_dn ??
+      entry.mst_dn ??
+      defaults.mst ??
+      '',
     );
     const company = normalizeDeletedLogString(
       entry.company ??
-        entry.cong_ty ??
-        entry.ten_cong_ty ??
-        entry.ten_dn ??
-        entry.doanh_nghiep ??
-        entry.ten_doanh_nghiep ??
-        defaults.company ??
-        '',
+      entry.cong_ty ??
+      entry.ten_cong_ty ??
+      entry.ten_dn ??
+      entry.doanh_nghiep ??
+      entry.ten_doanh_nghiep ??
+      defaults.company ??
+      '',
     );
     const deletedBy = normalizeDeletedLogString(
       entry.deleted_by ?? entry.actor ?? defaults.deleted_by ?? '',
@@ -151,7 +151,7 @@ export function createDeclDeletedLogStore({
 
     const serialized = JSON.stringify(normalized);
     if (serialized !== previousSerialized) {
-      setItem(deletedLogKey, serialized);
+      setItem(deletedLogKey, serialized).catch((e) => console.error('Background writeDeletedDeclLog failed', e));
     }
 
     return normalized;

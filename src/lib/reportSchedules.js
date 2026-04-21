@@ -225,8 +225,8 @@ export function normalizeReportScheduleEntry(entry, fallback = null) {
 
 export function createReportScheduleStore({
   getItem = () => null,
-  setItem = () => {},
-  refreshSharedKeys = () => {},
+  setItem = () => { },
+  refreshSharedKeys = () => { },
   pushAuditLog = null,
 } = {}) {
   function readReportSchedules() {
@@ -234,9 +234,9 @@ export function createReportScheduleStore({
     return Array.isArray(stored) ? stored.filter(Boolean) : [];
   }
 
-  function writeReportSchedules(list) {
+  async function writeReportSchedules(list) {
     const payload = Array.isArray(list) ? list : [];
-    setItem(REPORT_SCHEDULE_KEY, JSON.stringify(payload));
+    await setItem(REPORT_SCHEDULE_KEY, JSON.stringify(payload));
     refreshSharedKeys([REPORT_SCHEDULE_KEY]);
     return payload;
   }
@@ -246,7 +246,7 @@ export function createReportScheduleStore({
       return readReportSchedules().map((entry) => normalizeReportScheduleEntry(entry));
     },
 
-    saveReportSchedule(entry, { actor = "system" } = {}) {
+    async saveReportSchedule(entry, { actor = "system" } = {}) {
       const stored = readReportSchedules();
       const normalizedId = entry && entry.id ? String(entry.id) : "";
       const index = normalizedId ? stored.findIndex((item) => item?.id === normalizedId) : -1;
@@ -259,7 +259,7 @@ export function createReportScheduleStore({
         stored.push(normalized);
       }
 
-      writeReportSchedules(stored);
+      await writeReportSchedules(stored);
 
       if (typeof pushAuditLog === "function") {
         pushAuditLog({
@@ -278,7 +278,7 @@ export function createReportScheduleStore({
       return normalized;
     },
 
-    deleteReportSchedule(id, { actor = "system" } = {}) {
+    async deleteReportSchedule(id, { actor = "system" } = {}) {
       const stored = readReportSchedules();
       const normalizedId = String(id || "").trim();
       if (!normalizedId) {
@@ -290,7 +290,7 @@ export function createReportScheduleStore({
         return false;
       }
 
-      writeReportSchedules(next);
+      await writeReportSchedules(next);
 
       if (typeof pushAuditLog === "function") {
         pushAuditLog({

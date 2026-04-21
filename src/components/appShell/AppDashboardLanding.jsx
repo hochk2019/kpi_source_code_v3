@@ -1,15 +1,19 @@
 import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Info } from 'lucide-react';
 
 import { AppShellEmptyState } from '@/components/appShell/AppShellAsyncStates.jsx';
 import { buildAppDashboardSummaryState } from '@/components/appShell/appDashboardSummary.js';
 
 function DashboardSummaryCard({ label, value, detail, tone = 'default' }) {
   return (
-    <article className="ds-dashboard__summary-card" data-tone={tone}>
-      <p className="ds-dashboard__summary-label">{label}</p>
-      <p className="ds-dashboard__summary-value">{value}</p>
-      <p className="ds-dashboard__summary-detail">{detail}</p>
+    <article className="ds-dashboard__summary-card flex flex-col gap-1 relative items-center justify-center p-6 border rounded-xl bg-white/60 backdrop-blur-md shadow-sm" data-tone={tone}>
+      <div className="flex items-center gap-1.5 absolute top-4 left-4">
+        <p className="ds-dashboard__summary-label">{label}</p>
+        <button className="text-gray-400 hover:text-blue-500" title={detail} aria-label="More Info">
+          <Info size={14} />
+        </button>
+      </div>
+      <p className="ds-dashboard__summary-value text-4xl font-bold mt-4">{value}</p>
     </article>
   );
 }
@@ -69,12 +73,17 @@ export default function AppDashboardLanding({
       <div className="ds-dashboard__hero">
         <div className="ds-dashboard__hero-copy">
           <p className="ds-dashboard__eyebrow">Điểm vào mặc định</p>
-          <h3 className="ds-dashboard__title">Tổng quan KPI</h3>
-          <p className="ds-dashboard__description">
-            {isGuest
-              ? 'Bạn đang ở chế độ xem giới hạn. Chọn đúng luồng để bắt đầu thay vì rơi thẳng vào một màn hình chuyên sâu.'
-              : `${operatorName}, đây là điểm vào ưu tiên để kiểm tra sức khỏe vận hành, chọn luồng kế tiếp và giảm thời gian tìm tab.`}
-          </p>
+          <div className="flex items-center gap-2">
+            <h3 className="ds-dashboard__title">Tổng quan KPI</h3>
+            <button
+              className="text-gray-400 hover:text-blue-500 mt-1"
+              title={isGuest
+                ? 'Bạn đang ở chế độ xem giới hạn. Chọn đúng luồng để bắt đầu thay vì rơi thẳng vào một màn hình chuyên sâu.'
+                : `${operatorName}, đây là điểm vào ưu tiên để kiểm tra sức khỏe vận hành, chọn luồng kế tiếp và giảm thời gian tìm tab.`}
+            >
+              <Info size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="ds-dashboard__status-rail" aria-label="Trạng thái hiện tại">
@@ -106,14 +115,14 @@ export default function AppDashboardLanding({
       </div>
 
       <div className="ds-dashboard__grid">
-        <section className="ds-dashboard__panel" aria-labelledby="dashboard-quick-actions-title">
-          <div className="ds-dashboard__panel-header">
+        <section className="ds-dashboard__panel bg-white/60 backdrop-blur-md shadow-sm border border-gray-100/50" aria-labelledby="dashboard-quick-actions-title">
+          <div className="ds-dashboard__panel-header flex items-center justify-between">
             <h4 id="dashboard-quick-actions-title" className="ds-dashboard__panel-title">
-              Đi nhanh tới tác vụ chính
+              Tác vụ truy cập nhanh
             </h4>
-            <p className="ds-dashboard__panel-copy">
-              Ưu tiên những đường đi bắt đầu workflow thay vì mở tab rồi tự dò bề mặt chi tiết.
-            </p>
+            <button className="text-gray-400 hover:text-blue-500" title="Ưu tiên những đường đi bắt đầu workflow thay vì mở tab rồi tự dò bề mặt chi tiết.">
+              <Info size={16} />
+            </button>
           </div>
           <div className="ds-dashboard__quick-actions">
             {quickActions.map((action) => (
@@ -122,14 +131,14 @@ export default function AppDashboardLanding({
           </div>
         </section>
 
-        <section className="ds-dashboard__panel" aria-labelledby="dashboard-module-map-title">
-          <div className="ds-dashboard__panel-header">
+        <section className="ds-dashboard__panel bg-white/60 backdrop-blur-md shadow-sm border border-gray-100/50" aria-labelledby="dashboard-module-map-title">
+          <div className="ds-dashboard__panel-header flex items-center justify-between">
             <h4 id="dashboard-module-map-title" className="ds-dashboard__panel-title">
-              Bản đồ module theo cụm
+              Bản đồ module
             </h4>
-            <p className="ds-dashboard__panel-copy">
-              Mỗi cụm chỉ giữ các module thật sự nhìn thấy được với tài khoản hiện tại.
-            </p>
+            <button className="text-gray-400 hover:text-blue-500" title="Mỗi cụm chỉ giữ các module thật sự nhìn thấy được với tài khoản hiện tại.">
+              <Info size={16} />
+            </button>
           </div>
 
           <div className="ds-dashboard__module-groups">

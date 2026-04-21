@@ -86,5 +86,5 @@ export function resolveDefaultBackupDirectory(dbFile) {
   if (typeof dbFile === 'string' && dbFile.trim() && dbFile !== ':memory:') {
     return path.resolve(path.dirname(dbFile), 'backups');
   }
-  return path.resolve(process.cwd(), 'server', 'data', 'backups');
+  return path.resolve(process.cwd(), 'data', 'backups');
 }

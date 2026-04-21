@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart.jsx";
 
 const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 const TOP_STAFF_VISIBLE_COUNT_OPTIONS = [5, 7, 8, 9, 10, 12, 15];
@@ -43,9 +44,9 @@ function computeResponsiveTopStaffLimit(viewportHeight) {
 function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMessage, palette = DEFAULT_CHART_COLORS }) {
   const normalizedData = Array.isArray(data)
     ? data.map((item = {}) => ({
-        name: item.name || "",
-        value: Number(item.value || 0),
-      }))
+      name: item.name || "",
+      value: Number(item.value || 0),
+    }))
     : [];
   const total = normalizedData.reduce((sum, item) => sum + item.value, 0);
   const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
@@ -200,18 +201,16 @@ export function TopStaffWidget({
             <button
               type="button"
               onClick={() => onMetricChange?.("kpi")}
-              className={`rounded px-3 py-1.5 ${
-                metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
-              }`}
+              className={`rounded px-3 py-1.5 ${metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+                }`}
             >
               Điểm KPI
             </button>
             <button
               type="button"
               onClick={() => onMetricChange?.("decls")}
-              className={`rounded px-3 py-1.5 ${
-                metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
-              }`}
+              className={`rounded px-3 py-1.5 ${metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+                }`}
             >
               Số tờ khai
             </button>
@@ -248,7 +247,7 @@ export function TopStaffWidget({
         </div>
       ) : (
         <div className="mt-4 w-full" style={{ height: Math.max(220, visibleEntries * 44) }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer config={{ decls: { label: "Tờ khai", color: colors[0] } }} className="h-full w-full">
             <BarChart
               layout="vertical"
               data={displayedDeclData}
@@ -258,15 +257,19 @@ export function TopStaffWidget({
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" tickFormatter={formatInt} />
               <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
-              <Tooltip
-                formatter={(value) => [`${formatInt(value)} tờ khai`, "Tờ khai"]}
-                labelFormatter={(label, payload) => {
-                  const entry = payload && payload[0] && payload[0].payload;
-                  if (entry?.team && entry.team !== "Chưa gán tổ đội") {
-                    return `${label} — ${entry.team}`;
-                  }
-                  return label;
-                }}
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(label, payload) => {
+                      const entry = payload && payload[0] && payload[0].payload;
+                      if (entry?.team && entry.team !== "Chưa gán tổ đội") {
+                        return `${label} — ${entry.team}`;
+                      }
+                      return label;
+                    }}
+                  />
+                }
               />
               <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
                 {displayedDeclData.map((item, index) => (
@@ -275,7 +278,7 @@ export function TopStaffWidget({
                 <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       )}
 
@@ -337,6 +340,17 @@ export function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLOR
   const deltaPercent = comparison?.delta?.kpiPercent ?? null;
   const deltaClass = deltaKPI > 0 ? "text-emerald-600" : deltaKPI < 0 ? "text-red-600" : "text-gray-600";
 
+  const chartConfig = {
+    kpi: {
+      label: "Điểm KPI",
+      color: kpiColor,
+    },
+    decls: {
+      label: "Tờ khai",
+      color: declColor,
+    },
+  };
+
   return (
     <section className="ds-card space-y-4 p-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -362,18 +376,18 @@ export function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLOR
         ) : null}
       </div>
       <div className="mt-4 h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer config={chartConfig} className="h-full w-full">
           <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="period" />
-            <YAxis yAxisId="left" stroke={kpiColor} />
-            <YAxis yAxisId="right" orientation="right" stroke={declColor} />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={8} />
+            <YAxis yAxisId="left" stroke="var(--color-kpi)" tickLine={false} axisLine={false} />
+            <YAxis yAxisId="right" orientation="right" stroke="var(--color-decls)" tickLine={false} axisLine={false} />
+            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
             <Legend />
-            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke={kpiColor} strokeWidth={2} />
-            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke={declColor} strokeWidth={2} />
+            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke="var(--color-kpi)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke="var(--color-decls)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
           </LineChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </div>
     </section>
   );

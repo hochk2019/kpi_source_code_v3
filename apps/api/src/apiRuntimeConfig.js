@@ -65,7 +65,7 @@ function resolveDbFile(value, projectRoot, options) {
       return null;
     }
 
-    return path.resolve(projectRoot, "server", "data", "storage.sqlite");
+    return path.resolve(projectRoot, "data", "storage.sqlite");
   }
 
   if (value === ":memory:") {
