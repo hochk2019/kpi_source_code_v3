@@ -146,69 +146,75 @@ export default function DataImporterShell({
 
         <DataImporterWorkflowGuide {...workflowGuideProps} />
 
-        <WorkflowStageSection
-          id={stageIdByNumber.get(1)}
-          ariaLabel="Bước 1: Nạp nguồn"
-          title="1. Nạp nguồn"
-          description="Chuẩn bị nguồn dữ liệu bằng file XLSX hoặc đồng bộ ECUS trước khi chuyển sang bước rà soát."
-          status={sourceStageStatus}
-        >
-          <Suspense fallback={<StageLoadingState message="Đang tải khối nạp nguồn dữ liệu..." />}>
-            <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
-            {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
-            <DataImporterFileActions {...fileActionsProps} />
-          </Suspense>
-        </WorkflowStageSection>
+        {workflowState.currentStep === 1 && (
+          <WorkflowStageSection
+            id={stageIdByNumber.get(1)}
+            ariaLabel="Bước 1: Nạp nguồn"
+            title="1. Nạp nguồn"
+            description="Chuẩn bị nguồn dữ liệu bằng file XLSX hoặc đồng bộ ECUS trước khi chuyển sang bước rà soát."
+            status={sourceStageStatus}
+          >
+            <Suspense fallback={<StageLoadingState message="Đang tải khối nạp nguồn dữ liệu..." />}>
+              <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+              {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
+              <DataImporterFileActions {...fileActionsProps} />
+            </Suspense>
+          </WorkflowStageSection>
+        )}
 
-        <WorkflowStageSection
-          id={stageIdByNumber.get(2)}
-          ariaLabel="Bước 2: Rà soát dữ liệu"
-          title="2. Rà soát dữ liệu"
-          description={
-            mode === "preview"
-              ? previewSource === "sync"
-                ? "Kiểm tra dữ liệu xem trước từ ECUS, áp bộ lọc rà soát, rồi quyết định có chạy đồng bộ vào workspace hay không."
-                : "Kiểm tra dữ liệu xem trước, xử lý bộ lọc và quyết định có import vào workspace hay không."
-              : "Điều chỉnh bộ lọc và cách hiển thị để rà soát workspace trước khi chốt thay đổi."
-          }
-          status={reviewStageStatus}
-        >
-          <Suspense fallback={<StageLoadingState message="Đang tải khối rà soát dữ liệu..." />}>
-            {mode === "preview" ? (
-              <>
-                <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
+        {workflowState.currentStep === 2 && (
+          <WorkflowStageSection
+            id={stageIdByNumber.get(2)}
+            ariaLabel="Bước 2: Rà soát dữ liệu"
+            title="2. Rà soát dữ liệu"
+            description={
+              mode === "preview"
+                ? previewSource === "sync"
+                  ? "Kiểm tra dữ liệu xem trước từ ECUS, áp bộ lọc rà soát, rồi quyết định có chạy đồng bộ vào workspace hay không."
+                  : "Kiểm tra dữ liệu xem trước, xử lý bộ lọc và quyết định có import vào workspace hay không."
+                : "Điều chỉnh bộ lọc và cách hiển thị để rà soát workspace trước khi chốt thay đổi."
+            }
+            status={reviewStageStatus}
+          >
+            <Suspense fallback={<StageLoadingState message="Đang tải khối rà soát dữ liệu..." />}>
+              {mode === "preview" ? (
+                <>
+                  <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
+                  <DataImporterListControlsPanel {...listControlsPanelProps} />
+                  <DataImporterResultsPanel {...resultsPanelProps} />
+                </>
+              ) : (
                 <DataImporterListControlsPanel {...listControlsPanelProps} />
-                <DataImporterResultsPanel {...resultsPanelProps} />
-              </>
-            ) : (
-              <DataImporterListControlsPanel {...listControlsPanelProps} />
-            )}
-          </Suspense>
-        </WorkflowStageSection>
+              )}
+            </Suspense>
+          </WorkflowStageSection>
+        )}
 
-        <WorkflowStageSection
-          id={stageIdByNumber.get(3)}
-          ariaLabel="Bước 3: Lưu và theo dõi"
-          title="3. Lưu và theo dõi"
-          description={
-            mode === "preview"
-              ? "Sau khi import, dữ liệu sẽ chuyển sang workspace đã lưu để tiếp tục theo dõi và xử lý hậu kiểm."
-              : "Chốt thay đổi, theo dõi cảnh báo sau đồng bộ, và tiếp tục giám sát dữ liệu đã lưu."
-          }
-          status={saveStageStatus}
-        >
-          <DataImporterSummaryCards {...summaryCardsProps} />
-          <DataImporterUpdatedRowsBanner {...updatedRowsBannerProps} />
-          <Suspense fallback={<StageLoadingState message="Đang tải khối lưu và theo dõi..." />}>
-            {mode !== "preview" ? <DataImporterResultsPanel {...resultsPanelProps} /> : null}
-            {isAdminRole ? <DataImporterMonitoringPanel {...monitoringPanelProps} /> : null}
-          </Suspense>
-          {mode === "preview" ? (
-            <p className="text-xs text-[color:var(--ds-text-muted)]">
-              Import xong, toàn bộ workspace đã lưu và bề mặt theo dõi cảnh báo sẽ xuất hiện ở bước này.
-            </p>
-          ) : null}
-        </WorkflowStageSection>
+        {workflowState.currentStep === 3 && (
+          <WorkflowStageSection
+            id={stageIdByNumber.get(3)}
+            ariaLabel="Bước 3: Lưu và theo dõi"
+            title="3. Lưu và theo dõi"
+            description={
+              mode === "preview"
+                ? "Sau khi import, dữ liệu sẽ chuyển sang workspace đã lưu để tiếp tục theo dõi và xử lý hậu kiểm."
+                : "Chốt thay đổi, theo dõi cảnh báo sau đồng bộ, và tiếp tục giám sát dữ liệu đã lưu."
+            }
+            status={saveStageStatus}
+          >
+            <DataImporterSummaryCards {...summaryCardsProps} />
+            <DataImporterUpdatedRowsBanner {...updatedRowsBannerProps} />
+            <Suspense fallback={<StageLoadingState message="Đang tải khối lưu và theo dõi..." />}>
+              {mode !== "preview" ? <DataImporterResultsPanel {...resultsPanelProps} /> : null}
+              {isAdminRole ? <DataImporterMonitoringPanel {...monitoringPanelProps} /> : null}
+            </Suspense>
+            {mode === "preview" ? (
+              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                Import xong, toàn bộ workspace đã lưu và bề mặt theo dõi cảnh báo sẽ xuất hiện ở bước này.
+              </p>
+            ) : null}
+          </WorkflowStageSection>
+        )}
       </div>
     </>
   );

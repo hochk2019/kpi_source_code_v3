@@ -21,10 +21,9 @@ import { loadRules, loadRuleSets } from "@/lib/rules.js";
 
 import {
   ReportingControlsPanel,
-  ReportingWorkspaceGuidePanel,
   ReportingSchedulePanel,
 } from "@/components/reporting/ReportingPanels.jsx";
-import { ReportingDashboardOverview } from "@/components/reporting/ReportingDashboardOverview.jsx";
+import { ArrowLeft } from "lucide-react";
 import {
   formatDecimal,
   formatInt,
@@ -39,6 +38,7 @@ import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPr
 
 import { isAdminRole } from "../../packages/domain/src/accountRoles.js";
 
+import { ReportingAdjustmentsPanel } from "@/components/reporting/ReportingAdjustmentsPanel.jsx";
 import { useChartPalette } from "@/designSystem/hooks.js";
 
 const REPORTING_REFRESH_KEYS = [DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, KPI_ADJUSTMENTS_KEY];
@@ -68,14 +68,10 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     setStaffViewMode,
     teamViewMode,
     setTeamViewMode,
-    topStaffMetric,
-    setTopStaffMetric,
     staffSortKey,
     setStaffSortKey,
     teamSortKey,
     setTeamSortKey,
-    topStaffVisibleCount,
-    setTopStaffVisibleCount,
     columnVisibility,
     exportColumns,
     handleToggleColumnVisibility,
@@ -413,98 +409,9 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const summary = report.summary;
 
-  const summaryCompanyCardValue = managedCompanyCount || summary.companyCount;
-
-  const teamCountForSubtitle = Array.isArray(roster?.teams) ? roster.teams.length : 0;
-
-  const companyCardSubtitle = teamCountForSubtitle
-    ? `Doanh nghiệp do ${teamCountForSubtitle} tổ đội quản lý`
-    : "Doanh nghiệp duy nhất trong giai đoạn";
-
-  const ruleApply = selectedRuleMeta?.applyFrom
-    ? `Áp dụng từ ${selectedRuleMeta.applyFrom}`
-    : report.rules?.applyFrom
-      ? `Áp dụng từ ${report.rules.applyFrom}`
-      : "Áp dụng ngay";
-
   const adjustmentsReport = report.adjustments;
 
-  const topStaffByKpi = useMemo(() => {
-    return sortStatsCollection(report.staff.list, "kpi", (item) => item.name || "");
-  }, [report.staff.list]);
 
-  const topStaffByDecls = useMemo(() => {
-    return sortStatsCollection(report.staff.list, "decls", (item) => item.name || "")
-      .map((item) => {
-        const teamLabel =
-          item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
-            ? item.teamLabel
-            : "Chưa gán tổ đội";
-
-        return {
-          key: item.key,
-
-          name: item.name,
-
-          decls: Number(item?.stats?.decls || 0),
-
-          team: teamLabel,
-        };
-      })
-
-      .filter((item) => item.decls > 0);
-  }, [report.staff.list]);
-
-  const teamPieData = useMemo(() => {
-    return report.teams.list.map((item) => ({
-      name: item.name,
-
-      value: Math.round((item.stats.kpi || 0) * 10) / 10,
-    }));
-  }, [report.teams.list]);
-
-  const teamDeclPieData = useMemo(() => {
-    return report.teams.list.map((item) => ({
-      name: item.name,
-
-      value: Number(item.stats.decls || 0),
-    }));
-  }, [report.teams.list]);
-
-  const chartPalette = useChartPalette();
-
-  const sortedStaffList = useMemo(() => {
-    return sortStatsCollection(
-      report.staff.list,
-
-      staffSortKey,
-
-      (item) => {
-        const team =
-          item.teamLabel && item.teamLabel !== "Chưa gán tổ đội" ? ` — ${item.teamLabel}` : "";
-
-        return `${item.name || ""}${team}`;
-      },
-    );
-  }, [report.staff.list, staffSortKey]);
-
-  const sortedTeamList = useMemo(() => {
-    return sortStatsCollection(report.teams.list, teamSortKey, (item) => item.name || "");
-  }, [report.teams.list, teamSortKey]);
-
-  const trend = report.trend || {};
-
-  const trendSeries = trend.series || [];
-
-  const trendComparison = trend.comparison || null;
-
-  const companySummaryAllStaff = Array.isArray(report?.companies?.staff)
-    ? report.companies.staff
-    : [];
-
-  const companySummaryAllTeams = Array.isArray(report?.companies?.teams)
-    ? report.companies.teams
-    : [];
 
   const staffOptions = useMemo(() => {
     const base = [{ value: "all", label: `Tất cả nhân viên (${report.staff.list.length})` }];
@@ -526,6 +433,30 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
     return base.concat(report.teams.list.map((item) => ({ value: item.key, label: item.name })));
   }, [report.teams.list]);
+
+  const sortedStaffList = useMemo(() => {
+    return sortStatsCollection(report.staff.list, staffSortKey, (item) => item?.name || "");
+  }, [report.staff.list, staffSortKey]);
+
+  const sortedTeamList = useMemo(() => {
+    return sortStatsCollection(report.teams.list, staffSortKey, (item) => item?.name || "");
+  }, [report.teams.list, staffSortKey]);
+
+  const companySummaryAllStaff = useMemo(() => {
+    if (staffViewMode !== "company") {
+      return [];
+    }
+
+    return sortStatsCollection(report.companies.rows, staffSortKey, (item) => item?.name || "");
+  }, [report.companies.rows, staffSortKey, staffViewMode]);
+
+  const companySummaryAllTeams = useMemo(() => {
+    if (staffViewMode !== "company") {
+      return [];
+    }
+
+    return sortStatsCollection(report.companies.groups, staffSortKey, (item) => item?.name || "");
+  }, [report.companies.groups, staffSortKey, staffViewMode]);
 
   const filteredStaffList = sortedStaffList;
 
@@ -611,6 +542,8 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const excludeCodes = report.rules?.licenseExcludedSummary || "Không có";
 
+  const ruleApply = report.rules?.ruleApply || "Cấu hình chuẩn hệ thống";
+
   const ruleComparisonLabel = ruleComparison ? ruleDeltaLabel : "";
 
   const activeRuleMessage =
@@ -620,6 +553,16 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center text-sm pt-2">
+        <button
+          onClick={() => window.location.href = "/?section=overview&tab=dashboard"}
+          className="flex items-center gap-1.5 text-slate-500 hover:text-amber-600 font-medium transition-colors"
+        >
+          <ArrowLeft size={16} />
+          <span>Quay lại Dashboard Tổng quan</span>
+        </button>
+      </div>
+
       <ReportingControlsPanel
         summaryDeclsText={`${formatInt(summary.decls)} tờ khai hợp lệ`}
         selectedRuleName={selectedRuleMeta?.name || ""}
@@ -663,38 +606,8 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
         onRefreshTemplates={handleRefreshTemplates}
       />
 
-      <ReportingWorkspaceGuidePanel canManageSchedule={isAdmin} />
 
-      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.insights} aria-label="Dashboard insight KPI">
-        <SectionHeader
-          title="Dashboard insight KPI"
-          titleAs="h3"
-          description="Bắt đầu ở dashboard để nắm nhịp KPI, xu hướng và phân bổ trước khi drill-down theo nhân viên hoặc tổ đội."
-        />
-        <ReportingDashboardOverview
-          summary={summary}
-          adjustmentsReport={adjustmentsReport}
-          summaryCompanyCardValue={summaryCompanyCardValue}
-          companyCardSubtitle={companyCardSubtitle}
-          trendSeries={trendSeries}
-          trendComparison={trendComparison}
-          chartPalette={chartPalette}
-          teamPieData={teamPieData}
-          teamDeclPieData={teamDeclPieData}
-          topStaffMetric={topStaffMetric}
-          onTopStaffMetricChange={setTopStaffMetric}
-          topStaffByKpi={topStaffByKpi}
-          topStaffByDecls={topStaffByDecls}
-          topStaffVisibleCount={topStaffVisibleCount}
-          onTopStaffVisibleCountChange={setTopStaffVisibleCount}
-          adjustmentPage={adjustmentPage}
-          adjustmentPageSize={adjustmentPageSize}
-          onAdjustmentPageChange={setAdjustmentPage}
-          onAdjustmentPageSizeChange={handleAdjustmentPageSizeChange}
-          formatInt={formatInt}
-          formatDecimal={formatDecimal}
-        />
-      </SectionSurface>
+
 
       <SectionSurface id={REPORT_VIEWER_SECTION_IDS.explorer} aria-label="Khám phá phạm vi báo cáo KPI">
         <SectionHeader
@@ -749,6 +662,18 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
           formatDecimal={formatDecimal}
         />
       </SectionSurface>
+
+      <div id="report-viewer-adjustments" className="mt-8">
+        <ReportingAdjustmentsPanel
+          adjustmentsReport={adjustmentsReport}
+          adjustmentPageSize={adjustmentPageSize}
+          adjustmentPage={adjustmentPage}
+          onAdjustmentPageChange={setAdjustmentPage}
+          onAdjustmentPageSizeChange={handleAdjustmentPageSizeChange}
+          formatInt={formatInt}
+          formatDecimal={formatDecimal}
+        />
+      </div>
 
       {isAdmin ? (
         <div id={REPORT_VIEWER_SECTION_IDS.schedule}>

@@ -99,8 +99,8 @@ function toAdjustments(input) {
   const totalsSource = isRecord(source.totalsByCategory)
     ? source.totalsByCategory
     : isRecord(source.totals)
-    ? source.totals
-    : {};
+      ? source.totals
+      : {};
   const totalsByCategory = Object.keys(totalsSource).reduce((acc, key) => {
     acc[key] = {
       points: Number(totalsSource[key]?.points || 0),
@@ -122,26 +122,26 @@ function toAdjustments(input) {
   );
   const applied = Array.isArray(source.applied)
     ? source.applied.map((entry) => {
-        const adjustment = isRecord(entry?.adjustment) ? entry.adjustment : {};
-        const references = Array.isArray(adjustment.references)
-          ? adjustment.references.map(normalizeText).filter(Boolean)
-          : [];
+      const adjustment = isRecord(entry?.adjustment) ? entry.adjustment : {};
+      const references = Array.isArray(adjustment.references)
+        ? adjustment.references.map(normalizeText).filter(Boolean)
+        : [];
 
-        return {
-          key: normalizeText(adjustment.id) || `${normalizeText(entry?.date)}-${normalizeText(entry?.nhan_vien)}`,
-          date: normalizeText(entry?.date),
-          displayDate: normalizeText(entry?.displayDate),
-          label: normalizeText(adjustment.label) || normalizeText(entry?.loai_hinh),
-          staffName: normalizeText(entry?.nhan_vien),
-          teamName: normalizeText(entry?.team),
-          quantity: Number.isFinite(Number(adjustment.quantity)) ? Number(adjustment.quantity) : null,
-          unitPoints: Number.isFinite(Number(adjustment.unitPoints)) ? Number(adjustment.unitPoints) : null,
-          references,
-          referencesText: references.join(", "),
-          note: normalizeText(adjustment.note),
-          kpi: Number(entry?.kpi || 0),
-        };
-      })
+      return {
+        key: normalizeText(adjustment.id) || `${normalizeText(entry?.date)}-${normalizeText(entry?.nhan_vien)}`,
+        date: normalizeText(entry?.date),
+        displayDate: normalizeText(entry?.displayDate),
+        label: normalizeText(adjustment.label) || normalizeText(entry?.loai_hinh),
+        staffName: normalizeText(entry?.nhan_vien),
+        teamName: normalizeText(entry?.team),
+        quantity: Number.isFinite(Number(adjustment.quantity)) ? Number(adjustment.quantity) : null,
+        unitPoints: Number.isFinite(Number(adjustment.unitPoints)) ? Number(adjustment.unitPoints) : null,
+        references,
+        referencesText: references.join(", "),
+        note: normalizeText(adjustment.note),
+        kpi: Number(entry?.kpi || 0),
+      };
+    })
     : [];
 
   return {
@@ -257,14 +257,14 @@ function toScheduleItem(input) {
       rawDayOfWeek === null || rawDayOfWeek === undefined || rawDayOfWeek === ""
         ? null
         : Number.isFinite(dayOfWeek)
-        ? dayOfWeek
-        : null,
+          ? dayOfWeek
+          : null,
     dayOfMonth:
       rawDayOfMonth === null || rawDayOfMonth === undefined || rawDayOfMonth === ""
         ? null
         : Number.isFinite(dayOfMonth)
-        ? dayOfMonth
-        : null,
+          ? dayOfMonth
+          : null,
     formats,
     formatsSummary: formats.map((item) => item.toUpperCase()).join(", "),
     recipients,
@@ -458,16 +458,16 @@ function normalizeTeamItem(input) {
     rows,
     members: Array.isArray(source.members)
       ? source.members.map((member) => {
-          const memberSource = isRecord(member) ? member : {};
-          const memberStats = isRecord(memberSource.stats) ? memberSource.stats : {};
+        const memberSource = isRecord(member) ? member : {};
+        const memberStats = isRecord(memberSource.stats) ? memberSource.stats : {};
 
-          return {
-            key: normalizeText(memberSource.key),
-            name: normalizeText(memberSource.name),
-            stats: memberStats,
-            licenseSummary: toLicenseSummary(memberStats),
-          };
-        })
+        return {
+          key: normalizeText(memberSource.key),
+          name: normalizeText(memberSource.name),
+          stats: memberStats,
+          licenseSummary: toLicenseSummary(memberStats),
+        };
+      })
       : [],
     companies: toCompanyRows(source.companies),
   };
@@ -713,7 +713,7 @@ export function loadLocalReportingScheduleItems() {
 
 export function subscribeReportingSchedules(listener) {
   if (typeof listener !== "function") {
-    return () => {};
+    return () => { };
   }
 
   reportingSchedulesListeners.add(listener);
@@ -758,4 +758,8 @@ export async function fetchReportingViewModel(query = {}, currentRules = null) {
     ...await requestJson("/api/v4/reporting/view", query),
     currentRules,
   });
+}
+
+export async function fetchDashboardSummary(query = {}, currentRules = null) {
+  return fetchReportingViewModel(query, currentRules);
 }

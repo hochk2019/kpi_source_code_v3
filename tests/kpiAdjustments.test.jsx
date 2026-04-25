@@ -469,6 +469,9 @@ describe('KPIAdjustments UI', () => {
 
 
 
+    const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
+    await userEvent.click(historyTab);
+
     const listHeadings = await screen.findAllByText('Danh sách điểm KPI +/-');
 
     expect(listHeadings.length).toBeGreaterThan(0);
@@ -560,6 +563,9 @@ describe('KPIAdjustments UI', () => {
 
     const firstRender = render(<KPIAdjustments currentUser={approverUser} />);
 
+    const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
+    await userEvent.click(historyTab);
+
     await screen.findByText('Danh sách điểm KPI +/-');
 
     await userEvent.selectOptions(screen.getByLabelText('Trạng thái'), 'approved');
@@ -571,6 +577,9 @@ describe('KPIAdjustments UI', () => {
     firstRender.unmount();
 
     render(<KPIAdjustments currentUser={approverUser} />);
+
+    const historyTab2 = await screen.findByRole('tab', { name: 'Lịch sử' });
+    await userEvent.click(historyTab2);
 
     expect(await screen.findByLabelText('Trạng thái')).toHaveValue('approved');
     expect(screen.getByLabelText('Lọc theo nhân viên')).toHaveValue('binh');
@@ -609,6 +618,9 @@ describe('KPIAdjustments UI', () => {
 
     const firstRender = render(<KPIAdjustments currentUser={approverUser} />);
 
+    const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
+    await userEvent.click(historyTab);
+
     expect(await screen.findByText('Hiển thị 1-15 / 19 mục')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
@@ -624,6 +636,9 @@ describe('KPIAdjustments UI', () => {
     firstRender.unmount();
 
     render(<KPIAdjustments currentUser={approverUser} />);
+
+    const historyTab2 = await screen.findByRole('tab', { name: 'Lịch sử' });
+    await userEvent.click(historyTab2);
 
     expect(await screen.findByLabelText('Số dòng mỗi trang')).toHaveValue('30');
     expect(screen.getByText('Hiển thị 1-19 / 19 mục')).toBeInTheDocument();
@@ -655,6 +670,9 @@ describe('KPIAdjustments UI', () => {
         currentUser={{ username: 'manager.bulk', permissions: { adjustApprove: true, adjustSubmit: true } }}
       />
     );
+
+    const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
+    await userEvent.click(historyTab);
 
     await screen.findByText('Danh sách điểm KPI +/-');
 
@@ -705,6 +723,9 @@ describe('KPIAdjustments UI', () => {
         currentUser={{ username: 'manager.bulk', permissions: { adjustApprove: true, adjustSubmit: true } }}
       />
     );
+
+    const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
+    await userEvent.click(historyTab);
 
     await screen.findByText('Danh sách điểm KPI +/-');
 

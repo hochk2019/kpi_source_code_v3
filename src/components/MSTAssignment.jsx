@@ -354,6 +354,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
   /** UI */
+  const uniqueAgencies = Array.from(
+    new Set(
+      rows.flatMap((r) => [r.agency, ...(Array.isArray(r.agents) ? r.agents : [])]).filter(Boolean)
+    )
+  );
 
   return (
 
@@ -606,6 +611,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         />
       </MstAssignmentDataTablePanel>
 
+      <datalist id="hq-agency-list">
+        {uniqueAgencies.map((ag) => (
+          <option key={ag} value={ag} />
+        ))}
+      </datalist>
     </div>
 
   );

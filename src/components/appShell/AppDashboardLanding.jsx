@@ -1,22 +1,13 @@
 import React from 'react';
-import { ArrowRight, Info } from 'lucide-react';
+import { ArrowRight, Info, RefreshCw, AlertCircle, FileBarChart } from 'lucide-react';
 
-import { AppShellEmptyState } from '@/components/appShell/AppShellAsyncStates.jsx';
+import { AppShellEmptyState, AppShellLoadingState } from '@/components/appShell/AppShellAsyncStates.jsx';
 import { buildAppDashboardSummaryState } from '@/components/appShell/appDashboardSummary.js';
-
-function DashboardSummaryCard({ label, value, detail, tone = 'default' }) {
-  return (
-    <article className="ds-dashboard__summary-card flex flex-col gap-1 relative items-center justify-center p-6 border rounded-xl bg-white/60 backdrop-blur-md shadow-sm" data-tone={tone}>
-      <div className="flex items-center gap-1.5 absolute top-4 left-4">
-        <p className="ds-dashboard__summary-label">{label}</p>
-        <button className="text-gray-400 hover:text-blue-500" title={detail} aria-label="More Info">
-          <Info size={14} />
-        </button>
-      </div>
-      <p className="ds-dashboard__summary-value text-4xl font-bold mt-4">{value}</p>
-    </article>
-  );
-}
+import { useDashboardKpiOverview } from '@/hooks/useDashboardKpiOverview.js';
+import { useChartPalette } from '@/designSystem/hooks.js';
+import { ReportingExecutiveSummaryPanel } from '@/components/reporting/ReportingExecutiveSummaryPanel.jsx';
+import { SummaryCard, TeamPieWidget, TrendLineChart } from '@/components/reporting/ReportingOverviewWidgets.jsx';
+import { formatInt, formatDecimal } from '@/components/reporting/reportingDetailUtils.js';
 
 function DashboardQuickAction({ label, detail, onClick, icon = ArrowRight }) {
   const ActionIcon = icon;
@@ -47,12 +38,9 @@ export default function AppDashboardLanding({
   canViewDataHealth = false,
 }) {
   const {
-    enabledAssistCount,
     isGuest,
     operatorName,
     quickActions,
-    visibleModuleCount,
-    workflowSections,
   } = buildAppDashboardSummaryState({
     currentUser,
     sections,
@@ -63,119 +51,175 @@ export default function AppDashboardLanding({
     canViewDataHealth,
   });
 
+  const {
+    loading,
+    error,
+    reload,
+    summary,
+    trendSeries,
+    trendComparison,
+    adjustmentsReport,
+    teamPieData,
+    teamDeclPieData,
+    topStaffByKpi,
+    dateRange
+  } = useDashboardKpiOverview();
+
+  const chartPalette = useChartPalette();
+
+  const handleGoToReports = () => {
+    // Attempt to navigate to the detailed report section
+    // Fallback to checking how module tags navigate
+    onNavigate?.("reports") || onNavigate?.("performance_reports");
+  };
+
+  const summaryCards = [
+    {
+      title: "Tổng tờ khai",
+      value: formatInt(summary?.decls || 0),
+      subtitle: `Nhập: ${formatInt(summary?.import || 0)} • Xuất: ${formatInt(summary?.export || 0)}`,
+    },
+    {
+      title: "Tổng điểm KPI",
+      value: formatDecimal(summary?.kpi || 0),
+      subtitle: "Bao gồm điểm loại hình và giấy phép",
+    },
+    {
+      title: "Điểm KPI +/- bổ sung",
+      value: formatDecimal(adjustmentsReport?.totalPoints || 0),
+      subtitle: `Đã duyệt: ${formatInt(adjustmentsReport?.approvedCount || 0)} • Chờ duyệt: ${formatInt(
+        adjustmentsReport?.pendingCount || 0,
+      )}`,
+    },
+    {
+      title: "Số công ty quản lý",
+      value: formatInt(summary?.companyCount || 0),
+      subtitle: "Trong phân bổ tổ đội/nhân viên hiện tại",
+    },
+  ];
+
   return (
     <section
       id="app-workflow-dashboard-landing"
       tabIndex={-1}
-      className="ds-dashboard"
+      className="ds-dashboard w-full"
       aria-label="Dashboard tổng quan KPI"
     >
-      <div className="ds-dashboard__hero">
+      <div className="ds-dashboard__hero flex flex-wrap items-center justify-between pb-6 mb-6 border-b border-gray-100">
         <div className="ds-dashboard__hero-copy">
-          <p className="ds-dashboard__eyebrow">Điểm vào mặc định</p>
+          <p className="ds-dashboard__eyebrow text-amber-600 font-medium tracking-wide text-xs uppercase mb-1">
+            Tổng quan KPI
+          </p>
           <div className="flex items-center gap-2">
-            <h3 className="ds-dashboard__title">Tổng quan KPI</h3>
+            <h3 className="ds-dashboard__title text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
+              {isGuest ? 'Chế độ khách' : `${operatorName || 'Operator'}`}
+            </h3>
             <button
-              className="text-gray-400 hover:text-blue-500 mt-1"
-              title={isGuest
-                ? 'Bạn đang ở chế độ xem giới hạn. Chọn đúng luồng để bắt đầu thay vì rơi thẳng vào một màn hình chuyên sâu.'
-                : `${operatorName}, đây là điểm vào ưu tiên để kiểm tra sức khỏe vận hành, chọn luồng kế tiếp và giảm thời gian tìm tab.`}
+              className="text-gray-400 hover:text-amber-500 mt-1 transition-colors"
+              title="Điểm vào ưu tiên để kiểm tra sức khỏe vận hành."
             >
               <Info size={20} />
             </button>
           </div>
+          <p className="text-sm text-gray-500 mt-1">
+            Kỳ hiện tại: {dateRange.from} — {dateRange.to}
+          </p>
         </div>
 
-        <div className="ds-dashboard__status-rail" aria-label="Trạng thái hiện tại">
-          <span className="ds-dashboard__status-pill">
-            {isGuest ? 'Chế độ khách' : `Vai trò ${currentUser?.role || 'viewer'}`}
-          </span>
-          <span className="ds-dashboard__status-pill">{visibleModuleCount} module khả dụng</span>
-          <span className="ds-dashboard__status-pill">{workflowSections.length} cụm công việc</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={reload}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-gray-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-all shadow-sm"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            Làm mới
+          </button>
         </div>
       </div>
 
-      <div className="ds-dashboard__summary-grid">
-        <DashboardSummaryCard
-          label="Cụm điều hướng"
-          value={workflowSections.length.toLocaleString('vi-VN')}
-          detail="Nhóm shell đang mở cho tài khoản hiện tại."
-        />
-        <DashboardSummaryCard
-          label="Module tác nghiệp"
-          value={visibleModuleCount.toLocaleString('vi-VN')}
-          detail="Tổng số tab mà người dùng hiện tại có thể truy cập."
-          tone="accent"
-        />
-        <DashboardSummaryCard
-          label="Bề mặt hỗ trợ"
-          value={enabledAssistCount.toLocaleString('vi-VN')}
-          detail="Health, AI và audit được bật theo quyền hiện tại."
-        />
-      </div>
-
-      <div className="ds-dashboard__grid">
-        <section className="ds-dashboard__panel bg-white/60 backdrop-blur-md shadow-sm border border-gray-100/50" aria-labelledby="dashboard-quick-actions-title">
-          <div className="ds-dashboard__panel-header flex items-center justify-between">
-            <h4 id="dashboard-quick-actions-title" className="ds-dashboard__panel-title">
-              Tác vụ truy cập nhanh
-            </h4>
-            <button className="text-gray-400 hover:text-blue-500" title="Ưu tiên những đường đi bắt đầu workflow thay vì mở tab rồi tự dò bề mặt chi tiết.">
-              <Info size={16} />
-            </button>
+      <div className="space-y-6">
+        {error && (
+          <div className="p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 flex items-start gap-3">
+            <AlertCircle size={20} className="shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-sm">Lỗi dữ liệu KPI</h4>
+              <p className="text-sm mt-1">{error}</p>
+            </div>
           </div>
-          <div className="ds-dashboard__quick-actions">
-            {quickActions.map((action) => (
-              <DashboardQuickAction key={action.label} {...action} />
-            ))}
-          </div>
-        </section>
+        )}
 
-        <section className="ds-dashboard__panel bg-white/60 backdrop-blur-md shadow-sm border border-gray-100/50" aria-labelledby="dashboard-module-map-title">
-          <div className="ds-dashboard__panel-header flex items-center justify-between">
-            <h4 id="dashboard-module-map-title" className="ds-dashboard__panel-title">
-              Bản đồ module
-            </h4>
-            <button className="text-gray-400 hover:text-blue-500" title="Mỗi cụm chỉ giữ các module thật sự nhìn thấy được với tài khoản hiện tại.">
-              <Info size={16} />
-            </button>
+        {loading && !summary?.kpi ? (
+          <div className="min-h-[400px]">
+            <AppShellLoadingState title="Đang tải dữ liệu KPI..." />
           </div>
+        ) : (
+          <>
+            <ReportingExecutiveSummaryPanel
+              summary={summary || {}}
+              adjustmentsReport={adjustmentsReport || {}}
+              trendComparison={trendComparison}
+              topStaffByKpi={topStaffByKpi || []}
+              teamPieData={teamPieData || []}
+              formatInt={formatInt}
+              formatDecimal={formatDecimal}
+            />
 
-          <div className="ds-dashboard__module-groups">
-            {workflowSections.length ? (
-              workflowSections.map((section) => (
-                <article key={section.id} className="ds-dashboard__module-group">
-                  <div className="ds-dashboard__module-group-header">
-                    <h5 className="ds-dashboard__module-group-title">{section.label}</h5>
-                    <span className="ds-dashboard__module-group-count">
-                      {section.tabs.length.toLocaleString('vi-VN')} module
-                    </span>
-                  </div>
-                  <p className="ds-dashboard__module-group-copy">{section.description}</p>
-                  <div className="ds-dashboard__module-tags">
-                    {section.tabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        className="ds-dashboard__module-tag"
-                        onClick={() => onNavigate?.(tab.id)}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                </article>
-              ))
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {summaryCards.map((card) => (
+                <SummaryCard
+                  key={card.title}
+                  title={card.title}
+                  value={card.value}
+                  subtitle={card.subtitle}
+                />
+              ))}
+            </div>
+
+            <TrendLineChart
+              data={trendSeries || []}
+              comparison={trendComparison}
+              palette={chartPalette}
+            />
+
+            {teamPieData?.length > 0 ? (
+              <TeamPieWidget
+                kpiData={teamPieData}
+                declData={teamDeclPieData}
+                palette={chartPalette}
+                formatInt={formatInt}
+                formatDecimal={formatDecimal}
+              />
             ) : (
               <AppShellEmptyState
-                title="Chưa có module khả dụng"
-                description="Tài khoản hiện tại chưa được cấp module tác nghiệp ngoài dashboard tổng quan."
-                actionLabel={onOpenCommandCenter ? 'Mở Command Center' : ''}
-                onAction={onOpenCommandCenter}
+                title="Chưa có dữ liệu phân quyền / tổ đội"
+                description="Không tìm thấy đủ dữ liệu tờ khai để vẽ biểu đồ phân bổ tổ đội."
               />
             )}
-          </div>
-        </section>
+
+            <div className="mt-8 pt-6 border-t border-gray-100">
+              <h4 className="font-semibold text-slate-800 mb-4 text-lg">
+                Hành động nhanh
+              </h4>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {quickActions.map((action) => (
+                  <div key={action.label} className="bg-white rounded-xl shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] border border-slate-100/60 overflow-hidden hover:border-slate-300 transition-colors">
+                    <DashboardQuickAction {...action} />
+                  </div>
+                ))}
+
+                <div className="bg-white rounded-xl shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] border border-slate-100/60 overflow-hidden hover:border-slate-300 transition-colors">
+                  <DashboardQuickAction
+                    label="Mở báo cáo KPI"
+                    detail="Xem insight chi tiết, nhân viên, tổ đội và lịch xuất báo cáo"
+                    onClick={handleGoToReports}
+                    icon={FileBarChart}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </section>
   );

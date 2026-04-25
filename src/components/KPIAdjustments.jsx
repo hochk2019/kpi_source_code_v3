@@ -21,6 +21,7 @@ import {
 
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
 import PageSizeControl from "@/components/mst-assignment/table/PageSizeControl.jsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 
 import { useKpiAdjustmentForm } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js";
 import { useKpiAdjustmentFilters } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js";
@@ -751,11 +752,11 @@ export default function KPIAdjustments({ currentUser }) {
 
     ? Number.parseFloat(
 
-        detailData?.extraUnitPoints ??
+      detailData?.extraUnitPoints ??
 
-          (detailCategoryConfig.extraPointConfig?.defaultUnit ?? 0)
+      (detailCategoryConfig.extraPointConfig?.defaultUnit ?? 0)
 
-      ) || 0
+    ) || 0
 
     : 0;
 
@@ -772,13 +773,7 @@ export default function KPIAdjustments({ currentUser }) {
 
 
   return (
-
     <div className="space-y-6">
-
-      <KpiAdjustmentOverviewPanel stats={stats} formatInt={formatInt} formatDecimal={formatDecimal} />
-
-
-
       <KpiAdjustmentDetailDialog
         open={Boolean(detailEntry)}
         detailLabel={detailLabel}
@@ -830,109 +825,119 @@ export default function KPIAdjustments({ currentUser }) {
         buildLicenseFieldId={buildLicenseFieldId}
       />
 
-      <KpiAdjustmentFormPanel
-        canApprove={canApprove}
-        autoApproveEnabled={autoApproveEnabled}
-        autoApproveSaving={autoApproveSaving}
-        autoApproveStatusMessage={autoApproveStatusMessage}
-        autoApproveError={autoApproveError}
-        onAutoApproveToggle={handleToggleAutoApprove}
-        onRefreshDeclarations={handleRefreshDeclarations}
-        onOpenGuidance={() => setGuidanceOpen(true)}
-        onOpenSettings={() => openSettingsDialog()}
-        onOpenCategorySettings={() => openSettingsDialog(form.category)}
-        onSubmit={handleSubmit}
-        formFieldIds={FORM_FIELD_IDS}
-        form={form}
-        setForm={setForm}
-        normalizeStr={normalizeStr}
-        filteredStaffOptions={filteredStaffOptions}
-        staffOptions={staffOptions}
-        teamOptions={teamOptions}
-        mstOptions={mstOptions}
-        onTaxCodeInput={handleTaxCodeInput}
-        companyOptions={companyOptions}
-        onCompanyInput={handleCompanyInput}
-        selectFieldClass={SELECT_FIELD_CLASS}
-        onCategoryChange={handleCategoryChange}
-        categoryOptions={CATEGORY_OPTIONS}
-        formCategoryConfig={formCategoryConfig}
-        activeCategorySettings={activeCategorySettings}
-        isEditing={isEditing}
-        statusSet={KPI_ADJUSTMENT_STATUS_SET}
-        statusLabels={STATUS_LABELS}
-        onLicenseChange={handleLicenseChange}
-        licenseOptions={licenseOptions}
-        quickDeclarationSuggestions={quickDeclarationSuggestions}
-        onReferencePick={handleReferencePick}
-        declarationSearch={declarationSearch}
-        onDeclarationSearchChange={setDeclarationSearch}
-        filteredDeclarationResults={filteredDeclarationResults}
-        formatDateOnly={formatDateOnly}
-        normalizedMode={normalizedMode}
-        modeOptions={modeOptions}
-        onModeChange={handleModeChange}
-        isHybridFixed={isHybridFixed}
-        allowManualPointOverride={allowManualPointOverride}
-        computedExtraTotal={computedExtraTotal}
-        computedTotal={computedTotal}
-        formatDecimal={formatDecimal}
-        formError={formError}
-        canSubmit={canSubmit}
-        onReset={resetForm}
-        historyEntries={historyEntries}
-        formatDateTime={formatDateTime}
-      />
+      <Tabs defaultValue="management" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="management">Quản lý Phiếu</TabsTrigger>
+          <TabsTrigger value="history">Lịch sử</TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="management" className="space-y-6 mt-0">
+          <KpiAdjustmentOverviewPanel stats={stats} formatInt={formatInt} formatDecimal={formatDecimal} />
 
+          <KpiAdjustmentFormPanel
+            canApprove={canApprove}
+            autoApproveEnabled={autoApproveEnabled}
+            autoApproveSaving={autoApproveSaving}
+            autoApproveStatusMessage={autoApproveStatusMessage}
+            autoApproveError={autoApproveError}
+            onAutoApproveToggle={handleToggleAutoApprove}
+            onRefreshDeclarations={handleRefreshDeclarations}
+            onOpenGuidance={() => setGuidanceOpen(true)}
+            onOpenSettings={() => openSettingsDialog()}
+            onOpenCategorySettings={() => openSettingsDialog(form.category)}
+            onSubmit={handleSubmit}
+            formFieldIds={FORM_FIELD_IDS}
+            form={form}
+            setForm={setForm}
+            normalizeStr={normalizeStr}
+            filteredStaffOptions={filteredStaffOptions}
+            staffOptions={staffOptions}
+            teamOptions={teamOptions}
+            mstOptions={mstOptions}
+            onTaxCodeInput={handleTaxCodeInput}
+            companyOptions={companyOptions}
+            onCompanyInput={handleCompanyInput}
+            selectFieldClass={SELECT_FIELD_CLASS}
+            onCategoryChange={handleCategoryChange}
+            categoryOptions={CATEGORY_OPTIONS}
+            formCategoryConfig={formCategoryConfig}
+            activeCategorySettings={activeCategorySettings}
+            isEditing={isEditing}
+            statusSet={KPI_ADJUSTMENT_STATUS_SET}
+            statusLabels={STATUS_LABELS}
+            onLicenseChange={handleLicenseChange}
+            licenseOptions={licenseOptions}
+            quickDeclarationSuggestions={quickDeclarationSuggestions}
+            onReferencePick={handleReferencePick}
+            declarationSearch={declarationSearch}
+            onDeclarationSearchChange={setDeclarationSearch}
+            filteredDeclarationResults={filteredDeclarationResults}
+            formatDateOnly={formatDateOnly}
+            normalizedMode={normalizedMode}
+            modeOptions={modeOptions}
+            onModeChange={handleModeChange}
+            isHybridFixed={isHybridFixed}
+            allowManualPointOverride={allowManualPointOverride}
+            computedExtraTotal={computedExtraTotal}
+            computedTotal={computedTotal}
+            formatDecimal={formatDecimal}
+            formError={formError}
+            canSubmit={canSubmit}
+            onReset={resetForm}
+            historyEntries={historyEntries}
+            formatDateTime={formatDateTime}
+          />
+        </TabsContent>
 
-      <KpiAdjustmentListPanel
-        formFieldIds={FORM_FIELD_IDS}
-        selectFieldClass={SELECT_FIELD_CLASS}
-        filterMonth={filterMonth}
-        onFilterMonthChange={setFilterMonth}
-        filterStatus={filterStatus}
-        onFilterStatusChange={setFilterStatus}
-        showMineToggle={showMineToggle}
-        showMineOnly={showMineOnly}
-        currentStaffKey={currentStaffKey}
-        onMineToggle={handleMineToggle}
-        canApprove={canApprove}
-        staffFilter={staffFilter}
-        onStaffFilterChange={setStaffFilter}
-        staffFilterOptions={staffFilterOptions}
-        filteredAdjustments={filteredAdjustments}
-        currentPageItems={currentPageItems}
-        page={page}
-        pageSize={pageSize}
-        pageCount={pageCount}
-        totalItems={totalItems}
-        pageSizeOptions={KPI_ADJUSTMENT_PAGE_SIZE_OPTIONS}
-        onPageSizeChange={setPageSize}
-        onNextPage={nextPage}
-        onPreviousPage={previousPage}
-        PageSizeControlComponent={PageSizeControl}
-        categoryConfig={KPI_ADJUSTMENT_CATEGORY_CONFIG}
-        statusLabels={STATUS_LABELS}
-        formatDecimal={formatDecimal}
-        formatDateTime={formatDateTime}
-        selectedAdjustmentIds={selectedAdjustmentIdSet}
-        allVisibleAdjustmentsSelected={allVisibleAdjustmentsSelected}
-        selectedAdjustmentCount={selectedAdjustmentCount}
-        bulkApproveCount={bulkApproveCount}
-        bulkRejectCount={bulkRejectCount}
-        onToggleAdjustmentSelection={toggleAdjustmentSelection}
-        onToggleVisibleAdjustmentsSelection={toggleVisibleAdjustmentsSelection}
-        onClearSelection={clearAdjustmentSelection}
-        onBulkApprove={() => handleBulkStatusChange("approved")}
-        onBulkReject={() => handleBulkStatusChange("rejected")}
-        onEdit={handleEdit}
-        onViewDetail={(item) => setDetailEntry({ entry: item, intent: "view" })}
-        onApprove={(item) => setDetailEntry({ entry: item, intent: "approve" })}
-        onReject={(item) => setDetailEntry({ entry: item, intent: "reject" })}
-        onDelete={handleDelete}
-      />
-
+        <TabsContent value="history" className="space-y-6 mt-0">
+          <KpiAdjustmentListPanel
+            formFieldIds={FORM_FIELD_IDS}
+            selectFieldClass={SELECT_FIELD_CLASS}
+            filterMonth={filterMonth}
+            onFilterMonthChange={setFilterMonth}
+            filterStatus={filterStatus}
+            onFilterStatusChange={setFilterStatus}
+            showMineToggle={showMineToggle}
+            showMineOnly={showMineOnly}
+            currentStaffKey={currentStaffKey}
+            onMineToggle={handleMineToggle}
+            canApprove={canApprove}
+            staffFilter={staffFilter}
+            onStaffFilterChange={setStaffFilter}
+            staffFilterOptions={staffFilterOptions}
+            filteredAdjustments={filteredAdjustments}
+            currentPageItems={currentPageItems}
+            page={page}
+            pageSize={pageSize}
+            pageCount={pageCount}
+            totalItems={totalItems}
+            pageSizeOptions={KPI_ADJUSTMENT_PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
+            onNextPage={nextPage}
+            onPreviousPage={previousPage}
+            PageSizeControlComponent={PageSizeControl}
+            categoryConfig={KPI_ADJUSTMENT_CATEGORY_CONFIG}
+            statusLabels={STATUS_LABELS}
+            formatDecimal={formatDecimal}
+            formatDateTime={formatDateTime}
+            selectedAdjustmentIds={selectedAdjustmentIdSet}
+            allVisibleAdjustmentsSelected={allVisibleAdjustmentsSelected}
+            selectedAdjustmentCount={selectedAdjustmentCount}
+            bulkApproveCount={bulkApproveCount}
+            bulkRejectCount={bulkRejectCount}
+            onToggleAdjustmentSelection={toggleAdjustmentSelection}
+            onToggleVisibleAdjustmentsSelection={toggleVisibleAdjustmentsSelection}
+            onClearSelection={clearAdjustmentSelection}
+            onBulkApprove={() => handleBulkStatusChange("approved")}
+            onBulkReject={() => handleBulkStatusChange("rejected")}
+            onEdit={handleEdit}
+            onViewDetail={(item) => setDetailEntry({ entry: item, intent: "view" })}
+            onApprove={(item) => setDetailEntry({ entry: item, intent: "approve" })}
+            onReject={(item) => setDetailEntry({ entry: item, intent: "reject" })}
+            onDelete={handleDelete}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
 
   );

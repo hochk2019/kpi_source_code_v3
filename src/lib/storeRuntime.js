@@ -915,59 +915,79 @@ export function isExportDecl(soTk, loaiHinh) {
 
 
 export function getMSTRowsRaw() {
-
-  return mstAssignmentStore.getMSTRowsRaw();
-
+  const raw = mstAssignmentStore.getMSTRowsRaw();
+  if (Array.isArray(raw)) {
+    const hqMap = hqAgencyStore.mapHQAgenciesByMST();
+    return raw.map(row => {
+      const mst = normalizeMST(row?.mst || row?.MST);
+      const hq = mst ? hqMap.get(mst) : null;
+      if (hq) {
+        return { ...row, agency: hq.agent, agents: hq.agents, agent: hq.agent, ["Đại lý HQ"]: hq.agent };
+      }
+      return row;
+    });
+  }
+  return raw;
 }
-
-
 
 export function getMSTMap() {
-
-  return mstAssignmentStore.getMSTMap();
-
+  const rows = mstAssignmentStore.getMSTMap();
+  const hqMap = hqAgencyStore.mapHQAgenciesByMST();
+  return rows.map(row => {
+    const hq = hqMap.get(row.mst);
+    if (hq) {
+      return { ...row, agency: hq.agent, agents: hq.agents, agent: hq.agent, ["Đại lý HQ"]: hq.agent };
+    }
+    return row;
+  });
 }
 
-
-
-export function upsertMSTRows(rows, options) {
-
-  return mstAssignmentStore.upsertMSTRows(rows, options);
-
+export async function upsertMSTRows(rows, options) {
+  const result = await mstAssignmentStore.upsertMSTRows(rows, options);
+  if (Array.isArray(rows) && rows.length > 0) {
+    const hqRows = rows.map(r => ({
+      mst: r.mst || r.MST,
+      company: r.company || r.cong_ty,
+      agents: r.agents || hqAgencyStore.parseAgencyList(r.agency || r.agent || r["Đại lý HQ"]),
+    }));
+    await hqAgencyStore.upsertHQAgencies(hqRows, options);
+  }
+  return result;
 }
 
-
-
-export function saveMSTRow(rowInput, options) {
-
-  return mstAssignmentStore.saveMSTRow(rowInput, options);
-
+export async function saveMSTRow(rowInput, options) {
+  const result = await mstAssignmentStore.saveMSTRow(rowInput, options);
+  // Also save HQ mapping if save MST was ok or no-change, to ensure they sync
+  if (result.ok || result.reason === "no-change") {
+    const hqRow = {
+      mst: result.row?.mst || rowInput.mst || rowInput.MST,
+      company: result.row?.company || rowInput.company || rowInput.cong_ty,
+      agents: rowInput.agents || hqAgencyStore.parseAgencyList(rowInput.agency || rowInput.agent || rowInput["Đại lý HQ"]),
+    };
+    await hqAgencyStore.saveHQAgencyRow(hqRow, options);
+  }
+  return result;
 }
-
-
 
 export function getMSTHistoryEntries(limit) {
-
   return mstAssignmentStore.getMSTHistoryEntries(limit);
-
 }
-
-
 
 export function getMSTHistoryFor(mst, limit = 20) {
-
   return mstAssignmentStore.getMSTHistoryFor(mst, limit);
-
 }
 
-
-
 /** Lay nguoi phu trach theo MST & ngay hieu luc gan nhat (<= ngay to khai) */
-
 export function getMSTFor(mst, isoDate) {
-
-  return mstAssignmentStore.getMSTFor(mst, isoDate);
-
+  const row = mstAssignmentStore.getMSTFor(mst, isoDate);
+  if (row) {
+    const hqMap = hqAgencyStore.mapHQAgenciesByMST();
+    const hq = hqMap.get(row.mst);
+    if (hq) {
+      return { ...row, agency: hq.agent, agents: hq.agents, agent: hq.agent, ["Đại lý HQ"]: hq.agent };
+    }
+  }
+  return row;
 }
 
 

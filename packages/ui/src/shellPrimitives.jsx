@@ -23,9 +23,6 @@ export function SectionHeader({
     <div className={cn("ds-section__header", className)} {...props}>
       <div className="ds-section__intro">
         {React.createElement(titleAs, { className: cn("ds-section__title", titleClassName) }, title)}
-        {description ? (
-          <p className={cn("ds-section__description", descriptionClassName)}>{description}</p>
-        ) : null}
       </div>
       {meta || actions ? (
         <div className="ds-section__aside">

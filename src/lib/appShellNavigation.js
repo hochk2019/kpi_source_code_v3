@@ -50,15 +50,6 @@ export const APP_TAB_DEFINITIONS = Object.freeze([
     commandKeywords: ['mst', 'gan mst', 'doanh nghiep', 'nguoi phu trach'],
   },
   {
-    id: 'hq',
-    sectionId: 'operations',
-    label: 'Đại Lý HQ',
-    tooltip: 'Quản lý danh sách đại lý hải quan hợp tác',
-    commandLabel: 'Đi tới tab Đại Lý HQ',
-    commandDescription: 'Mở danh sách đại lý hải quan hợp tác và cấu hình liên quan',
-    commandKeywords: ['dai ly hq', 'dai ly hai quan', 'hai quan'],
-  },
-  {
     id: 'import',
     sectionId: 'operations',
     label: 'Import Data',
@@ -282,3 +273,4 @@ export function serializeAppShellLocation({
   const nextSearch = params.toString();
   return nextSearch ? `?${nextSearch}` : '';
 }
+

@@ -174,7 +174,7 @@ beforeEach(() => {
 
 describe('toISODate', () => {
 
-  it('parses day-first strings by default', () => {
+  it('parses day-first strings by default', async () => {
 
     expect(toISODate('15/09/2024')).toBe('2024-09-15');
 
@@ -182,7 +182,7 @@ describe('toISODate', () => {
 
 
 
-  it('supports month-first parsing when requested', () => {
+  it('supports month-first parsing when requested', async () => {
 
     expect(toISODate('08/01/2024', { preferMonthFirst: true })).toBe('2024-08-01');
 
@@ -190,7 +190,7 @@ describe('toISODate', () => {
 
 
 
-  it('normalises ISO strings with swapped month/day segments', () => {
+  it('normalises ISO strings with swapped month/day segments', async () => {
 
     expect(toISODate('2024-31-08')).toBe('2024-08-31');
 
@@ -204,7 +204,7 @@ describe('toISODate', () => {
 
 describe('report schedules', () => {
 
-  it('calculates next run for weekly schedules from a reference date', () => {
+  it('calculates next run for weekly schedules from a reference date', async () => {
 
     const reference = new Date('2024-09-02T07:00:00.000Z'); // Thứ hai
 
@@ -242,7 +242,7 @@ describe('report schedules', () => {
 
 
 
-  it('tính đúng lịch chạy tháng khi ngày vượt quá cuối tháng', () => {
+  it('tính đúng lịch chạy tháng khi ngày vượt quá cuối tháng', async () => {
 
     const reference = new Date('2024-01-31T10:00:00.000Z');
 
@@ -280,7 +280,7 @@ describe('report schedules', () => {
 
 
 
-  it('trả về null khi lịch bị tắt', () => {
+  it('trả về null khi lịch bị tắt', async () => {
 
     const result = calculateNextReportScheduleRun({
 
@@ -298,7 +298,7 @@ describe('report schedules', () => {
 
 
 
-    const saved = saveReportSchedule({
+    const saved = await await saveReportSchedule({
 
       name: 'Tắt tạm thời',
 
@@ -322,9 +322,9 @@ describe('report schedules', () => {
 
 
 
-  it('saves and normalises schedule entries with recipients & formats', () => {
+  it('saves and normalises schedule entries with recipients & formats', async () => {
 
-    const saved = saveReportSchedule({
+    const saved = await await saveReportSchedule({
 
       name: 'Báo cáo tuần',
 
@@ -362,9 +362,9 @@ describe('report schedules', () => {
 
 
 
-  it('deletes schedule entries by id', () => {
+  it('deletes schedule entries by id', async () => {
 
-    const entry = saveReportSchedule({
+    const entry = await await saveReportSchedule({
 
       name: 'Tạm thời',
 
@@ -380,7 +380,7 @@ describe('report schedules', () => {
 
     expect(getReportSchedules()).toHaveLength(1);
 
-    const removed = deleteReportSchedule(entry.id);
+    const removed = await await deleteReportSchedule(entry.id);
 
     expect(removed).toBe(true);
 
@@ -394,7 +394,7 @@ describe('report schedules', () => {
 
 describe('audit log facade', () => {
 
-  it('persists pushed entries and clear operation through the store facade', () => {
+  it('persists pushed entries and clear operation through the store facade', async () => {
 
     pushAuditLog({
 
@@ -448,7 +448,7 @@ describe('audit log facade', () => {
 
 describe('rules persistence facade', () => {
 
-  it('reads and writes rules through the extracted store facade', () => {
+  it('reads and writes rules through the extracted store facade', async () => {
 
     const nextRules = {
 
@@ -506,7 +506,7 @@ describe('legacy MST migration', () => {
 
 
 
-  it('migrates dữ liệu mst_rows_v1 và giữ nguyên dòng đã có', () => {
+  it('migrates dữ liệu mst_rows_v1 và giữ nguyên dòng đã có', async () => {
 
     sharedSetItem(
 
@@ -662,7 +662,7 @@ describe('legacy MST migration', () => {
 
 describe('saveDeclRows', () => {
 
-  it('merges rows using so_tk + nhanh when overwrite=false', () => {
+  it('merges rows using so_tk + nhanh when overwrite=false', async () => {
 
     const initial = [
 
@@ -734,7 +734,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('gi? nguyen t? khai khi ph?n nh�nh/du?i s? kh�c nhau', () => {
+  it('gi? nguyen t? khai khi ph?n nh�nh/du?i s? kh�c nhau', async () => {
 
     const first = [
 
@@ -772,7 +772,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('replaces storage completely when overwrite=true, enabling deletions', () => {
+  it('replaces storage completely when overwrite=true, enabling deletions', async () => {
 
     const baseline = [
 
@@ -808,7 +808,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('keeps reviewed rows unchanged when merging new data', () => {
+  it('keeps reviewed rows unchanged when merging new data', async () => {
 
     saveDeclRows([
 
@@ -836,7 +836,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('không cập nhật tờ khai đã rà soát khi thiếu quyền override', () => {
+  it('không cập nhật tờ khai đã rà soát khi thiếu quyền override', async () => {
 
     saveDeclRows([
 
@@ -888,7 +888,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('cho phép override tờ khai đã rà soát khi bật cờ allowReviewedOverride', () => {
+  it('cho phép override tờ khai đã rà soát khi bật cờ allowReviewedOverride', async () => {
 
     saveDeclRows([
 
@@ -940,7 +940,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('keeps latest license count when merging duplicates', () => {
+  it('keeps latest license count when merging duplicates', async () => {
 
     const latest = [
 
@@ -1006,7 +1006,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('làm mới số giấy phép hiển thị khi mã hợp lệ thay đổi', () => {
+  it('làm mới số giấy phép hiển thị khi mã hợp lệ thay đổi', async () => {
 
     const existing = [
 
@@ -1082,7 +1082,7 @@ describe('saveDeclRows', () => {
 
   });
 
-  it('xoá danh sách mã GP loại trừ khi dữ liệu mới rỗng với replace=true', () => {
+  it('xoá danh sách mã GP loại trừ khi dữ liệu mới rỗng với replace=true', async () => {
 
     const existing = [
 
@@ -1140,7 +1140,7 @@ describe('saveDeclRows', () => {
 
   });
 
-  it('hợp nhất licenseSourceCodes từ nhiều nguồn và chuẩn hóa', () => {
+  it('hợp nhất licenseSourceCodes từ nhiều nguồn và chuẩn hóa', async () => {
     const baseline = [
       {
         so_tk: '00000000003',
@@ -1177,7 +1177,7 @@ describe('saveDeclRows', () => {
     });
   });
 
-  it('giữ nguyên số GP nhập tay khi hợp nhất thêm licenseSourceCodes', () => {
+  it('giữ nguyên số GP nhập tay khi hợp nhất thêm licenseSourceCodes', async () => {
     const baseline = [
       {
         so_tk: '00000000004',
@@ -1216,7 +1216,7 @@ describe('saveDeclRows', () => {
     });
   });
 
-  it('áp dụng số GP nhập tay mới khi dữ liệu đến đáng tin cậy', () => {
+  it('áp dụng số GP nhập tay mới khi dữ liệu đến đáng tin cậy', async () => {
 
     const baseline = [
 
@@ -1288,7 +1288,7 @@ describe('saveDeclRows', () => {
 
 
 
-  it('tự động thêm MST mới vào bảng gán với trạng thái mặc định', () => {
+  it('tự động thêm MST mới vào bảng gán với trạng thái mặc định', async () => {
 
     expect(getMSTMap()).toHaveLength(0);
 
@@ -1354,9 +1354,9 @@ describe('saveDeclRows', () => {
 
 describe('saveMSTRow', () => {
 
-  it('ghi nhận thay đổi khi cập nhật từng dòng', () => {
+  it('ghi nhận thay đổi khi cập nhật từng dòng', async () => {
 
-    upsertMSTRows(
+    await upsertMSTRows(
 
       [
 
@@ -1388,7 +1388,7 @@ describe('saveMSTRow', () => {
 
     const originalKey = '0101234567__2024-09-01__';
 
-    const result = saveMSTRow(
+    const result = await await saveMSTRow(
 
       {
 
@@ -1446,7 +1446,7 @@ describe('saveMSTRow', () => {
 
 
 
-    const noChange = saveMSTRow(
+    const noChange = await await saveMSTRow(
 
       {
 
@@ -1480,9 +1480,9 @@ describe('saveMSTRow', () => {
 
 
 
-  it('thêm mới MST khi chưa tồn tại', () => {
+  it('thêm mới MST khi chưa tồn tại', async () => {
 
-    const result = saveMSTRow(
+    const result = await await saveMSTRow(
 
       {
 
@@ -1518,9 +1518,9 @@ describe('saveMSTRow', () => {
 
 
 
-  it('trả về conflict khi đổi sang khóa đã có', () => {
+  it('trả về conflict khi đổi sang khóa đã có', async () => {
 
-    upsertMSTRows(
+    await upsertMSTRows(
 
       [
 
@@ -1568,7 +1568,7 @@ describe('saveMSTRow', () => {
 
 
 
-    const conflict = saveMSTRow(
+    const conflict = await await saveMSTRow(
 
       {
 
@@ -1608,7 +1608,7 @@ describe('saveMSTRow', () => {
 
 describe('updateDeclRowFields', () => {
 
-  it('ghi nhận lịch sử chỉnh sửa khi cập nhật từng dòng', () => {
+  it('ghi nhận lịch sử chỉnh sửa khi cập nhật từng dòng', async () => {
 
     saveDeclRows([
 
@@ -1618,7 +1618,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const result = updateDeclRowFields('00000000001_', {
+    const result = await await updateDeclRowFields('00000000001_', {
 
       nhan_vien: 'Nguyễn Văn A',
 
@@ -1654,7 +1654,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-  it('không thêm lịch sử khi không có thay đổi mới', () => {
+  it('không thêm lịch sử khi không có thay đổi mới', async () => {
 
     saveDeclRows([
 
@@ -1664,7 +1664,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const firstUpdate = updateDeclRowFields('00000000002_', {
+    const firstUpdate = await await updateDeclRowFields('00000000002_', {
 
       nhan_vien: 'Lê Thị B',
 
@@ -1684,7 +1684,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-  it('từ chối cập nhật tờ khai đã rà soát khi không override', () => {
+  it('từ chối cập nhật tờ khai đã rà soát khi không override', async () => {
 
     saveDeclRows([
 
@@ -1708,7 +1708,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const blocked = updateDeclRowFields('00000000003_', {
+    const blocked = await await updateDeclRowFields('00000000003_', {
 
       loai_hinh: 'B11',
 
@@ -1720,7 +1720,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const override = updateDeclRowFields('00000000003_', {
+    const override = await await updateDeclRowFields('00000000003_', {
 
       loai_hinh: 'B11',
 
@@ -1738,7 +1738,7 @@ describe('updateDeclRowFields', () => {
 
 describe('previewDeclRows', () => {
 
-  it('tính toán số liệu thêm/cập nhật mà không ghi xuống storage', () => {
+  it('tính toán số liệu thêm/cập nhật mà không ghi xuống storage', async () => {
 
     const baseline = [
 
@@ -1796,7 +1796,7 @@ describe('previewDeclRows', () => {
 
 
 
-  it('chế độ overwrite trả về MST mới nhưng không ghi xuống map MST', () => {
+  it('chế độ overwrite trả về MST mới nhưng không ghi xuống map MST', async () => {
 
     const preview = previewDeclRows(
 
@@ -1838,7 +1838,7 @@ describe('previewDeclRows', () => {
 
 describe('import column config', () => {
 
-  it('mặc định ẩn các cột nhạy cảm khi chưa lưu cấu hình', () => {
+  it('mặc định ẩn các cột nhạy cảm khi chưa lưu cấu hình', async () => {
 
     const config = getImportColumnConfig();
 
@@ -1856,7 +1856,7 @@ describe('import column config', () => {
 
 
 
-  it('tự động bổ sung cột nhạy cảm cho cấu hình cũ không có version', () => {
+  it('tự động bổ sung cột nhạy cảm cho cấu hình cũ không có version', async () => {
 
     sharedSetItem(
 
@@ -1882,7 +1882,7 @@ describe('import column config', () => {
 
 
 
-  it('lưu và chuẩn hóa danh sách cột bị ẩn, chấp nhận cả thao tác phụ trợ', () => {
+  it('lưu và chuẩn hóa danh sách cột bị ẩn, chấp nhận cả thao tác phụ trợ', async () => {
 
     const sample = [
 
@@ -1930,7 +1930,7 @@ describe('import column config', () => {
 
   });
 
-  it('ghi nhớ chiều rộng cột tuỳ chỉnh và loại bỏ dữ liệu không hợp lệ', () => {
+  it('ghi nhớ chiều rộng cột tuỳ chỉnh và loại bỏ dữ liệu không hợp lệ', async () => {
 
     const result = saveImportColumnConfig(
 
@@ -1960,7 +1960,7 @@ describe('import column config', () => {
 
 
 
-  it('không cho phép ẩn toàn bộ các cột dữ liệu chính', () => {
+  it('không cho phép ẩn toàn bộ các cột dữ liệu chính', async () => {
 
     const attempt = saveImportColumnConfig({ hidden: [...IMPORT_COLUMN_IDS, 'history', 'update'] }, { actor: 'admin' });
 
@@ -1992,7 +1992,7 @@ describe('import column config', () => {
 
 describe('sortDeclRows', () => {
 
-  it('đưa các tờ khai mới nhất lên trước và fallback theo số tờ khai', () => {
+  it('đưa các tờ khai mới nhất lên trước và fallback theo số tờ khai', async () => {
 
     const rows = [
 
@@ -2020,7 +2020,7 @@ describe('sortDeclRows', () => {
 
 describe('getRecentDeclRows', () => {
 
-  it('giới hạn số dòng mới nhất theo yêu cầu', () => {
+  it('giới hạn số dòng mới nhất theo yêu cầu', async () => {
 
     const rows = [
 
@@ -2054,7 +2054,7 @@ describe('getRecentDeclRows', () => {
 
 describe('getData', () => {
 
-  it('giu facade tuong thich voi getDeclRows', () => {
+  it('giu facade tuong thich voi getDeclRows', async () => {
 
     saveDeclRows([
 
@@ -2074,7 +2074,7 @@ describe('getData', () => {
 
 describe('hq agency helpers', () => {
 
-  it('chuẩn hoá và gộp dữ liệu đại lý theo MST', () => {
+  it('chuẩn hoá và gộp dữ liệu đại lý theo MST', async () => {
 
     const storedCount = upsertHQAgencies([
 
@@ -2102,9 +2102,9 @@ describe('hq agency helpers', () => {
 
 
 
-  it('đồng bộ tên công ty và đại lý vào MST cùng tờ khai', () => {
+  it('đồng bộ tên công ty và đại lý vào MST cùng tờ khai', async () => {
 
-    upsertMSTRows([
+    await upsertMSTRows([
 
       { mst: '0101234567', company: 'Tên cũ', person_import: '', person_export: '', team: '' },
 
@@ -2156,7 +2156,7 @@ describe('hq agency helpers', () => {
 
 
 
-  it('ghi nhận lịch sử thao tác Đại lý HQ vào bộ nhớ chung', () => {
+  it('ghi nhận lịch sử thao tác Đại lý HQ vào bộ nhớ chung', async () => {
 
     clearStorageCache();
 
@@ -2226,7 +2226,7 @@ describe('hardDeleteDeclRows', () => {
 
 
 
-  it('xóa vĩnh viễn tờ khai và ghi log cảnh báo', () => {
+  it('xóa vĩnh viễn tờ khai và ghi log cảnh báo', async () => {
 
     const rows = [
 
@@ -2268,7 +2268,7 @@ describe('hardDeleteDeclRows', () => {
 
 
 
-  it('trả về missing khi tờ khai không tồn tại và giữ nguyên dữ liệu', () => {
+  it('trả về missing khi tờ khai không tồn tại và giữ nguyên dữ liệu', async () => {
 
     const rows = [
 
@@ -2308,7 +2308,7 @@ describe('hardDeleteDeclRows', () => {
 
 describe('team roster helpers', () => {
 
-  it('getTeamRoster trả về dữ liệu mặc định và seed bộ nhớ dùng chung', () => {
+  it('getTeamRoster trả về dữ liệu mặc định và seed bộ nhớ dùng chung', async () => {
 
     expect(sharedGetItem(TEAM_KEY)).toBeNull();
 
@@ -2330,7 +2330,7 @@ describe('team roster helpers', () => {
 
 
 
-  it('setTeamRoster chuẩn hoá tên và sinh id cho thành viên mới', () => {
+  it('setTeamRoster chuẩn hoá tên và sinh id cho thành viên mới', async () => {
 
     const saved = setTeamRoster({
 
@@ -2392,7 +2392,7 @@ describe('team roster helpers', () => {
 
 
 
-  it('mapMemberNamesToTeams bỏ dấu và không phân biệt hoa/thường', () => {
+  it('mapMemberNamesToTeams bỏ dấu và không phân biệt hoa/thường', async () => {
 
     const roster = setTeamRoster({
 
@@ -2418,7 +2418,7 @@ describe('team roster helpers', () => {
 
 
 
-  it('applyTeamRosterToMST đồng bộ tên team dựa vào thành viên phụ trách', () => {
+  it('applyTeamRosterToMST đồng bộ tên team dựa vào thành viên phụ trách', async () => {
 
     const roster = setTeamRoster({
 
@@ -2470,7 +2470,7 @@ describe('team roster helpers', () => {
 
 
 
-  it('applyTeamRosterToMST cập nhật lại tên thành viên khi đổi tên', () => {
+  it('applyTeamRosterToMST cập nhật lại tên thành viên khi đổi tên', async () => {
 
     const baseRoster = setTeamRoster({
 
@@ -2558,7 +2558,7 @@ describe('team roster helpers', () => {
 
 describe('subscribeTeamRoster', () => {
 
-  it('phát sự kiện khi danh sách tổ đội thay đổi', () => {
+  it('phát sự kiện khi danh sách tổ đội thay đổi', async () => {
 
     const snapshots = [];
 
@@ -2606,9 +2606,9 @@ describe('subscribeTeamRoster', () => {
 
 describe('getMSTFor', () => {
 
-  it('chọn dòng có ngày hiệu lực gần nhất nhưng không vượt quá ngày tờ khai', () => {
+  it('chọn dòng có ngày hiệu lực gần nhất nhưng không vượt quá ngày tờ khai', async () => {
 
-    upsertMSTRows(
+    await upsertMSTRows(
 
       [
 
@@ -2676,9 +2676,9 @@ describe('getMSTFor', () => {
 
 
 
-  it('fallback về dòng đầu tiên khi ngày tờ khai trước mọi mốc hiệu lực', () => {
+  it('fallback về dòng đầu tiên khi ngày tờ khai trước mọi mốc hiệu lực', async () => {
 
-    upsertMSTRows(
+    await upsertMSTRows(
 
       [
 
@@ -2734,7 +2734,7 @@ describe('getMSTFor', () => {
 
 describe('unmarkDeclRowsReviewed', () => {
 
-  it('removes reviewed flag and metadata for matched keys', () => {
+  it('removes reviewed flag and metadata for matched keys', async () => {
 
     saveDeclRows([
 
@@ -2744,7 +2744,7 @@ describe('unmarkDeclRowsReviewed', () => {
 
 
 
-    const updated = unmarkDeclRowsReviewed(['99999999999_']);
+    const updated = await await unmarkDeclRowsReviewed(['99999999999_']);
 
     expect(updated).toBe(1);
 
@@ -2800,11 +2800,11 @@ describe('kpi adjustment settings', () => {
 
 
 
-  it('chỉ cho phép quản lý cập nhật cấu hình mặc định', () => {
+  it('chỉ cho phép quản lý cập nhật cấu hình mặc định', async () => {
 
-    expect(() =>
+    await expect(async () =>
 
-      saveKpiAdjustmentSettings(
+      await saveKpiAdjustmentSettings(
 
         { categories: { support_misc: { defaultMode: 'dynamic' } } },
 
@@ -2812,15 +2812,15 @@ describe('kpi adjustment settings', () => {
 
       )
 
-    ).toThrow('Bạn không có quyền cấu hình điểm KPI bổ sung');
+    ).rejects.toThrow('Bạn không có quyền cấu hình điểm KPI bổ sung');
 
   });
 
 
 
-  it('lưu và đọc cấu hình hybrid cùng điểm giấy phép tùy chỉnh', () => {
+  it('lưu và đọc cấu hình hybrid cùng điểm giấy phép tùy chỉnh', async () => {
 
-    const settings = saveKpiAdjustmentSettings(
+    const settings = await await saveKpiAdjustmentSettings(
 
       {
 
@@ -2876,9 +2876,9 @@ describe('kpi adjustment settings', () => {
 
 
 
-  it('áp dụng cấu hình mặc định khi tính điểm KPI bổ sung', () => {
+  it('áp dụng cấu hình mặc định khi tính điểm KPI bổ sung', async () => {
 
-    saveKpiAdjustmentSettings(
+    await saveKpiAdjustmentSettings(
 
       {
 
@@ -2912,7 +2912,7 @@ describe('kpi adjustment settings', () => {
 
 
 
-    const dynamicEntry = saveKpiAdjustment(
+    const dynamicEntry = await await saveKpiAdjustment(
 
       {
 
@@ -2938,7 +2938,7 @@ describe('kpi adjustment settings', () => {
 
 
 
-    const fixedEntry = saveKpiAdjustment(
+    const fixedEntry = await await saveKpiAdjustment(
 
       {
 
@@ -2964,7 +2964,7 @@ describe('kpi adjustment settings', () => {
 
 
 
-    const licenseEntry = saveKpiAdjustment(
+    const licenseEntry = await await saveKpiAdjustment(
 
       {
 
@@ -2998,7 +2998,7 @@ describe('kpi adjustment settings', () => {
 
   });
 
-  it('tính tổng điểm bao gồm điểm bổ sung cho hoàn thuế', () => {
+  it('tính tổng điểm bao gồm điểm bổ sung cho hoàn thuế', async () => {
 
     sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
 
@@ -3006,7 +3006,7 @@ describe('kpi adjustment settings', () => {
 
     expect(defaults.categories.tax_refund_customer.extraUnitPoints).toBe(0.5);
 
-    const entry = saveKpiAdjustment(
+    const entry = await await saveKpiAdjustment(
 
       {
 
@@ -3042,9 +3042,9 @@ describe('kpi adjustment settings', () => {
 
   });
 
-  it('chuẩn hoá điểm mỗi đơn vị theo quyền override', () => {
+  it('chuẩn hoá điểm mỗi đơn vị theo quyền override', async () => {
 
-    saveKpiAdjustmentSettings(
+    await saveKpiAdjustmentSettings(
 
       {
 
@@ -3064,7 +3064,7 @@ describe('kpi adjustment settings', () => {
 
     sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
 
-    const unauthorized = saveKpiAdjustment(
+    const unauthorized = await await saveKpiAdjustment(
 
       {
 
@@ -3094,7 +3094,7 @@ describe('kpi adjustment settings', () => {
 
     expect(unauthorized.extraUnitPoints).toBeUndefined();
 
-    const allowed = saveKpiAdjustment(
+    const allowed = await await saveKpiAdjustment(
 
       {
 
@@ -3122,9 +3122,9 @@ describe('kpi adjustment settings', () => {
 
   });
 
-  it('bat/tat duyet tu dong cap nhat cau hinh', () => {
+  it('bat/tat duyet tu dong cap nhat cau hinh', async () => {
 
-    const enabled = saveKpiAdjustmentSettings(
+    const enabled = await await saveKpiAdjustmentSettings(
 
       { autoApprove: { enabled: true } },
 
@@ -3142,7 +3142,7 @@ describe('kpi adjustment settings', () => {
 
     expect(raw.autoApprove.enabled).toBe(true);
 
-    const disabled = saveKpiAdjustmentSettings(
+    const disabled = await await saveKpiAdjustmentSettings(
 
       { autoApprove: { enabled: false } },
 
@@ -3156,9 +3156,9 @@ describe('kpi adjustment settings', () => {
 
   });
 
-  it('tu dong duyet de xuat khi duyet tu dong dang bat', () => {
+  it('tu dong duyet de xuat khi duyet tu dong dang bat', async () => {
 
-    saveKpiAdjustmentSettings(
+    await saveKpiAdjustmentSettings(
 
       { autoApprove: { enabled: true } },
 
@@ -3168,7 +3168,7 @@ describe('kpi adjustment settings', () => {
 
     sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
 
-    const entry = saveKpiAdjustment(
+    const entry = await await saveKpiAdjustment(
 
       {
 
@@ -3202,13 +3202,13 @@ describe('kpi adjustment settings', () => {
 
   });
 
-  it('khong cho phep tao diem KPI khi khong co quyen', () => {
+  it('khong cho phep tao diem KPI khi khong co quyen', async () => {
 
     sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
 
-    expect(() =>
+    await expect(async () =>
 
-      saveKpiAdjustment(
+      await saveKpiAdjustment(
 
         {
 
@@ -3228,7 +3228,7 @@ describe('kpi adjustment settings', () => {
 
       ),
 
-    ).toThrow('Ban khong co quyen tao diem KPI bo sung');
+    ).rejects.toThrow('Ban khong co quyen tao diem KPI bo sung');
 
   });
 
@@ -3241,7 +3241,7 @@ describe('deleted declaration log', () => {
     sharedSetItem(DECL_DELETED_LOG_KEY, JSON.stringify([]));
   });
 
-  it('ghi nhật ký khi xóa mềm và xóa cứng', () => {
+  it('ghi nhật ký khi xóa mềm và xóa cứng', async () => {
     saveDeclRows(
       [
         { so_tk: '10000000001', nhanh: '01', mst: '0100100010', ten_dn: 'Công ty Ánh Dương' },
@@ -3276,7 +3276,7 @@ describe('deleted declaration log', () => {
     });
   });
 
-  it('giới hạn số bản ghi và giữ bản mới nhất ở đầu', () => {
+  it('giới hạn số bản ghi và giữ bản mới nhất ở đầu', async () => {
     const limit = DECL_DELETED_LOG_LIMIT;
     const existing = Array.from({ length: limit }, (_, index) => ({
       so_tk: String(index + 1).padStart(11, '0'),
@@ -3305,7 +3305,7 @@ describe('deleted declaration log', () => {
     expect(stored.some((entry) => entry.so_tk === droppedSoTk)).toBe(false);
   });
 
-  it('lọc theo khoảng thời gian và loại xóa', () => {
+  it('lọc theo khoảng thời gian và loại xóa', async () => {
     sharedSetItem(
       DECL_DELETED_LOG_KEY,
       JSON.stringify([

@@ -209,6 +209,22 @@ export default function MstAssignmentDataTablePanel({
                 </th>
               ) : null}
 
+              {isColumnVisible("agency") ? (
+                <th
+                  className="group relative p-2 text-left align-bottom"
+                  data-column-key="agency"
+                  style={columnStyleMap.agency}
+                  scope="col"
+                >
+                  <div className="pr-4 font-semibold">Đại lý HQ</div>
+                  <ColumnResizeHandle
+                    columnKey="agency"
+                    label={getColumnLabel("agency")}
+                    onResizeStart={handleColumnResizeStart}
+                  />
+                </th>
+              ) : null}
+
               {isColumnVisible("status") ? (
                 <th
                   className="group relative p-2 text-left whitespace-nowrap align-bottom"
@@ -407,6 +423,22 @@ export default function MstAssignmentDataTablePanel({
                       </td>
                     ) : null}
 
+                    {isColumnVisible("agency") ? (
+                      <td className="p-2 align-top" style={columnStyleMap.agency} data-column-key="agency">
+                        {rowIsReadOnly ? (
+                          <span>{row.agency || "—"}</span>
+                        ) : (
+                          <input
+                            list="hq-agency-list"
+                            value={row.agency || ""}
+                            onChange={(event) => onRowChange(row, { agency: event.target.value })}
+                            className="border rounded px-2 py-1 w-full"
+                            placeholder="Nhập tên đại lý..."
+                          />
+                        )}
+                      </td>
+                    ) : null}
+
                     {isColumnVisible("status") ? (
                       <td
                         className="p-2 align-top whitespace-nowrap"
@@ -415,13 +447,12 @@ export default function MstAssignmentDataTablePanel({
                       >
                         {statusDisplay ? (
                           <span
-                            className={`inline-flex items-center rounded px-2 py-1 text-xs font-semibold ${
-                              isStatusAssigned
-                                ? "bg-emerald-50 text-emerald-700"
-                                : isStatusWarning
-                                  ? "bg-amber-50 text-amber-700"
-                                  : "bg-slate-100 text-slate-700"
-                            }`}
+                            className={`inline-flex items-center rounded px-2 py-1 text-xs font-semibold ${isStatusAssigned
+                              ? "bg-emerald-50 text-emerald-700"
+                              : isStatusWarning
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-slate-100 text-slate-700"
+                              }`}
                           >
                             {statusDisplay}
                           </span>
@@ -536,11 +567,10 @@ export default function MstAssignmentDataTablePanel({
                                 type="button"
                                 onClick={() => onCommitRow(row)}
                                 disabled={updateDisabled}
-                                className={`px-2 py-1 rounded text-white ${
-                                  updateDisabled
-                                    ? "bg-gray-400 cursor-not-allowed"
-                                    : "bg-emerald-600 hover:bg-emerald-700"
-                                }`}
+                                className={`px-2 py-1 rounded text-white ${updateDisabled
+                                  ? "bg-gray-400 cursor-not-allowed"
+                                  : "bg-emerald-600 hover:bg-emerald-700"
+                                  }`}
                                 data-tooltip={
                                   updateDisabled ? "Không có thay đổi mới" : "Lưu các thay đổi vừa chỉnh"
                                 }

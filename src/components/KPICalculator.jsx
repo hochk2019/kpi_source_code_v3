@@ -11,9 +11,7 @@ const TeamManager = React.lazy(() => import('./TeamManager.jsx'));
 
 const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
 
-const AuditLog = React.lazy(() => import('./AuditLog.jsx'));
 
-const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
 
 const AiAssistant = React.lazy(() => import('./AiAssistant.jsx'));
 
@@ -172,13 +170,7 @@ const KPICalculator = ({
     };
   }, []);
 
-  const workflowGuide = buildAppShellWorkflowState({
-    currentTab,
-    canViewAudit,
-    canViewDataHealth,
-    onNavigate: requestTabNavigation,
-    onOpenCommandCenter: () => emitCommand('open:command-center'),
-  });
+
 
 
 
@@ -192,7 +184,6 @@ const KPICalculator = ({
         currentTab={currentTab}
         currentSection={currentSection}
         currentUser={effectiveAuth}
-        workflowGuide={workflowGuide}
         onOpenCommandCenter={() => emitCommand('open:command-center')}
       >
 
@@ -226,20 +217,6 @@ const KPICalculator = ({
                 currentUser={effectiveAuth}
                 onNavigate={requestTabNavigation}
               />
-
-            </TabPanel>
-          ) : null}
-
-        </TabsContent>
-
-
-
-        <TabsContent value="hq" className="ds-panel">
-
-          {loadedTabs.has('hq') ? (
-            <TabPanel panelRootId={getAppTabRootId('hq')} tabLabel="Đại Lý HQ">
-
-              <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
 
             </TabPanel>
           ) : null}
@@ -444,7 +421,7 @@ const KPICalculator = ({
 
         )}
       </AppShellFrame>
-    </div>
+    </div >
 
   );
 

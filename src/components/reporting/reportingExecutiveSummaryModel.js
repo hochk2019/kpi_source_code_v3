@@ -17,8 +17,9 @@ export function buildExecutiveSummaryModel({
   const totalKpi = toNumber(summary.kpi);
   const totalDecls = toNumber(summary.decls);
   const kpiPerDecl = totalDecls > 0 ? totalKpi / totalDecls : 0;
-  const topStaff = Array.isArray(topStaffByKpi) && topStaffByKpi.length ? topStaffByKpi[0] : null;
-  const sortedTeams = sortByValueDescending(teamPieData);
+  const topStaffList = (Array.isArray(topStaffByKpi) ? topStaffByKpi : []).filter(s => toNumber(s?.stats?.kpi) > 0);
+  const topStaff = topStaffList.length ? topStaffList[0] : null;
+  const sortedTeams = sortByValueDescending(teamPieData).filter(t => toNumber(t.value) > 0);
   const topTeam = sortedTeams.length ? sortedTeams[0] : null;
   const topTeamShare = totalKpi > 0 && topTeam ? (toNumber(topTeam.value) / totalKpi) * 100 : 0;
   const pendingAdjustments = toNumber(adjustmentsReport.pendingCount);
