@@ -298,7 +298,7 @@ describe('report schedules', () => {
 
 
 
-    const saved = await await saveReportSchedule({
+    const saved = await saveReportSchedule({
 
       name: 'Tắt tạm thời',
 
@@ -324,7 +324,7 @@ describe('report schedules', () => {
 
   it('saves and normalises schedule entries with recipients & formats', async () => {
 
-    const saved = await await saveReportSchedule({
+    const saved = await saveReportSchedule({
 
       name: 'Báo cáo tuần',
 
@@ -364,7 +364,7 @@ describe('report schedules', () => {
 
   it('deletes schedule entries by id', async () => {
 
-    const entry = await await saveReportSchedule({
+    const entry = await saveReportSchedule({
 
       name: 'Tạm thời',
 
@@ -380,7 +380,7 @@ describe('report schedules', () => {
 
     expect(getReportSchedules()).toHaveLength(1);
 
-    const removed = await await deleteReportSchedule(entry.id);
+    const removed = await deleteReportSchedule(entry.id);
 
     expect(removed).toBe(true);
 
@@ -408,7 +408,7 @@ describe('audit log facade', () => {
 
     });
 
-
+    await new Promise((r) => setTimeout(r, 0));
 
     const pushed = getAuditLogs(1)[0];
 
@@ -436,7 +436,7 @@ describe('audit log facade', () => {
 
     });
 
-
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(getAuditLogs()).toEqual([cleared]);
 
@@ -474,7 +474,7 @@ describe('rules persistence facade', () => {
 
 
 
-    setRules(nextRules);
+    await setRules(nextRules);
 
 
 
@@ -494,13 +494,13 @@ describe('legacy MST migration', () => {
 
 
 
-  beforeEach(() => {
+  beforeEach(async () => {
 
-    sharedSetItem(LEGACY_MST_KEY, null);
+    await sharedSetItem(LEGACY_MST_KEY, null);
 
-    sharedSetItem(MST_KEY, JSON.stringify([]));
+    await sharedSetItem(MST_KEY, JSON.stringify([]));
 
-    sharedSetItem(AUDIT_KEY, JSON.stringify([]));
+    await sharedSetItem(AUDIT_KEY, JSON.stringify([]));
 
   });
 
@@ -508,7 +508,7 @@ describe('legacy MST migration', () => {
 
   it('migrates dữ liệu mst_rows_v1 và giữ nguyên dòng đã có', async () => {
 
-    sharedSetItem(
+    await sharedSetItem(
 
       LEGACY_MST_KEY,
 
@@ -552,7 +552,7 @@ describe('legacy MST migration', () => {
 
 
 
-    sharedSetItem(
+    await sharedSetItem(
 
       MST_KEY,
 
@@ -583,6 +583,11 @@ describe('legacy MST migration', () => {
     );
 
 
+
+    // Trigger migration (fire-and-forget inside getMSTMap)
+    getMSTMap();
+    // Wait for async migration to complete
+    await new Promise((r) => setTimeout(r, 50));
 
     const rows = getMSTMap();
 
@@ -680,9 +685,9 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(initial, { overwrite: true });
+    await saveDeclRows(initial, { overwrite: true });
 
-    const summary = saveDeclRows(incoming, { overwrite: false });
+    const summary = await saveDeclRows(incoming, { overwrite: false });
 
 
 
@@ -750,9 +755,9 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(first, { overwrite: true });
+    await saveDeclRows(first, { overwrite: true });
 
-    const summary = saveDeclRows(second, { overwrite: false });
+    const summary = await saveDeclRows(second, { overwrite: false });
 
 
 
@@ -786,7 +791,7 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(baseline, { overwrite: true });
+    await saveDeclRows(baseline, { overwrite: true });
 
     expect(getDeclRows()).toHaveLength(3);
 
@@ -794,7 +799,7 @@ describe('saveDeclRows', () => {
 
     const remaining = baseline.slice(0, 2);
 
-    saveDeclRows(remaining, { overwrite: true });
+    await saveDeclRows(remaining, { overwrite: true });
 
 
 
@@ -810,7 +815,7 @@ describe('saveDeclRows', () => {
 
   it('keeps reviewed rows unchanged when merging new data', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       { so_tk: '30766075015', nhanh: '', date: '2025-08-11', loai_hinh: 'E42', reviewed: true },
 
@@ -818,7 +823,7 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows([
+    await saveDeclRows([
 
       { so_tk: '30766075015', nhanh: '', date: '2025-08-12', loai_hinh: 'A11' },
 
@@ -838,7 +843,7 @@ describe('saveDeclRows', () => {
 
   it('không cập nhật tờ khai đã rà soát khi thiếu quyền override', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       {
 
@@ -860,7 +865,7 @@ describe('saveDeclRows', () => {
 
 
 
-    const summary = saveDeclRows([
+    const summary = await saveDeclRows([
 
       {
 
@@ -890,7 +895,7 @@ describe('saveDeclRows', () => {
 
   it('cho phép override tờ khai đã rà soát khi bật cờ allowReviewedOverride', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       {
 
@@ -912,7 +917,7 @@ describe('saveDeclRows', () => {
 
 
 
-    const summary = saveDeclRows([
+    const summary = await saveDeclRows([
 
       {
 
@@ -982,9 +987,9 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(latest, { overwrite: true });
+    await saveDeclRows(latest, { overwrite: true });
 
-    saveDeclRows(older, { overwrite: false });
+    await saveDeclRows(older, { overwrite: false });
 
 
 
@@ -1054,9 +1059,9 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(existing, { overwrite: true });
+    await saveDeclRows(existing, { overwrite: true });
 
-    const summary = saveDeclRows(incoming, { overwrite: false });
+    const summary = await saveDeclRows(incoming, { overwrite: false });
 
 
 
@@ -1124,9 +1129,9 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(existing, { overwrite: true });
+    await saveDeclRows(existing, { overwrite: true });
 
-    const summary = saveDeclRows(incoming, { overwrite: false });
+    const summary = await saveDeclRows(incoming, { overwrite: false });
 
 
 
@@ -1162,8 +1167,8 @@ describe('saveDeclRows', () => {
       },
     ];
 
-    saveDeclRows(baseline, { overwrite: true });
-    const summary = saveDeclRows(incoming, { overwrite: false });
+    await saveDeclRows(baseline, { overwrite: true });
+    const summary = await saveDeclRows(incoming, { overwrite: false });
 
     expect(summary.updated).toBe(1);
     const stored = getDeclRows();
@@ -1200,8 +1205,8 @@ describe('saveDeclRows', () => {
       },
     ];
 
-    saveDeclRows(baseline, { overwrite: true });
-    const summary = saveDeclRows(incoming, { overwrite: false });
+    await saveDeclRows(baseline, { overwrite: true });
+    const summary = await saveDeclRows(incoming, { overwrite: false });
 
     expect(summary.updated).toBe(1);
     const stored = getDeclRows();
@@ -1260,9 +1265,9 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(baseline, { overwrite: true });
+    await saveDeclRows(baseline, { overwrite: true });
 
-    const summary = saveDeclRows(incoming, { overwrite: false });
+    const summary = await saveDeclRows(incoming, { overwrite: false });
 
 
 
@@ -1294,7 +1299,7 @@ describe('saveDeclRows', () => {
 
 
 
-    saveDeclRows(
+    await saveDeclRows(
 
       [
 
@@ -1388,7 +1393,7 @@ describe('saveMSTRow', () => {
 
     const originalKey = '0101234567__2024-09-01__';
 
-    const result = await await saveMSTRow(
+    const result = await saveMSTRow(
 
       {
 
@@ -1446,7 +1451,7 @@ describe('saveMSTRow', () => {
 
 
 
-    const noChange = await await saveMSTRow(
+    const noChange = await saveMSTRow(
 
       {
 
@@ -1482,7 +1487,7 @@ describe('saveMSTRow', () => {
 
   it('thêm mới MST khi chưa tồn tại', async () => {
 
-    const result = await await saveMSTRow(
+    const result = await saveMSTRow(
 
       {
 
@@ -1568,7 +1573,7 @@ describe('saveMSTRow', () => {
 
 
 
-    const conflict = await await saveMSTRow(
+    const conflict = await saveMSTRow(
 
       {
 
@@ -1610,7 +1615,7 @@ describe('updateDeclRowFields', () => {
 
   it('ghi nhận lịch sử chỉnh sửa khi cập nhật từng dòng', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       { so_tk: '00000000001', nhanh: '', date: '2024-09-01', licenses: 1 },
 
@@ -1618,7 +1623,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const result = await await updateDeclRowFields('00000000001_', {
+    const result = await updateDeclRowFields('00000000001_', {
 
       nhan_vien: 'Nguyễn Văn A',
 
@@ -1656,7 +1661,7 @@ describe('updateDeclRowFields', () => {
 
   it('không thêm lịch sử khi không có thay đổi mới', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       { so_tk: '00000000002', nhanh: '', date: '2024-09-02', nhan_vien: 'Lê Thị B', licenses: 0 },
 
@@ -1664,7 +1669,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const firstUpdate = await await updateDeclRowFields('00000000002_', {
+    const firstUpdate = await updateDeclRowFields('00000000002_', {
 
       nhan_vien: 'Lê Thị B',
 
@@ -1686,7 +1691,7 @@ describe('updateDeclRowFields', () => {
 
   it('từ chối cập nhật tờ khai đã rà soát khi không override', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       {
 
@@ -1708,7 +1713,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const blocked = await await updateDeclRowFields('00000000003_', {
+    const blocked = await updateDeclRowFields('00000000003_', {
 
       loai_hinh: 'B11',
 
@@ -1720,7 +1725,7 @@ describe('updateDeclRowFields', () => {
 
 
 
-    const override = await await updateDeclRowFields('00000000003_', {
+    const override = await updateDeclRowFields('00000000003_', {
 
       loai_hinh: 'B11',
 
@@ -1748,11 +1753,11 @@ describe('previewDeclRows', () => {
 
 
 
-    saveDeclRows(baseline, { overwrite: true });
+    await saveDeclRows(baseline, { overwrite: true });
 
 
 
-    const preview = previewDeclRows(
+    const preview = await previewDeclRows(
 
       [
 
@@ -1798,7 +1803,7 @@ describe('previewDeclRows', () => {
 
   it('chế độ overwrite trả về MST mới nhưng không ghi xuống map MST', async () => {
 
-    const preview = previewDeclRows(
+    const preview = await previewDeclRows(
 
       [
 
@@ -1858,7 +1863,7 @@ describe('import column config', () => {
 
   it('tự động bổ sung cột nhạy cảm cho cấu hình cũ không có version', async () => {
 
-    sharedSetItem(
+    await sharedSetItem(
 
       UI_LAYOUT_KEY,
 
@@ -1904,7 +1909,7 @@ describe('import column config', () => {
 
 
 
-    const result = saveImportColumnConfig({ hidden: sample }, { actor: 'admin' });
+    const result = await saveImportColumnConfig({ hidden: sample }, { actor: 'admin' });
 
     const expected = [...new Set([IMPORT_COLUMN_IDS[0], IMPORT_COLUMN_IDS[1], 'history', 'update', 'status'])].sort();
 
@@ -1932,7 +1937,7 @@ describe('import column config', () => {
 
   it('ghi nhớ chiều rộng cột tuỳ chỉnh và loại bỏ dữ liệu không hợp lệ', async () => {
 
-    const result = saveImportColumnConfig(
+    const result = await saveImportColumnConfig(
 
       { widths: { date: 150.6, declaration: 60, khong_hop_le: 200 } },
 
@@ -1962,7 +1967,7 @@ describe('import column config', () => {
 
   it('không cho phép ẩn toàn bộ các cột dữ liệu chính', async () => {
 
-    const attempt = saveImportColumnConfig({ hidden: [...IMPORT_COLUMN_IDS, 'history', 'update'] }, { actor: 'admin' });
+    const attempt = await saveImportColumnConfig({ hidden: [...IMPORT_COLUMN_IDS, 'history', 'update'] }, { actor: 'admin' });
 
     const attemptBaseHidden = attempt.hidden.filter((key) => IMPORT_COLUMN_IDS.includes(key));
 
@@ -2036,7 +2041,7 @@ describe('getRecentDeclRows', () => {
 
 
 
-    saveDeclRows(rows, { overwrite: true });
+    await saveDeclRows(rows, { overwrite: true });
 
     const latest = getRecentDeclRows(3);
 
@@ -2056,7 +2061,7 @@ describe('getData', () => {
 
   it('giu facade tuong thich voi getDeclRows', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       { so_tk: 'TK100', nhanh: 'A', date: '2024-09-01', agency: '' },
 
@@ -2076,7 +2081,7 @@ describe('hq agency helpers', () => {
 
   it('chuẩn hoá và gộp dữ liệu đại lý theo MST', async () => {
 
-    const storedCount = upsertHQAgencies([
+    const storedCount = await upsertHQAgencies([
 
       { mst: '010-123-4567', company: '  Công ty A  ', agent: 'FCL' },
 
@@ -2112,7 +2117,7 @@ describe('hq agency helpers', () => {
 
 
 
-    saveDeclRows([
+    await saveDeclRows([
 
       { so_tk: 'TK01', nhanh: '', date: '2024-09-10', mst: '0101234567', cong_ty: 'Tên cũ' },
 
@@ -2120,7 +2125,7 @@ describe('hq agency helpers', () => {
 
 
 
-    upsertHQAgencies([
+    await upsertHQAgencies([
 
       { mst: '0101234567', company: 'Công ty Golden', agent: 'FCL' },
 
@@ -2160,7 +2165,7 @@ describe('hq agency helpers', () => {
 
     clearStorageCache();
 
-    upsertHQAgencies(
+    await upsertHQAgencies(
 
       [
 
@@ -2196,7 +2201,7 @@ describe('hq agency helpers', () => {
 
 
 
-    upsertHQAgencies([], { actor: 'tester' });
+    await upsertHQAgencies([], { actor: 'tester' });
 
     const historyAfterDelete = getHQHistoryEntries();
 
@@ -2214,13 +2219,13 @@ describe('hardDeleteDeclRows', () => {
 
   const IMPORT_LOG_KEY = 'import_logs_v1';
 
-  beforeEach(() => {
+  beforeEach(async () => {
 
     clearStorageCache();
 
-    sharedSetItem(AUDIT_KEY, JSON.stringify([]));
+    await sharedSetItem(AUDIT_KEY, JSON.stringify([]));
 
-    sharedSetItem(IMPORT_LOG_KEY, JSON.stringify([]));
+    await sharedSetItem(IMPORT_LOG_KEY, JSON.stringify([]));
 
   });
 
@@ -2236,9 +2241,9 @@ describe('hardDeleteDeclRows', () => {
 
     ];
 
-    sharedSetItem(DECL_KEY, JSON.stringify(rows));
+    await sharedSetItem(DECL_KEY, JSON.stringify(rows));
 
-    const result = hardDeleteDeclRows(['00000001001_01'], { actor: 'tester' });
+    const result = await hardDeleteDeclRows(['00000001001_01'], { actor: 'tester' });
 
     expect(result.removed).toBe(1);
 
@@ -2276,9 +2281,9 @@ describe('hardDeleteDeclRows', () => {
 
     ];
 
-    sharedSetItem(DECL_KEY, JSON.stringify(rows));
+    await sharedSetItem(DECL_KEY, JSON.stringify(rows));
 
-    const result = hardDeleteDeclRows(['00000009999_00'], { actor: 'tester' });
+    const result = await hardDeleteDeclRows(['00000009999_00'], { actor: 'tester' });
 
     expect(result.removed).toBe(0);
 
@@ -2318,7 +2323,7 @@ describe('team roster helpers', () => {
 
     expect(roster.teams).toHaveLength(3);
 
-
+    await new Promise((r) => setTimeout(r, 0));
 
     const stored = JSON.parse(sharedGetItem(TEAM_KEY));
 
@@ -2332,7 +2337,7 @@ describe('team roster helpers', () => {
 
   it('setTeamRoster chuẩn hoá tên và sinh id cho thành viên mới', async () => {
 
-    const saved = setTeamRoster({
+    const saved = await setTeamRoster({
 
       teams: [
 
@@ -2394,7 +2399,7 @@ describe('team roster helpers', () => {
 
   it('mapMemberNamesToTeams bỏ dấu và không phân biệt hoa/thường', async () => {
 
-    const roster = setTeamRoster({
+    const roster = await setTeamRoster({
 
       teams: [
 
@@ -2420,7 +2425,7 @@ describe('team roster helpers', () => {
 
   it('applyTeamRosterToMST đồng bộ tên team dựa vào thành viên phụ trách', async () => {
 
-    const roster = setTeamRoster({
+    const roster = await setTeamRoster({
 
       teams: [
 
@@ -2472,7 +2477,7 @@ describe('team roster helpers', () => {
 
   it('applyTeamRosterToMST cập nhật lại tên thành viên khi đổi tên', async () => {
 
-    const baseRoster = setTeamRoster({
+    const baseRoster = await setTeamRoster({
 
       teams: [
 
@@ -2510,7 +2515,7 @@ describe('team roster helpers', () => {
 
 
 
-    const renamedRoster = setTeamRoster({
+    const renamedRoster = await setTeamRoster({
 
       teams: baseRoster.teams.map((team) => ({
 
@@ -2574,7 +2579,7 @@ describe('subscribeTeamRoster', () => {
 
 
 
-    setTeamRoster({
+    await setTeamRoster({
 
       teams: [
 
@@ -2736,7 +2741,7 @@ describe('unmarkDeclRowsReviewed', () => {
 
   it('removes reviewed flag and metadata for matched keys', async () => {
 
-    saveDeclRows([
+    await saveDeclRows([
 
       { so_tk: '99999999999', nhanh: '', date: '2025-09-01', reviewed: true, reviewed_at: '2025-09-02T00:00:00Z' },
 
@@ -2744,7 +2749,7 @@ describe('unmarkDeclRowsReviewed', () => {
 
 
 
-    const updated = await await unmarkDeclRowsReviewed(['99999999999_']);
+    const updated = await unmarkDeclRowsReviewed(['99999999999_']);
 
     expect(updated).toBe(1);
 
@@ -2820,7 +2825,7 @@ describe('kpi adjustment settings', () => {
 
   it('lưu và đọc cấu hình hybrid cùng điểm giấy phép tùy chỉnh', async () => {
 
-    const settings = await await saveKpiAdjustmentSettings(
+    const settings = await saveKpiAdjustmentSettings(
 
       {
 
@@ -2912,7 +2917,7 @@ describe('kpi adjustment settings', () => {
 
 
 
-    const dynamicEntry = await await saveKpiAdjustment(
+    const dynamicEntry = await saveKpiAdjustment(
 
       {
 
@@ -2938,7 +2943,7 @@ describe('kpi adjustment settings', () => {
 
 
 
-    const fixedEntry = await await saveKpiAdjustment(
+    const fixedEntry = await saveKpiAdjustment(
 
       {
 
@@ -2964,7 +2969,7 @@ describe('kpi adjustment settings', () => {
 
 
 
-    const licenseEntry = await await saveKpiAdjustment(
+    const licenseEntry = await saveKpiAdjustment(
 
       {
 
@@ -3006,7 +3011,7 @@ describe('kpi adjustment settings', () => {
 
     expect(defaults.categories.tax_refund_customer.extraUnitPoints).toBe(0.5);
 
-    const entry = await await saveKpiAdjustment(
+    const entry = await saveKpiAdjustment(
 
       {
 
@@ -3064,7 +3069,7 @@ describe('kpi adjustment settings', () => {
 
     sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
 
-    const unauthorized = await await saveKpiAdjustment(
+    const unauthorized = await saveKpiAdjustment(
 
       {
 
@@ -3094,7 +3099,7 @@ describe('kpi adjustment settings', () => {
 
     expect(unauthorized.extraUnitPoints).toBeUndefined();
 
-    const allowed = await await saveKpiAdjustment(
+    const allowed = await saveKpiAdjustment(
 
       {
 
@@ -3124,7 +3129,7 @@ describe('kpi adjustment settings', () => {
 
   it('bat/tat duyet tu dong cap nhat cau hinh', async () => {
 
-    const enabled = await await saveKpiAdjustmentSettings(
+    const enabled = await saveKpiAdjustmentSettings(
 
       { autoApprove: { enabled: true } },
 
@@ -3142,7 +3147,7 @@ describe('kpi adjustment settings', () => {
 
     expect(raw.autoApprove.enabled).toBe(true);
 
-    const disabled = await await saveKpiAdjustmentSettings(
+    const disabled = await saveKpiAdjustmentSettings(
 
       { autoApprove: { enabled: false } },
 
@@ -3168,7 +3173,7 @@ describe('kpi adjustment settings', () => {
 
     sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
 
-    const entry = await await saveKpiAdjustment(
+    const entry = await saveKpiAdjustment(
 
       {
 
@@ -3242,7 +3247,7 @@ describe('deleted declaration log', () => {
   });
 
   it('ghi nhật ký khi xóa mềm và xóa cứng', async () => {
-    saveDeclRows(
+    await saveDeclRows(
       [
         { so_tk: '10000000001', nhanh: '01', mst: '0100100010', ten_dn: 'Công ty Ánh Dương' },
         { so_tk: '10000000002', nhanh: '02', mst: '0100100020', ten_dn: 'Công ty Bình Minh' },
@@ -3250,7 +3255,7 @@ describe('deleted declaration log', () => {
       { overwrite: true },
     );
 
-    const softResult = softDeleteDeclRows(['10000000001_01'], { actor: 'thu.ky' });
+    const softResult = await softDeleteDeclRows(['10000000001_01'], { actor: 'thu.ky' });
     expect(softResult.deleted).toBe(1);
 
     const softLog = getDeletedDeclLog();
@@ -3264,7 +3269,7 @@ describe('deleted declaration log', () => {
       company: 'Công ty Ánh Dương',
     });
 
-    const hardResult = hardDeleteDeclRows(['10000000002_02'], { actor: 'quan.ly' });
+    const hardResult = await hardDeleteDeclRows(['10000000002_02'], { actor: 'quan.ly' });
     expect(hardResult.removed).toBe(1);
 
     const hardLog = getDeletedDeclLog({ type: 'hard' });
@@ -3290,12 +3295,12 @@ describe('deleted declaration log', () => {
 
     sharedSetItem(DECL_DELETED_LOG_KEY, JSON.stringify(existing));
 
-    saveDeclRows(
+    await saveDeclRows(
       [{ so_tk: '90000000001', nhanh: '01', mst: '0999999999', ten_dn: 'Công ty Giới Hạn' }],
       { overwrite: true },
     );
 
-    softDeleteDeclRows(['90000000001_01'], { actor: 'tester' });
+    await softDeleteDeclRows(['90000000001_01'], { actor: 'tester' });
 
     const stored = JSON.parse(sharedGetItem(DECL_DELETED_LOG_KEY) || '[]');
     expect(stored).toHaveLength(limit);
@@ -3306,7 +3311,7 @@ describe('deleted declaration log', () => {
   });
 
   it('lọc theo khoảng thời gian và loại xóa', async () => {
-    sharedSetItem(
+    await sharedSetItem(
       DECL_DELETED_LOG_KEY,
       JSON.stringify([
         {

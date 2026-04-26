@@ -205,7 +205,7 @@ export function createDeclMutationStore({
     };
   }
 
-  function updateDeclRowFields(
+  async function updateDeclRowFields(
     rowKey,
     updates,
     { actor = "system", detail = "", allowReviewedOverride = false } = {},
@@ -263,7 +263,7 @@ export function createDeclMutationStore({
 
     const nextRows = rows.slice();
     nextRows[index] = nextRow;
-    const stored = persistAndAnnotateDeclRows(nextRows);
+    const stored = await persistAndAnnotateDeclRows(nextRows);
     const updated = stored[index] || nextRow;
 
     const actorName = normalizeStr(actor) || "system";
@@ -293,7 +293,7 @@ export function createDeclMutationStore({
     return { success: true, row: updated };
   }
 
-  function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
+  async function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
     const list = normalizeKeyList(keys);
     if (list.length === 0) {
       return { deleted: 0, alreadyDeleted: 0, missing: 0, keys: [], alreadyDeletedKeys: [], missingKeys: list };
@@ -347,7 +347,7 @@ export function createDeclMutationStore({
       if (logEntries.length > 0) {
         appendDeletedDeclLogEntries(logEntries);
       }
-      persistAndAnnotateDeclRows(nextRows);
+      await persistAndAnnotateDeclRows(nextRows);
       const actionDetail =
         detail && detail.trim().length > 0
           ? detail
@@ -376,7 +376,7 @@ export function createDeclMutationStore({
     };
   }
 
-  function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
+  async function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
     const list = normalizeKeyList(keys);
     if (list.length === 0) {
       return { removed: 0, missing: 0, keys: [], missingKeys: list };
@@ -420,7 +420,7 @@ export function createDeclMutationStore({
       if (logEntries.length > 0) {
         appendDeletedDeclLogEntries(logEntries);
       }
-      persistAndAnnotateDeclRows(nextRows);
+      await persistAndAnnotateDeclRows(nextRows);
       const actionDetail =
         detail && detail.trim().length > 0
           ? detail
@@ -447,7 +447,7 @@ export function createDeclMutationStore({
     };
   }
 
-  function restoreDeclRows(keys, { actor = "system", detail = "" } = {}) {
+  async function restoreDeclRows(keys, { actor = "system", detail = "" } = {}) {
     const list = normalizeKeyList(keys);
     if (list.length === 0) {
       return { restored: 0, skipped: 0, failed: 0, restoredKeys: [], skippedKeys: [], failedKeys: [] };
@@ -463,7 +463,7 @@ export function createDeclMutationStore({
     const failed = [];
 
     for (const key of list) {
-      const result = updateDeclRowFields(
+      const result = await updateDeclRowFields(
         key,
         { deleted_at: null, deleted_by: null },
         { actor: actorName, detail: baseDetail, allowReviewedOverride: true },

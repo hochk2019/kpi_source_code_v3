@@ -19,7 +19,7 @@ export function createDeclWriteStore({
   normalizeDeclarationNumber = defaultNormalizeDeclarationNumber,
   mergeDeclarationRowClient = (_existing, incoming) => incoming,
 } = {}) {
-  function ensureMSTEntriesForDeclRows(declRows, { actor = "system", dryRun = false } = {}) {
+  async function ensureMSTEntriesForDeclRows(declRows, { actor = "system", dryRun = false } = {}) {
     const list = Array.isArray(declRows) ? declRows : [];
     if (!list.length) {
       return { additions: [], total: 0 };
@@ -74,7 +74,7 @@ export function createDeclWriteStore({
     const suffix = additions.length > 3 ? "…" : "";
     const detailSample = sample ? ` (${sample}${suffix})` : "";
 
-    upsertMSTRows(merged, {
+    await upsertMSTRows(merged, {
       actor: actorName,
       detail: `Tự động thêm ${additions.length} MST mới từ dữ liệu tờ khai${detailSample}`,
     });
@@ -295,7 +295,7 @@ export function createDeclWriteStore({
     };
   }
 
-  function previewDeclRows(newRows, { overwrite = false, actor = "system" } = {}) {
+  async function previewDeclRows(newRows, { overwrite = false, actor = "system" } = {}) {
     const incoming = Array.isArray(newRows) ? newRows : [];
     const normalizedIncoming = normalizeDeclRows(incoming);
     const actorName = normalizeStr(actor) || "system";
@@ -305,7 +305,7 @@ export function createDeclWriteStore({
       const validRows = normalizedIncoming.filter((row) => !!getDeclarationKey(row));
       const invalidRows = normalizedIncoming.filter((row) => !getDeclarationKey(row));
       const mstSummary =
-        ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true }) || {
+        (await ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true })) || {
           additions: [],
           total: 0,
         };
@@ -342,7 +342,7 @@ export function createDeclWriteStore({
       sampleLimit: 20,
     });
     const mstSummary =
-      ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true }) || {
+      (await ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true })) || {
         additions: [],
         total: 0,
       };
@@ -360,7 +360,7 @@ export function createDeclWriteStore({
     };
   }
 
-  function saveDeclRows(
+  async function saveDeclRows(
     newRows,
     { overwrite = false, actor = "system", detail = "", allowReviewedOverride = false } = {},
   ) {
@@ -373,7 +373,7 @@ export function createDeclWriteStore({
     const currentRows = getDeclRowsRaw();
 
     if (overwrite) {
-      const stored = persistAndAnnotateDeclRows(normalizedIncoming);
+      const stored = await persistAndAnnotateDeclRows(normalizedIncoming);
       pushAuditLog({
         actor: actorName,
         action: "decl.overwrite",
@@ -381,7 +381,7 @@ export function createDeclWriteStore({
       });
 
       const mstSummary =
-        ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName }) || {
+        (await ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName })) || {
           additions: [],
           total: 0,
         };
@@ -409,9 +409,9 @@ export function createDeclWriteStore({
     const { mergedRows, summary } = computeDeclImportDiff(currentRows, normalizedIncoming, {
       sampleLimit: 0,
     });
-    const stored = persistAndAnnotateDeclRows(mergedRows);
+    const stored = await persistAndAnnotateDeclRows(mergedRows);
     const mstSummary =
-      ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName }) || {
+      (await ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName })) || {
         additions: [],
         total: 0,
       };

@@ -1094,7 +1094,7 @@ export function subscribeTeamRoster(listener) {
   return teamRosterStore.subscribeTeamRoster(listener);
 }
 
-export function setTeamRoster(next, options = {}) {
+export async function setTeamRoster(next, options = {}) {
   return teamRosterStore.setTeamRoster(next, options);
 }
 
@@ -1140,19 +1140,19 @@ export function mapHQAgenciesByMST() {
 
 
 
-export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
+export async function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
   return hqAgencyStore.upsertHQAgencies(rows, { actor, detail });
 }
 
 
 
-export function saveHQAgencyRow(row, { actor = "system", previousMst = "", detail = "" } = {}) {
+export async function saveHQAgencyRow(row, { actor = "system", previousMst = "", detail = "" } = {}) {
   return hqAgencyStore.saveHQAgencyRow(row, { actor, previousMst, detail });
 }
 
 
 
-export function deleteHQAgencyRow(mst, { actor = "system", detail = "" } = {}) {
+export async function deleteHQAgencyRow(mst, { actor = "system", detail = "" } = {}) {
   return hqAgencyStore.deleteHQAgencyRow(mst, { actor, detail });
 }
 
@@ -1611,9 +1611,9 @@ export function getRules() {
 
 }
 
-export function setRules(v) {
+export async function setRules(v) {
 
-  rulesPersistenceStore.setRules(v);
+  await rulesPersistenceStore.setRules(v);
 
 }
 
