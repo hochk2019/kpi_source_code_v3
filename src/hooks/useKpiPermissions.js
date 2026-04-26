@@ -13,22 +13,23 @@ export function useKpiPermissions(auth) {
         [auth],
     );
 
-    const permissions = effectiveAuth.permissions || {};
-
-    return useMemo(() => ({
-        effectiveAuth,
-        canImportEdit: !!permissions.importEdit,
-        canImportUpload: !!permissions.importUpload,
-        canMstEdit: !!permissions.mstEdit,
-        canRulesEdit: !!permissions.rulesEdit,
-        canTeamsEdit: !!permissions.teamsEdit,
-        canManageAccounts: !!permissions.accountManage,
-        canExportReports: permissions.reportsExport !== false,
-        canManageSync: !!permissions.syncManage,
-        canManageAlerts: !!permissions.alertsManage,
-        canViewAudit: !!permissions.auditView || !!permissions.accountManage,
-        canUseAi: !!permissions.aiAssistUse || !!permissions.aiAssistManage,
-        canManageDataHealth: !!permissions.dataHealthManage,
-        canViewDataHealth: !!permissions.dataHealthView || !!permissions.dataHealthManage,
-    }), [effectiveAuth, permissions]);
+    return useMemo(() => {
+        const permissions = effectiveAuth.permissions || {};
+        return {
+            effectiveAuth,
+            canImportEdit: !!permissions.importEdit,
+            canImportUpload: !!permissions.importUpload,
+            canMstEdit: !!permissions.mstEdit,
+            canRulesEdit: !!permissions.rulesEdit,
+            canTeamsEdit: !!permissions.teamsEdit,
+            canManageAccounts: !!permissions.accountManage,
+            canExportReports: permissions.reportsExport !== false,
+            canManageSync: !!permissions.syncManage,
+            canManageAlerts: !!permissions.alertsManage,
+            canViewAudit: !!permissions.auditView || !!permissions.accountManage,
+            canUseAi: !!permissions.aiAssistUse || !!permissions.aiAssistManage,
+            canManageDataHealth: !!permissions.dataHealthManage,
+            canViewDataHealth: !!permissions.dataHealthView || !!permissions.dataHealthManage,
+        };
+    }, [effectiveAuth]);
 }
