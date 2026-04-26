@@ -266,7 +266,7 @@ export default function useDataImporterImportFlow({
     ],
   );
 
-  const handleImport = useCallback(() => {
+  const handleImport = useCallback(async () => {
     const importGate = resolveImportEligibility({
       canUploadFiles,
       isReadOnlyForEdits,
@@ -305,7 +305,7 @@ export default function useDataImporterImportFlow({
 
     const rows = effectivePreviewRows;
     const effectiveOverwrite = canOverwriteData ? overwrite : false;
-    const result = saveDeclRows(rows, {
+    const result = await saveDeclRows(rows, {
       overwrite: effectiveOverwrite,
       actor,
       detail: `Import từ ${selectedFile || "file XLSX"}`,

@@ -143,13 +143,13 @@ describe("createDeclWriteStore", () => {
     expect(spies.upsertMSTRows).not.toHaveBeenCalled();
   });
 
-  it("saves overwrite payloads, appends MST additions, and emits overwrite audit", () => {
+  it("saves overwrite payloads, appends MST additions, and emits overwrite audit", async () => {
     const { state, store, spies } = createHarness({
       currentRows: [{ so_tk: "OLD", nhanh: "", date: "2024-01-01", mst: "0100000000" }],
       mstRows: [{ mst: "0100000000" }],
     });
 
-    const result = store.saveDeclRows(
+    const result = await store.saveDeclRows(
       [
         { so_tk: "TK010", nhanh: "", date: "2024-02-01", mst: "0123456789", company: "Doanh nghiệp A" },
       ],
@@ -188,7 +188,7 @@ describe("createDeclWriteStore", () => {
     });
   });
 
-  it("keeps reviewed rows locked unless override is explicitly enabled", () => {
+  it("keeps reviewed rows locked unless override is explicitly enabled", async () => {
     const harness = createHarness({
       currentRows: [
         {
@@ -203,7 +203,7 @@ describe("createDeclWriteStore", () => {
       ],
     });
 
-    const lockedResult = harness.store.saveDeclRows(
+    const lockedResult = await harness.store.saveDeclRows(
       [
         {
           so_tk: "TK777",
@@ -220,7 +220,7 @@ describe("createDeclWriteStore", () => {
     expect(lockedResult.locked).toBe(1);
     expect(harness.state.currentRows[0].loai_hinh).toBe("A11");
 
-    const overrideResult = harness.store.saveDeclRows(
+    const overrideResult = await harness.store.saveDeclRows(
       [
         {
           so_tk: "TK777",

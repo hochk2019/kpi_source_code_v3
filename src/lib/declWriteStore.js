@@ -19,13 +19,12 @@ export function createDeclWriteStore({
   normalizeDeclarationNumber = defaultNormalizeDeclarationNumber,
   mergeDeclarationRowClient = (_existing, incoming) => incoming,
 } = {}) {
-  async function ensureMSTEntriesForDeclRows(declRows, { actor = "system", dryRun = false } = {}) {
+  function computeMSTAdditionsForDeclRows(declRows) {
     const list = Array.isArray(declRows) ? declRows : [];
     if (!list.length) {
-      return { additions: [], total: 0 };
+      return { existingRows: [], additions: [], loggedAdditions: [], total: 0 };
     }
 
-    const actorName = normalizeStr(actor) || "system";
     const existingRows = getMSTMap();
     const knownMSTs = new Set(existingRows.map((row) => row.mst));
     const additions = [];
@@ -52,20 +51,37 @@ export function createDeclWriteStore({
       seen.add(mst);
     }
 
-    if (!additions.length) {
-      return { additions: [], total: 0 };
-    }
-
     const loggedAdditions = additions.map((item) => ({
       mst: item.mst,
       company: item.company,
       effective_from: item.effective_from,
     }));
 
-    if (dryRun) {
-      return { additions: loggedAdditions, total: additions.length };
+    return {
+      existingRows,
+      additions,
+      loggedAdditions,
+      total: additions.length,
+    };
+  }
+
+  function previewMSTEntriesForDeclRows(declRows) {
+    const { loggedAdditions, total } = computeMSTAdditionsForDeclRows(declRows);
+    return { additions: loggedAdditions, total };
+  }
+
+  async function ensureMSTEntriesForDeclRows(declRows, { actor = "system", dryRun = false } = {}) {
+    const { existingRows, additions, loggedAdditions, total } = computeMSTAdditionsForDeclRows(declRows);
+
+    if (!total) {
+      return { additions: [], total: 0 };
     }
 
+    if (dryRun) {
+      return { additions: loggedAdditions, total };
+    }
+
+    const actorName = normalizeStr(actor) || "system";
     const merged = existingRows.concat(additions);
     const sample = additions
       .slice(0, 3)
@@ -79,7 +95,7 @@ export function createDeclWriteStore({
       detail: `Tự động thêm ${additions.length} MST mới từ dữ liệu tờ khai${detailSample}`,
     });
 
-    return { additions: loggedAdditions, total: additions.length };
+    return { additions: loggedAdditions, total };
   }
 
   function isEqualDeclValue(a, b) {
@@ -295,20 +311,18 @@ export function createDeclWriteStore({
     };
   }
 
-  async function previewDeclRows(newRows, { overwrite = false, actor = "system" } = {}) {
+  function previewDeclRows(newRows, { overwrite = false } = {}) {
     const incoming = Array.isArray(newRows) ? newRows : [];
     const normalizedIncoming = normalizeDeclRows(incoming);
-    const actorName = normalizeStr(actor) || "system";
     const currentRows = getDeclRowsRaw();
 
     if (overwrite) {
       const validRows = normalizedIncoming.filter((row) => !!getDeclarationKey(row));
       const invalidRows = normalizedIncoming.filter((row) => !getDeclarationKey(row));
-      const mstSummary =
-        (await ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true })) || {
-          additions: [],
-          total: 0,
-        };
+      const mstSummary = previewMSTEntriesForDeclRows(normalizedIncoming) || {
+        additions: [],
+        total: 0,
+      };
 
       return {
         mode: "overwrite",
@@ -341,11 +355,10 @@ export function createDeclWriteStore({
     const { mergedRows, summary, samples } = computeDeclImportDiff(currentRows, normalizedIncoming, {
       sampleLimit: 20,
     });
-    const mstSummary =
-      (await ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true })) || {
-        additions: [],
-        total: 0,
-      };
+    const mstSummary = previewMSTEntriesForDeclRows(normalizedIncoming) || {
+      additions: [],
+      total: 0,
+    };
 
     return {
       mode: "merge",

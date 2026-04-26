@@ -105,7 +105,7 @@ export default function useDataImporterSavedEdits({
     toast,
   ]);
 
-  const handleSaveRowChanges = useCallback((rowKey) => {
+  const handleSaveRowChanges = useCallback(async (rowKey) => {
     if (isReadOnlyForEdits) {
       alert("Bạn không có quyền lưu chỉnh sửa.");
       return;
@@ -129,7 +129,7 @@ export default function useDataImporterSavedEdits({
 
     try {
       const fieldList = Object.keys(diff);
-      const result = updateDeclRowFields(rowKey, diff, {
+      const result = await updateDeclRowFields(rowKey, diff, {
         actor,
         detail: `Cập nhật thủ công (${fieldList.join(", ")}) qua Import Data`,
         allowReviewedOverride: isAdminRole,

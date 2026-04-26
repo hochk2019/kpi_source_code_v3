@@ -106,6 +106,7 @@ export default function DataImporterShell({
 }) {
   const workflowState = buildWorkflowGuideState(workflowGuideProps);
   const previewSource = workflowGuideProps?.previewSource || null;
+  const hasRows = !!workflowGuideProps?.hasRows;
   const stageIdByNumber = new Map(workflowState.steps.map((step) => [step.number, step.targetId]));
   const sourceStageStatus = getWorkflowStageStatus(1, workflowState.currentStep);
   const reviewStageStatus = getWorkflowStageStatus(2, workflowState.currentStep);
@@ -179,6 +180,13 @@ export default function DataImporterShell({
             <Suspense fallback={<StageLoadingState message="Đang tải khối rà soát dữ liệu..." />}>
               {mode === "preview" ? (
                 <>
+                  {!hasRows ? (
+                    <>
+                      <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+                      {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
+                      <DataImporterFileActions {...fileActionsProps} />
+                    </>
+                  ) : null}
                   <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
                   <DataImporterListControlsPanel {...listControlsPanelProps} />
                   <DataImporterResultsPanel {...resultsPanelProps} />
@@ -190,7 +198,7 @@ export default function DataImporterShell({
           </WorkflowStageSection>
         )}
 
-        {workflowState.currentStep === 3 && (
+        {hasRows && (
           <WorkflowStageSection
             id={stageIdByNumber.get(3)}
             ariaLabel="Bước 3: Lưu và theo dõi"
@@ -205,7 +213,15 @@ export default function DataImporterShell({
             <DataImporterSummaryCards {...summaryCardsProps} />
             <DataImporterUpdatedRowsBanner {...updatedRowsBannerProps} />
             <Suspense fallback={<StageLoadingState message="Đang tải khối lưu và theo dõi..." />}>
-              {mode !== "preview" ? <DataImporterResultsPanel {...resultsPanelProps} /> : null}
+              <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+              {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
+              <DataImporterFileActions {...fileActionsProps} />
+              {mode !== "preview" ? (
+                <>
+                  <DataImporterListControlsPanel {...listControlsPanelProps} />
+                  <DataImporterResultsPanel {...resultsPanelProps} />
+                </>
+              ) : null}
               {isAdminRole ? <DataImporterMonitoringPanel {...monitoringPanelProps} /> : null}
             </Suspense>
             {mode === "preview" ? (

@@ -22,7 +22,7 @@ export default function useDataImporterRowMutations({
   loadSavedRows,
   fetchAlerts,
 }) {
-  const deleteRowsByKeys = useCallback((keys, { alreadyFiltered = false } = {}) => {
+  const deleteRowsByKeys = useCallback(async (keys, { alreadyFiltered = false } = {}) => {
     if (!Array.isArray(keys) || keys.length === 0) return;
 
     let allowedKeys = keys;
@@ -63,7 +63,7 @@ export default function useDataImporterRowMutations({
       allowedKeys = allowed;
     }
 
-    const result = softDeleteDeclRows(allowedKeys, { actor });
+    const result = await softDeleteDeclRows(allowedKeys, { actor });
     const parts = [];
 
     if (result.deleted > 0) {
@@ -97,7 +97,7 @@ export default function useDataImporterRowMutations({
     softDeleteDeclRows,
   ]);
 
-  const hardDeleteRowsByKeys = useCallback((keys, { alreadyFiltered = false } = {}) => {
+  const hardDeleteRowsByKeys = useCallback(async (keys, { alreadyFiltered = false } = {}) => {
     if (!Array.isArray(keys) || keys.length === 0) return;
 
     let allowedKeys = keys;
@@ -138,7 +138,7 @@ export default function useDataImporterRowMutations({
       allowedKeys = allowed;
     }
 
-    const result = hardDeleteDeclRows(allowedKeys, { actor });
+    const result = await hardDeleteDeclRows(allowedKeys, { actor });
     const parts = [];
 
     if (result.removed > 0) {
@@ -306,7 +306,7 @@ export default function useDataImporterRowMutations({
     mode,
   ]);
 
-  const handleRestoreSingle = useCallback((row) => {
+  const handleRestoreSingle = useCallback(async (row) => {
     if (isReadOnlyForEdits) {
       alert("Bạn không có quyền khôi phục tờ khai.");
       return;
@@ -322,7 +322,7 @@ export default function useDataImporterRowMutations({
     }
 
     const key = keyOfRow(row);
-    const result = restoreDeclRows([key], {
+    const result = await restoreDeclRows([key], {
       actor,
       detail: "Khôi phục tờ khai bị xóa mềm từ giao diện Import Data",
     });
