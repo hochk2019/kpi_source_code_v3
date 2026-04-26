@@ -14,7 +14,6 @@ import { getAuth, getViewerAuth, loadSession, logout } from './auth/localAuth.js
 
 import './App.css';
 
-import { clearStorageCache } from './lib/storageClient.js';
 import {
   APP_SHELL_FALLBACK_TAB,
   parseAppShellLocation,
@@ -30,8 +29,6 @@ import NotificationCenter from './components/NotificationCenter.jsx';
 import CommandCenter from './components/CommandCenter.jsx';
 
 import { subscribeCommand } from './lib/commandBus.js';
-
-import { isAdminRole } from '../packages/domain/src/accountRoles.js';
 
 
 
@@ -150,8 +147,6 @@ export default function App() {
 
 
   const effectiveAuth = useMemo(() => auth || getViewerAuth(), [auth]);
-
-  const isAdmin = isAdminRole(effectiveAuth?.role);
 
   useEffect(() => {
     effectiveAuthRef.current = effectiveAuth;

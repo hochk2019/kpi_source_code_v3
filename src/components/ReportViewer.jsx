@@ -3,11 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import "../print.css";
 
 import {
-  getTeamRoster,
-  getMSTMap,
-  normalizeName,
   normalizeStr,
-  mapMemberNamesToTeams,
   KPI_ADJUSTMENTS_KEY,
   DECL_KEY,
   MST_KEY,
@@ -39,7 +35,6 @@ import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPr
 import { isAdminRole } from "../../packages/domain/src/accountRoles.js";
 
 import { ReportingAdjustmentsPanel } from "@/components/reporting/ReportingAdjustmentsPanel.jsx";
-import { useChartPalette } from "@/designSystem/hooks.js";
 
 const REPORTING_REFRESH_KEYS = [DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, KPI_ADJUSTMENTS_KEY];
 const REPORT_VIEWER_SECTION_IDS = {
@@ -123,10 +118,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     loadRules(storedRuleId || undefined),
   );
 
-  const [roster, setRoster] = useState(() => getTeamRoster());
-
-  const [mstRows, setMstRows] = useState(() => getMSTMap());
-
   const activeRule = useMemo(() => {
     const sets = Array.isArray(ruleCollection?.sets) ? ruleCollection.sets : [];
 
@@ -155,10 +146,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   useEffect(() => {
     setRuleCollection(loadRuleSets());
-
-    setRoster(getTeamRoster());
-
-    setMstRows(getMSTMap());
   }, [version]);
 
   useEffect(() => {
@@ -172,15 +159,9 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       bumpVersion();
     });
 
-    const unsubscribeTeams = subscribeStorage(TEAM_KEY, () => {
-      setRoster(getTeamRoster());
+    const unsubscribeTeams = subscribeStorage(TEAM_KEY, bumpVersion);
 
-      bumpVersion();
-    });
-
-    const unsubscribeMst = subscribeStorage(MST_KEY, () => {
-      setMstRows(getMSTMap());
-    });
+    const unsubscribeMst = subscribeStorage(MST_KEY, bumpVersion);
 
     return () => {
       unsubscribeDeclarations();
@@ -316,76 +297,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
     return `${kpiLabel} • ${declLabel}`;
   }, [ruleComparison]);
-
-  const managedCompanyCount = useMemo(() => {
-    const teams = Array.isArray(roster?.teams) ? roster.teams : [];
-
-    if (!teams.length || !Array.isArray(mstRows) || !mstRows.length) {
-      return 0;
-    }
-
-    const teamKeys = new Set();
-
-    for (const team of teams) {
-      const teamName = normalizeStr(team?.name);
-
-      const key = normalizeName(teamName);
-
-      if (key) {
-        teamKeys.add(key);
-      }
-    }
-
-    if (!teamKeys.size) {
-      return 0;
-    }
-
-    const memberMap = mapMemberNamesToTeams(roster);
-
-    const seen = new Set();
-
-    for (const row of mstRows) {
-      if (!row) continue;
-
-      let teamKey = normalizeName(normalizeStr(row.team));
-
-      if (!teamKey) {
-        const importKey = normalizeName(row.person_import);
-
-        if (memberMap.has(importKey)) {
-          teamKey = normalizeName(memberMap.get(importKey)?.team ?? "");
-        }
-      }
-
-      if (!teamKey) {
-        const exportKey = normalizeName(row.person_export);
-
-        if (memberMap.has(exportKey)) {
-          teamKey = normalizeName(memberMap.get(exportKey)?.team ?? "");
-        }
-      }
-
-      if (!teamKey || !teamKeys.has(teamKey)) {
-        continue;
-      }
-
-      const mst = normalizeStr(row.mst);
-
-      if (mst) {
-        seen.add(mst);
-
-        continue;
-      }
-
-      const company = normalizeStr(row.company);
-
-      if (company) {
-        seen.add(`${teamKey}|${company}`);
-      }
-    }
-
-    return seen.size;
-  }, [mstRows, roster]);
 
   useEffect(() => {
     if (scope === "staff" && selectedStaff !== "all") {

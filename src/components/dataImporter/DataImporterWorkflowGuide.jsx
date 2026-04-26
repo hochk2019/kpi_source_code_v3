@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  buildWorkflowGuideState,
-  getWorkflowStageStatus,
-} from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
+import { buildWorkflowGuideState } from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
 
 export default function DataImporterWorkflowGuide({
   mode = "saved",
@@ -26,7 +23,7 @@ export default function DataImporterWorkflowGuide({
   onPreviewSync,
   onRunSync,
 }) {
-  const { actions, currentStep, headline, steps } = buildWorkflowGuideState({
+  const { actions, currentStep, headline } = buildWorkflowGuideState({
     mode,
     canEdit,
     canImport,

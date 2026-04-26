@@ -22,10 +22,7 @@ const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
 import {
   APP_SHELL_FALLBACK_TAB,
 } from '@/lib/appShellNavigation.js';
-import {
-  buildAppShellWorkflowState,
-  getAppTabRootId,
-} from '@/components/appShell/appShellWorkflowState.js';
+import { getAppTabRootId } from '@/components/appShell/appShellWorkflowState.js';
 import { AppShellLoadingState } from '@/components/appShell/AppShellAsyncStates.jsx';
 import AppShellFrame from '@/components/appShell/AppShellFrame.jsx';
 import AppDashboardLanding from '@/components/appShell/AppDashboardLanding.jsx';

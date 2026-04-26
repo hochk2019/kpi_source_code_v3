@@ -20,7 +20,6 @@ import { fetchWithAuth } from '@/auth/localAuth.js';
 import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
 import { toast } from '@/shared/toast.js';
 import { formatDateTime } from '../../packages/domain/src/format.js';
-import { ROLE_LABELS, normalizeRoleKey } from '../../packages/domain/src/accountRoles.js';
 
 const DEFAULT_RANGE_DAYS = 7;
 const DEFAULT_PAGE_SIZE = 50;
@@ -49,11 +48,6 @@ function buildDefaultRange() {
     from: toDateInputString(fromDate),
     to: toDateInputString(today),
   };
-}
-
-function resolveRoleLabel(role) {
-  const key = normalizeRoleKey(role);
-  return ROLE_LABELS[key] || role || '—';
 }
 
 function formatFilters(filters) {
@@ -85,7 +79,7 @@ export default function ExportAuditReport() {
   const [formState, setFormState] = useState(() => ({ ...defaultRange, search: '', kind: 'all' }));
   const [filters, setFilters] = useState(() => ({ ...defaultRange, search: '', kind: 'all' }));
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const loadExportAudit = useCallback(async ({ signal }, params) => {
     const query = new URLSearchParams();
