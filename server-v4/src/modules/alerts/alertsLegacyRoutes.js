@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy alerts routes — retained for backward compatibility.
+ * Migration tracked under CQ-007.
+ */
 function parseNotificationLimit(rawLimit) {
   const parsed = Number.parseInt(rawLimit ?? '50', 10);
   return Number.isFinite(parsed) ? parsed : 50;

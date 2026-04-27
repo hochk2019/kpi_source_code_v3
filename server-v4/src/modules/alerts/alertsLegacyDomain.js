@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy alerts domain — retained for backward compatibility.
+ * Migration tracked under CQ-007.
+ */
 export const DEFAULT_ALERT_CONFIG = {
   enabled: true,
   thresholdDays: 2,

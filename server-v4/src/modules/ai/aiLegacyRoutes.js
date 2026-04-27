@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy AI routes — retained for backward compatibility with v4 API.
+ * Migration tracked under CQ-007.
+ */
 export function registerAiRoutes(app, deps) {
   if (!app || typeof app.get !== 'function' || typeof app.post !== 'function') {
     throw new Error('registerAiRoutes requires an Express app instance.');

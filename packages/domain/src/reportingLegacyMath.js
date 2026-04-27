@@ -1,3 +1,8 @@
+/**
+ * @deprecated Legacy reporting math — retained for backward compatibility.
+ * New code should use `packages/domain/src/reporting.js` (resolveReportingRule, buildReportingReadModels).
+ * Migration tracked under CQ-007/BL-005.
+ */
 import {
 
   normalizeName,

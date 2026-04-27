@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy compatibility routes — bridges old API shape to new v4 handlers.
+ * Will be removed when all clients migrate to v4 API directly. Tracked under CQ-007.
+ */
 import express, { type Request, type Response, type Router } from 'express';
 
 import type { RuntimePersistence } from '../persistence/runtimePersistence.js';
