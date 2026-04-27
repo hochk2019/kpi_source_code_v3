@@ -67,7 +67,9 @@ export function createDefaultAccountsState() {
 
   ]);
 
-  return { accounts, passwords, currentUser: null };
+  const sharedStorage = new Map();
+
+  return { accounts, passwords, currentUser: null, sharedStorage };
 
 }
 
@@ -365,6 +367,23 @@ function createReportingViewHandler(slice, errorMessage = 'Không thể tải b�
 export function createDefaultHandlers(state) {
 
   return {
+
+    'PUT /api/v4/shared-sync/storage/:key': ({ url, init }) => {
+      const key = decodeURIComponent(url.split('/').pop() || '');
+      const body = safeParse(init?.body, {});
+      const value = Object.prototype.hasOwnProperty.call(body, 'value') ? body.value : null;
+      if (value === null) {
+        state.sharedStorage.delete(key);
+      } else {
+        state.sharedStorage.set(key, value);
+      }
+      return jsonResponse({ ok: true });
+    },
+    'GET /api/v4/shared-sync/storage/:key': ({ url }) => {
+      const key = decodeURIComponent(url.split('/').pop() || '');
+      const raw = state.sharedStorage.has(key) ? state.sharedStorage.get(key) : null;
+      return jsonResponse({ ok: true, raw, value: raw != null ? safeParse(raw, null) : null });
+    },
 
     'GET /api/v4/reporting/view': createReportingViewHandler(),
 
