@@ -42,7 +42,7 @@ export function createAuditLogStore({
 
   function writeAuditLogs(list) {
     const payload = Array.isArray(list) ? list : [];
-    setItem(auditKey, JSON.stringify(payload)).catch((e) => console.error('Background writeAuditLogs failed', e));
+    Promise.resolve(setItem(auditKey, JSON.stringify(payload))).catch((e) => console.error('Background writeAuditLogs failed', e));
     return payload;
   }
 
