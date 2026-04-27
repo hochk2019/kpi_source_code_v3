@@ -36,6 +36,84 @@
   - Uu tien "signal over volume": it chu hon, nhieu hanh dong hon.
   - Giam token khong duoc lam mat tinh dung dan, test, hoac kha nang rollback.
 
+## Trigger-Based Discipline (BẮT BUỘC — không ngoại lệ)
+
+### KHI: edit/rename/refactor 1 function/class/method
+THÌ:
+1. Chạy `gitnexus_impact({target, direction:"upstream"})`
+2. Output blast radius table (d=1/d=2/d=3 count + files)
+3. Nếu HIGH/CRITICAL → **STOP**, đợi user confirm
+4. Workflow: `/pre-edit-impact <symbol>`
+
+### KHI: đổi function signature (sync→async, rename, thêm/bớt param, đổi return type)
+THÌ:
+1. Liệt kê **100% callers** (gitnexus_context incoming_refs)
+2. Liệt kê **100% test files** gọi/mock symbol đó
+3. Present table cho user duyệt TRƯỚC KHI sửa
+4. Update ALL d=1 callers + tests trong cùng scope
+5. Workflow: `/sig-change <symbol> <change>`
+
+### KHI: test fail sau khi sửa code
+THÌ:
+1. `git stash` + run test trên baseline → confirm pre-existing hay regression
+2. Log kết quả verification vào response
+3. Nếu pre-existing → tạo bead, KHÔNG fix trong slice hiện tại
+
+### KHI: muốn touch file ngoài user request
+THÌ: **STOP.** Mention file đó, KHÔNG sửa. (Karpathy Principle #3)
+
+### KHI: bắt đầu task mới / session mới
+THÌ: Chạy `/gate` — đọc task.md, state goal, list assumptions, identify scope.
+
+### KHI: xong 1 slice
+THÌ: Chạy `/end-slice` — 5-line summary + discipline checklist + detect_changes.
+
+### Anti-pattern reference
+CQ-001: `saveDeclRows` async → sót 5 callers → 9 test fail → 30+ min rework. Nguyên nhân: không chạy gitnexus_impact, không liệt kê callers trước.
+
+## Karpathy Coding Principles (BẮT BUỘC)
+
+Nguồn: https://github.com/forrestchang/andrej-karpathy-skills
+
+1. **Think Before Coding** — Nêu assumptions rõ ràng. Nếu nhiều cách hiểu → present all, không chọn ngầm. Nếu uncertain → HỎI.
+2. **Simplicity First** — Code tối thiểu giải quyết vấn đề. Không feature ngoài yêu cầu. Không abstraction cho single-use. Nếu 200 dòng có thể là 50 → viết lại.
+3. **Surgical Changes** — Chỉ touch file trong scope. Không "improve" code kế bên. Match style hiện có. Nếu thấy dead code → MENTION, không delete.
+4. **Goal-Driven Execution** — Định nghĩa success criteria TRƯỚC khi code. "Fix bug" → "Write test reproduces it, then make it pass."
+
+## RTK Token Savings (BẮT BUỘC — Windows native)
+
+Nguồn: https://github.com/rtk-ai/rtk — Tiết kiệm 60-90% tokens.
+
+**MỌI shell command PHẢI prefix `rtk`:**
+
+| Thay vì | Dùng |
+|---------|------|
+| `git status` | `rtk git status` |
+| `git log --oneline -N` | `rtk git log -n N` |
+| `git add/commit/push` | `rtk git add/commit/push` |
+| `pnpm exec vitest run` | `rtk vitest run` |
+| `grep "x" src/` | `rtk grep "x" src/` |
+| `ls -la` | `rtk ls` |
+| `cat file` | `rtk read file` |
+
+Cuối slice: kiểm tra RTK compliance (% commands dùng rtk / total). Target: 100%.
+Analytics: `rtk gain`, `rtk discover`, `rtk session`.
+
+## Huashu Design Skills (trigger-based)
+
+Nguồn: https://github.com/alchaincyf/huashu-design — HTML-native design.
+
+| Trigger | Skill |
+|---------|-------|
+| User yêu cầu mơ hồ ("làm cho đẹp") | Design Direction Advisor: 3 hướng từ 5 trường phái × 20 triết lý |
+| Thiết kế UI component/page | Junior Designer workflow: assumptions → placeholders → iterate |
+| Nhắc tên brand cụ thể | Brand Asset Protocol 5 bước (BẮT BUỘC) |
+| Review design | 5-Dimension Expert Review (0-10 × 5 chiều + radar chart) |
+| Tạo slide/presentation | HTML Slides → PPTX engine |
+| Animation/motion | Motion Design: Stage + Sprite + Easing + interpolate |
+| Infographic/data viz | CSS Grid + magazine layout + real data |
+| Bất kỳ design output nào | Anti-AI Slop: không purple gradient, emoji icons, Inter display |
+
 ## Quy tắc dùng Skills
 
 - Nếu người dùng nhắc tên skill hoặc yêu cầu khớp mô tả skill thì **phải dùng skill** đó.
