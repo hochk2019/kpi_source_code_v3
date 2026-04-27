@@ -238,4 +238,24 @@ describe("createDeclWriteStore", () => {
     expect(overrideResult.updated).toBe(1);
     expect(harness.state.currentRows[0].loai_hinh).toBe("B33");
   });
+
+  it("tracks rows with missing required fields as incomplete warnings (BL-004)", async () => {
+    const harness = createHarness();
+
+    const result = await harness.store.saveDeclRows(
+      [
+        { so_tk: "TK100", nhanh: "", mst: "0100000001", company: "Good Co" },
+        { so_tk: "TK200", nhanh: "", mst: "", company: "No MST Co" },
+        { so_tk: "TK300", nhanh: "", company: "Also No MST" },
+      ],
+      { overwrite: false, actor: "tester" },
+    );
+
+    expect(result.inserted).toBe(3);
+    expect(result.incomplete).toBe(2);
+    expect(result.incompleteRows).toHaveLength(2);
+    expect(result.incompleteRows[0].missingFields).toContain("mst");
+    expect(result.incompleteRows[1].missingFields).toContain("mst");
+    expect(harness.state.currentRows).toHaveLength(3);
+  });
 });

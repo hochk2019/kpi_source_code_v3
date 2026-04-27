@@ -210,6 +210,15 @@ export function createDeclWriteStore({
     };
   }
 
+  function validateDeclRowFields(row) {
+    const missing = [];
+    const soTk = normalizeDeclarationNumber(row?.so_tk ?? row?.so_tk_full ?? "");
+    if (!soTk) missing.push("so_tk");
+    const mst = extractMSTFromDeclRow(row);
+    if (!mst) missing.push("mst");
+    return missing;
+  }
+
   function computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit = 20 } = {}) {
     const fallbackRows = [];
     const currentMap = new Map();
@@ -230,10 +239,12 @@ export function createDeclWriteStore({
     let updated = 0;
     let skipped = 0;
     let locked = 0;
+    let incomplete = 0;
     const insertedDeclarations = [];
     const updatedDeclarations = [];
     const lockedDeclarations = [];
     const errorEntries = [];
+    const incompleteEntries = [];
     const insertedRows = [];
     const updatedRows = [];
     const lockedRows = [];
@@ -243,6 +254,12 @@ export function createDeclWriteStore({
       if (!key) {
         errorEntries.push(normalizeImportErrorRow(row, "missing-key"));
         continue;
+      }
+
+      const missingFields = validateDeclRowFields(row);
+      if (missingFields.length > 0) {
+        incomplete += 1;
+        incompleteEntries.push({ ...normalizeImportErrorRow(row, "incomplete-fields"), missingFields });
       }
 
       const existing = currentMap.get(key);
@@ -297,10 +314,12 @@ export function createDeclWriteStore({
         skipped,
         locked,
         invalid: errorEntries.length,
+        incomplete,
         insertedDeclarations,
         updatedDeclarations,
         lockedDeclarations,
         errors: errorEntries,
+        incompleteRows: incompleteEntries,
       },
       samples: {
         inserted: insertedRows.slice(0, sampleLimit),
@@ -457,10 +476,12 @@ export function createDeclWriteStore({
       skipped: summary.skipped,
       locked: summary.locked,
       invalid: summary.invalid,
+      incomplete: summary.incomplete || 0,
       insertedDeclarations: summary.insertedDeclarations,
       updatedDeclarations: summary.updatedDeclarations,
       lockedDeclarations: summary.lockedDeclarations,
       errors: summary.errors,
+      incompleteRows: summary.incompleteRows || [],
       newBusinessCount: mstSummary.total || 0,
       newBusinesses: mstSummary.additions || [],
     };
