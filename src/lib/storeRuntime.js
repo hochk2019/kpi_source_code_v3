@@ -1048,11 +1048,11 @@ function getDeclRowsRaw() {
 
 
 
-function writeDeclRows(rows) {
+async function writeDeclRows(rows) {
 
   const normalized = normalizeDeclRows(rows);
 
-  setItem(DECL_KEY, JSON.stringify(normalized));
+  await setItem(DECL_KEY, JSON.stringify(normalized));
 
   return normalized;
 
@@ -1330,7 +1330,7 @@ function extractEffectiveDateFromDeclRow(row) {
 
 async function persistAndAnnotateDeclRows(rows) {
 
-  const normalized = writeDeclRows(rows);
+  const normalized = await writeDeclRows(rows);
 
   const annotated = applyAgenciesToDeclRows(normalized);
 
@@ -1583,7 +1583,7 @@ export function pushImportLog(entry, extraMeta = null) {
 
   logs.unshift(cleaned);
 
-  setItem(LOG_KEY, JSON.stringify(logs.slice(0, 50)));
+  Promise.resolve(setItem(LOG_KEY, JSON.stringify(logs.slice(0, 50)))).catch((e) => console.error('Background pushImportLog failed', e));
 
 }
 

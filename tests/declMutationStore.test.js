@@ -192,7 +192,7 @@ describe("createDeclMutationStore", () => {
     );
   });
 
-  it("blocks partial updates on reviewed rows unless override is allowed", () => {
+  it("blocks partial updates on reviewed rows unless override is allowed", async () => {
     const { state, store, spies } = createHarness({
       currentRows: [
         {
@@ -206,7 +206,7 @@ describe("createDeclMutationStore", () => {
       ],
     });
 
-    const blocked = store.updateDeclRowFields(
+    const blocked = await store.updateDeclRowFields(
       "TK002_",
       { loai_hinh: "B12" },
       { actor: "tester" },
@@ -215,7 +215,7 @@ describe("createDeclMutationStore", () => {
     expect(state.currentRows[0].loai_hinh).toBe("A12");
     expect(spies.persistAndAnnotateDeclRows).not.toHaveBeenCalled();
 
-    const override = store.updateDeclRowFields(
+    const override = await store.updateDeclRowFields(
       "TK002_",
       { loai_hinh: "B12" },
       { actor: "admin", allowReviewedOverride: true },
@@ -228,7 +228,7 @@ describe("createDeclMutationStore", () => {
     expect(state.historyEntries).toHaveLength(1);
   });
 
-  it("soft deletes rows, records deleted-log entries, and reports already deleted keys", () => {
+  it("soft deletes rows, records deleted-log entries, and reports already deleted keys", async () => {
     const { state, store, spies } = createHarness({
       currentRows: [
         { so_tk: "TK003", nhanh: "", mst: "0301234567" },
@@ -236,7 +236,7 @@ describe("createDeclMutationStore", () => {
       ],
     });
 
-    const result = store.softDeleteDeclRows(["TK003_", "TK004_", "TK999_"], { actor: "tester" });
+    const result = await store.softDeleteDeclRows(["TK003_", "TK004_", "TK999_"], { actor: "tester" });
 
     expect(result).toMatchObject({
       deleted: 1,
@@ -258,7 +258,7 @@ describe("createDeclMutationStore", () => {
     );
   });
 
-  it("hard deletes rows and emits error-level import logs", () => {
+  it("hard deletes rows and emits error-level import logs", async () => {
     const { state, store, spies } = createHarness({
       currentRows: [
         { so_tk: "TK005", nhanh: "", mst: "0501234567", deleted_at: "2026-04-01T00:00:00Z" },
@@ -266,7 +266,7 @@ describe("createDeclMutationStore", () => {
       ],
     });
 
-    const result = store.hardDeleteDeclRows(["TK005_"], { actor: "tester" });
+    const result = await store.hardDeleteDeclRows(["TK005_"], { actor: "tester" });
 
     expect(result).toMatchObject({
       removed: 1,
@@ -280,7 +280,7 @@ describe("createDeclMutationStore", () => {
     );
   });
 
-  it("restores soft-deleted rows and writes an import info log", () => {
+  it("restores soft-deleted rows and writes an import info log", async () => {
     const { state, store, spies } = createHarness({
       currentRows: [
         {
@@ -293,7 +293,7 @@ describe("createDeclMutationStore", () => {
       ],
     });
 
-    const result = store.restoreDeclRows(["TK007_"], { actor: "tester" });
+    const result = await store.restoreDeclRows(["TK007_"], { actor: "tester" });
 
     expect(result).toMatchObject({
       restored: 1,
@@ -311,21 +311,21 @@ describe("createDeclMutationStore", () => {
     );
   });
 
-  it("marks and unmarks reviewed metadata via write-through storage", () => {
+  it("marks and unmarks reviewed metadata via write-through storage", async () => {
     const { state, store, spies } = createHarness({
       currentRows: [
         { so_tk: "TK008", nhanh: "", mst: "0801234567" },
       ],
     });
 
-    const marked = store.markDeclRowsReviewed(["TK008_"], { actor: "reviewer" });
+    const marked = await store.markDeclRowsReviewed(["TK008_"], { actor: "reviewer" });
     expect(marked).toBe(1);
     expect(state.currentRows[0]).toMatchObject({
       reviewed: true,
       reviewed_by: "reviewer",
     });
 
-    const unmarked = store.unmarkDeclRowsReviewed(["TK008_"], { actor: "reviewer" });
+    const unmarked = await store.unmarkDeclRowsReviewed(["TK008_"], { actor: "reviewer" });
     expect(unmarked).toBe(1);
     expect(state.currentRows[0].reviewed).toBeUndefined();
     expect(state.currentRows[0].reviewed_at).toBeUndefined();

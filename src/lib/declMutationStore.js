@@ -502,7 +502,7 @@ export function createDeclMutationStore({
     };
   }
 
-  function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {
+  async function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {
     const list = normalizeKeyList(keys);
     if (list.length === 0) {
       return 0;
@@ -536,7 +536,7 @@ export function createDeclMutationStore({
       return 0;
     }
 
-    writeDeclRows(nextRows);
+    await writeDeclRows(nextRows);
 
     pushAuditLog({
       actor: actorName,
@@ -548,7 +548,7 @@ export function createDeclMutationStore({
     return changed;
   }
 
-  function unmarkDeclRowsReviewed(keys, { actor = "system", note = "Bỏ đánh dấu rà soát" } = {}) {
+  async function unmarkDeclRowsReviewed(keys, { actor = "system", note = "Bỏ đánh dấu rà soát" } = {}) {
     const list = normalizeKeyList(keys);
     if (list.length === 0) {
       return 0;
@@ -580,7 +580,7 @@ export function createDeclMutationStore({
       return 0;
     }
 
-    writeDeclRows(nextRows);
+    await writeDeclRows(nextRows);
 
     pushAuditLog({
       actor: actorName,
