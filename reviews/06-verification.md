@@ -61,3 +61,56 @@
 - **Tests**: 73/73 pass on directly affected suites; 4 pre-existing fails in `reportViewer/shellPrimitives/ExportAuditReport` confirmed unchanged via `git stash` (not regressions)
 - **ESLint**: 0 warnings on all modified files
 - **Open beads**: `cng-jws` (P1, declHistory setItem TypeError), `cng-bkp` (P1, SectionHeader missing render)
+
+---
+
+## Wave 2 Implementation Status (2026-04-27)
+
+### ✅ cng-bkp (P1): SectionHeader render description prop
+- Added `<p>` element for `description` inside `SectionHeader` component
+- **File**: `packages/ui/src/shellPrimitives.jsx`
+- **Result**: `tests/shellPrimitives.test.jsx` passes description rendering test
+
+### ✅ cng-jws (P1): auditLog writeAuditLogs Promise.resolve fix
+- Wrapped `setItem()` call with `Promise.resolve()` so `.catch()` is safe even when setItem returns synchronously
+- **File**: `src/lib/auditLog.js`
+- **Result**: `tests/auditLogStore.test.js` all pass
+
+### ✅ cng-916 (P2): fetchMock shared-sync storage handlers
+- Added PUT/GET `/api/v4/shared-sync/storage/:key` handlers to `mockApiState.js` using `sharedStorage` Map
+- Previously `refreshSharedKeys` GET hit default fallback without `raw` field → cache cleared silently
+- **File**: `tests/helpers/mockApiState.js`
+- **Result**: `tests/automation.flows.test.js` 3/3 pass (was 1/3)
+
+### ✅ BL-006: sync/async mismatch audit
+- `writeDeclRows` made async (await setItem)
+- `pushImportLog` wrapped with `Promise.resolve().catch()` for safe fire-and-forget
+- `markDeclRowsReviewed`/`unmarkDeclRowsReviewed` made async
+- Updated 5 tests with async/await
+- **Files**: `src/lib/storeRuntime.js`, `src/lib/declMutationStore.js`, `tests/declMutationStore.test.js`
+- **Result**: 76/76 pass on affected suites
+
+### ✅ BL-004: field validation for import merge
+- Added `validateDeclRowFields()` to `computeDeclImportDiff` — checks `so_tk` and `mst` presence
+- Non-blocking: rows still merge but `summary.incomplete` + `summary.incompleteRows` track warnings for UI
+- Regression test added
+- **Files**: `src/lib/declWriteStore.js`, `tests/declWriteStore.test.js`
+- **Result**: 82/82 pass on affected suites
+
+### ✅ UX-001: Workflow guides collapsible
+- Already implemented in `AppShellWorkflowGuide` with localStorage persistence, toggle button, and summary view
+- No additional changes needed
+
+### ✅ CQ-007/BL-005: @deprecated JSDoc legacy paths
+- Added `@deprecated` JSDoc banner to 5 legacy files with migration references
+- **Files**: `reportingLegacyMath.js`, `aiLegacyRoutes.js`, `alertsLegacyDomain.js`, `alertsLegacyRoutes.js`, `legacyCompatRoutes.ts`
+
+### ✅ UX-005: Command Center search bar
+- Replaced plain "Mở Command Center" button with search-bar styled trigger
+- Shows search icon, "Tìm kiếm..." placeholder, and `Ctrl K` kbd hint
+- **Files**: `src/components/appShell/AppShellFrame.jsx`, `src/App.css`
+
+### Wave 2 Summary
+- **All 8 tasks completed** (3 P1/P2 bug fixes, 2 medium business logic, 3 low UX/docs)
+- **Pre-existing fails**: 4 in `appShellFrame/appDashboardLanding` (URL parse error, confirmed on baseline)
+- **No regressions introduced**
