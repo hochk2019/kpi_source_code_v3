@@ -611,6 +611,46 @@
     border-color: var(--ds-border-strong);
   }
 
+  .ds-app-shell__command-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--ds-border-subtle);
+    background: color-mix(in srgb, var(--ds-surface-card) 88%, white);
+    color: var(--ds-text-muted);
+    font-size: 0.8125rem;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+    min-width: 12rem;
+  }
+
+  .ds-app-shell__command-search:hover {
+    border-color: var(--ds-border-strong);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-border-subtle) 40%, transparent);
+  }
+
+  .ds-app-shell__command-search-label {
+    flex: 1;
+    text-align: left;
+  }
+
+  .ds-app-shell__command-search-kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    font-size: 0.6875rem;
+    font-family: inherit;
+    font-weight: 600;
+    border-radius: 0.25rem;
+    border: 1px solid var(--ds-border-subtle);
+    padding: 0.1rem 0.35rem;
+    color: var(--ds-text-muted);
+    background: var(--ds-surface-muted);
+  }
+
   .ds-app-shell__content {
     display: flex;
     flex-direction: column;
