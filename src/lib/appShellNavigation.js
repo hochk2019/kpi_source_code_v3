@@ -59,6 +59,15 @@ export const APP_TAB_DEFINITIONS = Object.freeze([
     commandKeywords: ['import', 'excel', 'ecus', 'dong bo', 'du lieu'],
   },
   {
+    id: 'hq',
+    sectionId: 'operations',
+    label: 'Đại Lý HQ',
+    tooltip: 'Quản lý thông tin đại lý hải quan và đơn vị ủy thác',
+    commandLabel: 'Đi tới tab Đại Lý HQ',
+    commandDescription: 'Tra cứu và quản lý danh sách đại lý hải quan',
+    commandKeywords: ['dai ly', 'hq', 'hai quan', 'uy thac'],
+  },
+  {
     id: 'teams',
     sectionId: 'performance',
     label: 'Quản lý Tổ đội',
