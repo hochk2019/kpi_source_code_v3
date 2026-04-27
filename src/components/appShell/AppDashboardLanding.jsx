@@ -6,7 +6,7 @@ import { buildAppDashboardSummaryState } from '@/components/appShell/appDashboar
 import { useDashboardKpiOverview } from '@/hooks/useDashboardKpiOverview.js';
 import { useChartPalette } from '@/designSystem/hooks.js';
 import { ReportingExecutiveSummaryPanel } from '@/components/reporting/ReportingExecutiveSummaryPanel.jsx';
-import { SummaryCard, TeamPieWidget, TrendLineChart } from '@/components/reporting/ReportingOverviewWidgets.jsx';
+import { SummaryCard, TeamPieWidget, TopStaffWidget, TrendLineChart } from '@/components/reporting/ReportingOverviewWidgets.jsx';
 import { formatInt, formatDecimal } from '@/components/reporting/reportingDetailUtils.js';
 
 function DashboardQuickAction({ label, detail, onClick, icon = ArrowRight }) {
@@ -62,6 +62,7 @@ export default function AppDashboardLanding({
     teamPieData,
     teamDeclPieData,
     topStaffByKpi,
+    topStaffByDecls,
     dateRange
   } = useDashboardKpiOverview();
 
@@ -194,6 +195,16 @@ export default function AppDashboardLanding({
               <AppShellEmptyState
                 title="Chưa có dữ liệu phân quyền / tổ đội"
                 description="Không tìm thấy đủ dữ liệu tờ khai để vẽ biểu đồ phân bổ tổ đội."
+              />
+            )}
+
+            {(topStaffByKpi?.length > 0 || topStaffByDecls?.length > 0) && (
+              <TopStaffWidget
+                kpiData={topStaffByKpi || []}
+                declData={topStaffByDecls || []}
+                palette={chartPalette}
+                formatInt={formatInt}
+                formatDecimal={formatDecimal}
               />
             )}
 
