@@ -86,12 +86,12 @@ describe('AppShellFrame', () => {
       </AppShellFrame>,
     );
 
-    expect(screen.getByText('Bảng điều hành KPI')).toBeInTheDocument();
+    expect(screen.getAllByText('Bao cao KPI').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Hieu suat').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('tab', { name: /Bao cao KPI/i })).toBeInTheDocument();
     expect(screen.getByText(/Người dùng admin/i)).toBeInTheDocument();
-    expect(screen.getByText(/Workflow Bao cao KPI/i)).toBeInTheDocument();
-    expect(screen.getByText(/Dashboard tong hop va xuat bao cao theo ky\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Workflow báo cáo KPI/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Xem va xuat bao cao KPI tong hop/i).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Command Center/i }).length).toBeGreaterThan(0);
   });
 

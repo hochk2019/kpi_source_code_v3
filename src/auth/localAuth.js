@@ -243,7 +243,14 @@ export function buildUrl(path) {
 
   const normalized = path.startsWith("/") ? path : `/${path}`;
 
-  return `${base || ""}${normalized}`;
+  if (!base) {
+    const origin = typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost";
+    return `${origin}${normalized}`;
+  }
+
+  return `${base}${normalized}`;
 
 }
 
