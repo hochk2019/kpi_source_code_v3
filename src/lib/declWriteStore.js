@@ -1,7 +1,17 @@
+import { z } from "zod";
 import {
   normalizeDeclarationNumber as defaultNormalizeDeclarationNumber,
   normalizeStr as defaultNormalizeStr,
 } from "./storeCoreHelpers.js";
+
+// BL-004: Zod schema for required declaration fields (relaxed - validation handled downstream)
+const declRowSchema = z.object({
+  so_tk: z.coerce.string(),
+  nhanh: z.union([z.string(), z.boolean(), z.number()]).optional(),
+  date: z.union([z.string(), z.date()]).optional(),
+});
+
+const importRowArraySchema = z.array(z.unknown());
 
 export function createDeclWriteStore({
   normalizeStr = defaultNormalizeStr,
@@ -220,6 +230,14 @@ export function createDeclWriteStore({
   }
 
   function computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit = 20 } = {}) {
+    // BL-004: Validate input with Zod schema
+    const validatedRows = Array.isArray(normalizedIncoming) ? normalizedIncoming : [];
+    const validRows = validatedRows.filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      const result = declRowSchema.safeParse(row);
+      return result.success;
+    });
+
     const fallbackRows = [];
     const currentMap = new Map();
 
@@ -249,7 +267,7 @@ export function createDeclWriteStore({
     const updatedRows = [];
     const lockedRows = [];
 
-    for (const row of normalizedIncoming) {
+    for (const row of validRows) {
       const key = getDeclarationKey(row);
       if (!key) {
         errorEntries.push(normalizeImportErrorRow(row, "missing-key"));
