@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Search } from 'lucide-react';
 
 import CommandCenterFooter from '@/components/command-center/CommandCenterFooter.jsx';
@@ -43,6 +43,7 @@ export default function CommandCenter({
   className = '',
 }) {
   const { theme, setTheme } = useTheme();
+
   const {
     closeDialog,
     dialogId,
@@ -70,20 +71,33 @@ export default function CommandCenter({
     themePreference: theme,
   });
 
+  // UX-005: Inline search state for collapsed header
+  const [inlineQuery, setInlineQuery] = useState('');
+  const handleInlineChange = useCallback((value) => {
+    setInlineQuery(value);
+    if (value.trim()) {
+      updateQuery(value);
+      openDialog();
+    }
+  }, [updateQuery, openDialog]);
+
   return (
     <>
-      <button
-        type="button"
-        onClick={openDialog}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={dialogId}
-        className={`inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-600 shadow-sm transition hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ds-accent-ring)] dark:border-gray-700 dark:text-gray-200 dark:hover:bg-slate-800 ${className}`.trim()}
-        data-tooltip="Mở Command Center (Ctrl+K)"
-      >
-        <Search className="h-4 w-4" />
-        <span className="hidden sm:inline">Command Center</span>
-      </button>
+      {/* UX-005: Inline search bar in collapsed header */}
+      {!open ? (
+        <div className={`flex items-center gap-2 rounded-full border border-gray-300 bg-white px-3 py-1.5 shadow-sm transition hover:border-gray-400 dark:border-gray-700 dark:bg-slate-900 ${className}`.trim()}>
+          <Search className="h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={inlineQuery}
+            onChange={(e) => handleInlineChange(e.target.value)}
+            onFocus={openDialog}
+            placeholder="Tìm lệnh... (Ctrl+K)"
+            className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none dark:text-gray-200 w-32 sm:w-48"
+            aria-label="Tìm kiếm lệnh"
+          />
+        </div>
+      ) : null}
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 px-4 py-24 backdrop-blur-sm">
