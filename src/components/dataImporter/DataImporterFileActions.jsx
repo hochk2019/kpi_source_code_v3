@@ -14,6 +14,7 @@ export default function DataImporterFileActions({
   canViewSavedRows = false,
   selectedFile = "",
   modeLabel = "",
+  isImporting = false, // CRIT-001: Loading state
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -40,12 +41,14 @@ export default function DataImporterFileActions({
         <button
           type="button"
           onClick={onImport}
-          disabled={!canImport}
+          disabled={!canImport || isImporting}
           className={`px-3 py-1.5 rounded ${
-            canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"
+            canImport && !isImporting
+              ? "bg-black text-white"
+              : "bg-gray-200 text-gray-500 cursor-not-allowed"
           }`}
         >
-          Import XLSX
+          {isImporting ? "Đang import..." : "Import XLSX"}
         </button>
       ) : null}
       {canEdit && !canImport && importDisabledReason ? (

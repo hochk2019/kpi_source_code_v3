@@ -1315,145 +1315,19 @@ export default function AccountManager() {
 
 
 
-      <AppDialog open={deleteDialogOpen} onOpenChange={(open) => (open ? setDeleteDialogOpen(true) : closeDeleteDialog())}>
-
-        <AppDialogContent size="sm">
-
-          <AppDialogHeader>
-
-            <AppDialogTitle>Xóa tài khoản</AppDialogTitle>
-
-            <AppDialogDescription>
-
-              {accountToDelete
-
-                ? `Thao tác này sẽ xóa vĩnh viễn tài khoản ${accountToDelete.username} khỏi hệ thống.`
-
-                : "Xác nhận xóa tài khoản khỏi hệ thống."}
-
-            </AppDialogDescription>
-
-          </AppDialogHeader>
-
-          <div className="space-y-4 px-6 pb-4 pt-2">
-
-            {accountToDelete && (
-
-              <div className="space-y-1 text-sm text-[color:var(--ds-text-secondary)]">
-
-                {accountToDelete.name && accountToDelete.name !== accountToDelete.username ? (
-
-                  <p>
-
-                    <strong>Họ tên:</strong> {accountToDelete.name}
-
-                  </p>
-
-                ) : null}
-
-                {accountToDelete.memberName ? (
-
-                  <p>
-
-                    <strong>Nhân viên KPI:</strong> {accountToDelete.memberName}
-
-                    {accountToDelete.teamName ? ` • ${accountToDelete.teamName}` : ""}
-
-                  </p>
-
-                ) : (
-
-                  <p className="text-[color:var(--ds-text-muted)]">Tài khoản chưa gắn nhân viên KPI.</p>
-
-                )}
-
-                <p className="text-[color:var(--ds-text-muted)]">
-
-                  Tài khoản sẽ bị đăng xuất ngay sau khi xoá và không thể phục hồi.
-
-                </p>
-
-              </div>
-
-            )}
-
-            <div className="space-y-2">
-
-              <label className="text-sm font-medium text-[color:var(--ds-text-primary)]" htmlFor="delete-confirm-input">
-
-                Nhập lại tên tài khoản để xác nhận
-
-              </label>
-
-              <input
-
-                id="delete-confirm-input"
-
-                className={CONTROL_CLASS}
-
-                value={deleteConfirmText}
-
-                onChange={(event) => {
-
-                  setDeleteConfirmText(event.target.value);
-
-                  if (deleteError) {
-
-                    setDeleteError("");
-
-                  }
-
-                }}
-
-                placeholder="username"
-
-              />
-
-            </div>
-
-            {deleteError && <p className="text-sm text-rose-600">{deleteError}</p>}
-
-          </div>
-
-          <AppDialogFooter>
-
-            <AppDialogClose asChild>
-
-              <button
-
-                type="button"
-
-                className="rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
-
-              >
-
-                Hủy
-
-              </button>
-
-            </AppDialogClose>
-
-            <button
-
-              type="button"
-
-              onClick={handleConfirmDelete}
-
-              disabled={isDeleting}
-
-              className="rounded bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
-
-            >
-
-              Xóa vĩnh viễn
-
-            </button>
-
-          </AppDialogFooter>
-
-        </AppDialogContent>
-
-      </AppDialog>
+      <AccountDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => (open ? setDeleteDialogOpen(true) : closeDeleteDialog())}
+        account={accountToDelete}
+        confirmText={deleteConfirmText}
+        onConfirmTextChange={(value) => {
+          setDeleteConfirmText(value);
+          if (deleteError) setDeleteError("");
+        }}
+        onConfirm={handleConfirmDelete}
+        error={deleteError}
+        isDeleting={isDeleting}
+      />
 
     </div>
 

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import resolveImportEligibility from "@/components/dataImporter/importGate.js";
 import { parseDataImporterWorkbook } from "@/components/dataImporter/dataImporterWorkbookParser.js";
@@ -13,6 +13,7 @@ function resetFileInput(fileRef, inputElement) {
 }
 
 export default function useDataImporterImportFlow({
+  // CRIT-001: Processing lock to prevent duplicate imports
   fileRef,
   canUploadFiles = false,
   isReadOnlyForEdits = false,
@@ -266,8 +267,21 @@ export default function useDataImporterImportFlow({
     ],
   );
 
+  // CRIT-001: Processing lock to prevent duplicate imports
+  const isProcessingRef = useRef(false);
+  const [isImporting, setIsImporting] = useState(false);
+
   const handleImport = useCallback(async () => {
-    const importGate = resolveImportEligibility({
+    // Block if already processing
+    if (isProcessingRef.current) {
+      return;
+    }
+
+    isProcessingRef.current = true;
+    setIsImporting(true);
+
+    try {
+      const importGate = resolveImportEligibility({
       canUploadFiles,
       isReadOnlyForEdits,
       mode,
@@ -321,39 +335,44 @@ export default function useDataImporterImportFlow({
       result.locked > 0 ? `bỏ qua ${skippedLabel} (khóa ${lockedLabel})` : `bỏ qua ${skippedLabel}`;
     const message = `Import ${selectedFile || "file XLSX"}: +${insertedLabel} / cập nhật ${updatedLabel} / ${skippedSummary} → tổng ${totalLabel}`;
 
-    pushImportLog({
-      kind: "manual-import",
-      actor,
-      message,
-      summary: {
-        file: selectedFile || "",
-        totalIncoming: result.totalIncoming,
-        inserted: result.inserted,
-        updated: result.updated,
-        skipped: result.skipped,
-        locked: result.locked,
-        invalid: result.invalid,
-        totalStored: result.totalStored,
-        newBusinesses: result.newBusinessCount,
-      },
-      meta: {
-        file: selectedFile || "",
-        errors: Array.isArray(result.errors) ? result.errors : [],
-        newBusinesses: Array.isArray(result.newBusinesses) ? result.newBusinesses.slice(0, 50) : [],
-      },
-      insertedDeclarations: result.insertedDeclarations,
-      updatedDeclarations: result.updatedDeclarations,
-      lockedDeclarations: result.lockedDeclarations,
-    });
+      pushImportLog({
+        kind: "manual-import",
+        actor,
+        message,
+        summary: {
+          file: selectedFile || "",
+          totalIncoming: result.totalIncoming,
+          inserted: result.inserted,
+          updated: result.updated,
+          skipped: result.skipped,
+          locked: result.locked,
+          invalid: result.invalid,
+          totalStored: result.totalStored,
+          newBusinesses: result.newBusinessCount,
+        },
+        meta: {
+          file: selectedFile || "",
+          errors: Array.isArray(result.errors) ? result.errors : [],
+          newBusinesses: Array.isArray(result.newBusinesses) ? result.newBusinesses.slice(0, 50) : [],
+        },
+        insertedDeclarations: result.insertedDeclarations,
+        updatedDeclarations: result.updatedDeclarations,
+        lockedDeclarations: result.lockedDeclarations,
+      });
 
-    alert(`Import xong: thêm ${insertedLabel}, cập nhật ${updatedLabel}, ${skippedSummary}.`);
+      alert(`Import xong: thêm ${insertedLabel}, cập nhật ${updatedLabel}, ${skippedSummary}.`);
 
-    if (fileRef?.current) {
-      fileRef.current.value = "";
+      if (fileRef?.current) {
+        fileRef.current.value = "";
+      }
+
+      loadSavedRows?.({ bypassConfirm: true });
+      fetchAlerts?.();
+    } finally {
+      // CRIT-001: Always reset processing lock
+      isProcessingRef.current = false;
+      setIsImporting(false);
     }
-
-    loadSavedRows?.({ bypassConfirm: true });
-    fetchAlerts?.();
   }, [
     actor,
     canOverwriteData,
@@ -376,5 +395,6 @@ export default function useDataImporterImportFlow({
   return {
     handleFileChange,
     handleImport,
+    isImporting, // CRIT-001: Export for UI disable state
   };
 }

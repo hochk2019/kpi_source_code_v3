@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardSummary } from "../../packages/api-client/src/reportingClient.js";
 import { loadRules } from "@/lib/rules.js";
 
@@ -27,6 +27,9 @@ export function useDashboardKpiOverview() {
         setVersion((v) => v + 1);
     }, []);
 
+    // Memoize date range to prevent stale values on re-renders
+    const dateRange = useMemo(() => getMonthBoundaries(), [version]);
+
     useEffect(() => {
         let cancelled = false;
 
@@ -35,7 +38,7 @@ export function useDashboardKpiOverview() {
             setError("");
 
             try {
-                const { from, to } = getMonthBoundaries();
+                const { from, to } = dateRange;
                 // Load the currently active rules for data formatting and references
                 const activeRules = loadRules();
                 const result = await fetchDashboardSummary({ from, to }, activeRules);

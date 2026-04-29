@@ -155,7 +155,7 @@ export default function useDataImporterWorkflowSession({
     onAfterSyncSuccess: handleRefreshCoDiscrepancy,
   });
 
-  const { handleFileChange, handleImport } = useDataImporterImportFlow({
+  const { handleFileChange, handleImport, isImporting } = useDataImporterImportFlow({
     fileRef,
     canUploadFiles,
     isReadOnlyForEdits,
@@ -362,6 +362,7 @@ export default function useDataImporterWorkflowSession({
     handlePreviewSync,
     handleFileChange,
     handleImport,
+    isImporting,
     applyRangePreset,
     handleRefreshAlerts,
     handleMarkReviewed,

@@ -17,6 +17,7 @@ export default function createDataImporterShellProps({
   syncPreviewRows = [],
   previewLoading = false,
   syncRunning = false,
+  isImporting = false,
   fileInputRef,
   onFileChange,
   onImport,
@@ -127,11 +128,12 @@ export default function createDataImporterShellProps({
     onOpenDeletedList,
     isReadOnlyForEdits,
     canEdit,
-    canImport: derivedCanImport,
-    importDisabledReason: importGate.reason,
+    canImport: derivedCanImport && !isImporting, // CRIT-001: Disable khi đang import
+    importDisabledReason: isImporting ? "Đang xử lý import..." : importGate.reason,
     canViewSavedRows,
     selectedFile,
     modeLabel,
+    isImporting, // CRIT-001: Pass để UI hiển thị loading
   };
 
   const filterPresetControlsProps = {

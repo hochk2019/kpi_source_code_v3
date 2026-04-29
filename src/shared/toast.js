@@ -184,7 +184,19 @@ const toast = Object.assign(
 
     custom: (...args) => sonnerToast.custom?.(...args),
 
-    dismiss: (...args) => sonnerToast.dismiss(...args)
+    dismiss: (...args) => sonnerToast.dismiss(...args),
+
+    sticky: (message, options = {}) => {
+      const { kind = "info", prefix = true, description, ...rest } = options;
+      const resolvedDescription = resolveDescription(description);
+      const finalOptions = { duration: Number.POSITIVE_INFINITY, ...rest };
+      if (resolvedDescription) {
+        finalOptions.description = prefix
+          ? `${PREFIXES[kind] ?? PREFIXES.info} ${resolvedDescription}`
+          : resolvedDescription;
+      }
+      return sonnerToast(buildMessage(kind, message, prefix), finalOptions);
+    }
 
   }
 

@@ -825,13 +825,14 @@ export default function KPIAdjustments({ currentUser }) {
         buildLicenseFieldId={buildLicenseFieldId}
       />
 
-      <Tabs defaultValue="management" className="w-full">
+      <Tabs defaultValue="form" className="w-full">
         <TabsList className="mb-4">
-          <TabsTrigger value="management">Quản lý Phiếu</TabsTrigger>
-          <TabsTrigger value="history">Lịch sử</TabsTrigger>
+          <TabsTrigger value="form">Nhập điều chỉnh</TabsTrigger>
+          <TabsTrigger value="list">Danh sách</TabsTrigger>
+          <TabsTrigger value="settings">Cài đặt</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="management" className="space-y-6 mt-0">
+        <TabsContent value="form" className="space-y-6 mt-0">
           <KpiAdjustmentOverviewPanel stats={stats} formatInt={formatInt} formatDecimal={formatDecimal} />
 
           <KpiAdjustmentFormPanel
@@ -889,7 +890,7 @@ export default function KPIAdjustments({ currentUser }) {
           />
         </TabsContent>
 
-        <TabsContent value="history" className="space-y-6 mt-0">
+        <TabsContent value="list" className="space-y-6 mt-0">
           <KpiAdjustmentListPanel
             formFieldIds={FORM_FIELD_IDS}
             selectFieldClass={SELECT_FIELD_CLASS}
@@ -935,6 +936,24 @@ export default function KPIAdjustments({ currentUser }) {
             onApprove={(item) => setDetailEntry({ entry: item, intent: "approve" })}
             onReject={(item) => setDetailEntry({ entry: item, intent: "reject" })}
             onDelete={handleDelete}
+          />
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6 mt-0">
+          <KpiAdjustmentSettingsDialog
+            embedded
+            open={true}
+            focusCategory={settingsFocusCategory}
+            settingsDraft={settingsDraft}
+            settingsError={settingsError}
+            settingsSaving={settingsSaving}
+            onOpenChange={() => {}}
+            onClose={() => {}}
+            onReset={handleSettingsReset}
+            onSubmit={handleSettingsSubmit}
+            onUpdateDraft={updateSettingsDraft}
+            buildSettingsFieldId={buildSettingsFieldId}
+            buildLicenseFieldId={buildLicenseFieldId}
           />
         </TabsContent>
       </Tabs>

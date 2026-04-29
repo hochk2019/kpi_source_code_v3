@@ -149,13 +149,20 @@ export function useReportViewerActions({
 
   const withExporter = async (runner) => {
     setExporting(true);
+    const stickyId = toast.sticky("Đang xuất báo cáo…", {
+      kind: "info",
+      description: "Vui lòng chờ trong khi file Excel được tạo.",
+    });
 
     try {
       const exporter = await loadReportExporterModule();
       await runner(exporter);
+      toast.dismiss(stickyId);
+      toast.success("Xuất báo cáo thành công.");
     } catch (err) {
+      toast.dismiss(stickyId);
       console.error("Khong the xuat bao cao", err);
-      window.alert(`Khong the xuat bao cao: ${err?.message || "Loi khong xac dinh"}`);
+      toast.error(err?.message || "Không thể xuất báo cáo.");
     } finally {
       setExporting(false);
     }

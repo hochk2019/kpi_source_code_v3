@@ -1624,21 +1624,17 @@ function addByTiers(numItems, tiers = [], isCumulative = false) {
 
     } else {
 
+      // Find the highest matching tier - don't break early
+
+      // Continue checking to find the tier with highest 'from' value that matches
+
       if (numItems >= from && numItems <= to) {
 
         sum = Number(add || 0);
 
-        break;
-
       }
 
-      if (numItems > to) {
-
-        sum = Number(add || 0);
-
-        break;
-
-      }
+      // Removed incorrect break statement that was causing wrong tier selection
 
     }
 

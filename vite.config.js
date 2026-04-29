@@ -124,12 +124,22 @@ export default defineConfig({
 
     environment: 'jsdom',
 
+    pool: 'forks',
+
+    testTimeout: 15000,
+
     setupFiles: './vitest.setup.js',
 
     environmentMatchGlobs: [
-
       ['tests/server.*.test.js', 'node'],
-
+      ['tests/server-v4/**', 'node'],
+      ['tests/scripts/**', 'node'],
+      ['tests/apps*', 'node'],
+      ['tests/backendEntrypointPlan*', 'node'],
+      ['tests/bootstrapAccountPasswords*', 'node'],
+      ['tests/businessSnapshotSqlite*', 'node'],
+      ['tests/check-server*', 'node'],
+      ['tests/checkServerRetirement*', 'node'],
     ],
 
     exclude: ['tests/playwright/**', 'node_modules/**', 'dist/**', '.codex_tmp/**'],

@@ -69,85 +69,69 @@ export default function NotificationCenter({ className }) {
 
 
   useEffect(() => {
-
     let cancelled = false;
+    let unsubscribe = null;
 
     setLoading(true);
 
     fetchNotificationHistory(20)
-
       .then((initial) => {
-
         if (cancelled) return;
-
         setEvents(initial);
-
       })
-
       .catch((err) => {
-
-        console.warn('Không thể tải thông báo gần nhất', err);
-
+        // CRIT-002: Remove console.warn to avoid noise in production
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Không thể tải thông báo gần nhất', err);
+        }
       })
-
       .finally(() => {
-
         if (!cancelled) {
-
           setLoading(false);
-
         }
-
       });
 
-    const unsubscribe = subscribeNotificationStream((event) => {
+    // CRIT-002: Safe subscription setup
+    const setupSubscription = async () => {
+      try {
+        unsubscribe = await subscribeNotificationStream((event) => {
+          if (!event || cancelled) return;
 
-      if (!event) return;
+          setEvents((prev) => {
+            const next = [event, ...prev];
+            const unique = new Map();
+            for (const entry of next) {
+              if (entry && entry.id && !unique.has(entry.id)) {
+                unique.set(entry.id, entry);
+              }
+            }
+            return Array.from(unique.values()).slice(0, 50);
+          });
 
-      setEvents((prev) => {
-
-        const next = [event, ...prev];
-
-        const unique = new Map();
-
-        for (const entry of next) {
-
-          if (entry && entry.id && !unique.has(entry.id)) {
-
-            unique.set(entry.id, entry);
-
-          }
-
+          setUnreadIds((prev) => {
+            const next = new Set(prev);
+            if (event.id) {
+              next.add(event.id);
+            }
+            return next;
+          });
+        });
+      } catch (err) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Failed to subscribe to notification stream', err);
         }
-
-        return Array.from(unique.values()).slice(0, 50);
-
-      });
-
-      setUnreadIds((prev) => {
-
-        const next = new Set(prev);
-
-        if (event.id) {
-
-          next.add(event.id);
-
-        }
-
-        return next;
-
-      });
-
-    });
-
-    return () => {
-
-      cancelled = true;
-
-      unsubscribe();
-
+      }
     };
 
+    setupSubscription();
+
+    return () => {
+      cancelled = true;
+      // CRIT-002: Safe unsubscribe - check if it's a function
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, []);
 
 

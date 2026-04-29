@@ -602,7 +602,7 @@ export function ReportingSchedulePanel({
               </label>
               <select
                 id="schedule-frequency"
-                value={scheduleDraft.frequency}
+                value={scheduleDraft.frequency ?? ''}
                 onChange={(event) => onFieldChange("frequency", event.target.value)}
                 className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
               >
@@ -614,7 +614,7 @@ export function ReportingSchedulePanel({
               </select>
               {scheduleDraft.frequency === "weekly" ? (
                 <select
-                  value={scheduleDraft.dayOfWeek}
+                  value={scheduleDraft.dayOfWeek ?? ''}
                   onChange={(event) => onFieldChange("dayOfWeek", Number(event.target.value))}
                   className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
                 >
@@ -630,7 +630,7 @@ export function ReportingSchedulePanel({
                     type="number"
                     min={1}
                     max={31}
-                    value={scheduleDraft.dayOfMonth}
+                    value={scheduleDraft.dayOfMonth ?? ''}
                     onChange={(event) => onFieldChange("dayOfMonth", Number(event.target.value))}
                     className="w-20 rounded border border-[color:var(--ds-border-subtle)] bg-white px-2 py-2 text-sm text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
                   />
@@ -646,7 +646,7 @@ export function ReportingSchedulePanel({
               <input
                 id="schedule-time"
                 type="time"
-                value={scheduleDraft.time}
+                value={scheduleDraft.time ?? ''}
                 onChange={(event) => onFieldChange("time", event.target.value)}
                 className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
               />
