@@ -164,6 +164,22 @@ export default function NotificationCenter({ className }) {
 
   }, [open]);
 
+  // UI-003: Auto-dismiss notifications after 5 seconds
+  useEffect(() => {
+    if (events.length === 0) return undefined;
+
+    const timers = events
+      .filter((e) => e.tone !== 'error')
+      .map((event) =>
+        setTimeout(() => {
+          setEvents((prev) => prev.filter((e) => e.id !== event.id));
+        }, 5000)
+      );
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [events]);
 
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { toast } from "@/shared/toast.js";
 import {
   DEFAULT_SYNC_CONFIG,
   formatMstListForInput,
@@ -484,7 +485,7 @@ export default function useDataImporterSync({
 
   const handleSaveSyncConfig = useCallback(async () => {
     if (!canManageSync) {
-      alert("Bạn không có quyền cập nhật cấu hình đồng bộ.");
+      toast?.error?.("Bạn không có quyền cập nhật cấu hình đồng bộ.");
       return;
     }
 
@@ -981,7 +982,7 @@ export default function useDataImporterSync({
 
   const handleRunSync = useCallback(async () => {
     if (!canManageSync) {
-      alert("Bạn không có quyền chạy đồng bộ ECUS.");
+      toast?.error?.("Bạn không có quyền chạy đồng bộ ECUS.");
       return false;
     }
 
@@ -1071,7 +1072,7 @@ export default function useDataImporterSync({
 
   const handlePreviewSync = useCallback(async () => {
     if (!canManageSync) {
-      alert("Bạn không có quyền xem trước dữ liệu đồng bộ.");
+      toast?.error?.("Bạn không có quyền xem trước dữ liệu đồng bộ.");
       return { ok: false, denied: true };
     }
 

@@ -16,6 +16,7 @@ import TeamManagerHistoryPanel from "@/components/team-manager/TeamManagerHistor
 import TeamManagerMemberPanel from "@/components/team-manager/TeamManagerMemberPanel.jsx";
 import TeamManagerCompaniesPanel from "@/components/team-manager/TeamManagerCompaniesPanel.jsx";
 import TeamManagerToolbar from "@/components/team-manager/TeamManagerToolbar.jsx";
+import EmptyState from "@/components/shared/EmptyState.jsx";
 import { loadXlsx } from "@/lib/loadXlsx.js";
 
 const COMPANY_PAGE_SIZE = 20;
@@ -709,37 +710,45 @@ function TeamManager({ canEdit = true, currentUser = null }) {
         onRefresh={refreshHistory}
       />
 
-      <div className="flex flex-wrap gap-2">
-        {roster.teams.map((team) => {
-          const isActive = team.id === selectedTeamId;
+      {roster.teams.length === 0 ? (
+        <EmptyState
+          icon="inbox"
+          title="Chưa có tổ đội nào"
+          description="Hãy tạo tổ đội đầu tiên để bắt đầu quản lý."
+        />
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {roster.teams.map((team) => {
+            const isActive = team.id === selectedTeamId;
 
-          const memberCount = team.members.length;
+            const memberCount = team.members.length;
 
-          const normalizedTeam = normalizeName(team.name);
+            const normalizedTeam = normalizeName(team.name);
 
-          const companyCount = teamCompanyCounts.get(normalizedTeam) ?? 0;
+            const companyCount = teamCompanyCounts.get(normalizedTeam) ?? 0;
 
-          return (
-            <button
-              key={team.id}
-              onClick={() => {
-                setSelectedTeamId(team.id);
+            return (
+              <button
+                key={team.id}
+                onClick={() => {
+                  setSelectedTeamId(team.id);
 
-                setSelectedMemberId(null);
-              }}
-              className={`px-4 py-2 rounded border text-left ${
-                isActive ? "bg-blue-600 text-white" : "bg-white"
-              }`}
-            >
-              <div className="font-semibold">{team.name}</div>
+                  setSelectedMemberId(null);
+                }}
+                className={`px-4 py-2 rounded border text-left ${
+                  isActive ? "bg-blue-600 text-white" : "bg-white"
+                }`}
+              >
+                <div className="font-semibold">{team.name}</div>
 
-              <div className="text-xs opacity-80">
-                {memberCount} thành viên · {companyCount} doanh nghiệp
-              </div>
-            </button>
-          );
-        })}
-      </div>
+                <div className="text-xs opacity-80">
+                  {memberCount} thành viên · {companyCount} doanh nghiệp
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {selectedTeam ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(240px,280px)_1fr]">

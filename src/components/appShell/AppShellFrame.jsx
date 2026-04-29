@@ -2,6 +2,7 @@ import React from 'react';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 import AppShellWorkflowGuide from '@/components/appShell/AppShellWorkflowGuide.jsx';
+import RuntimeErrorBoundary from '@/components/errorBoundaries/RuntimeErrorBoundary.jsx';
 
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip.jsx';
 import { Info } from 'lucide-react';
@@ -220,7 +221,16 @@ export default function AppShellFrame({
 
           {workflowGuide ? <AppShellWorkflowGuide {...workflowGuide} /> : null}
 
-          <div className="ds-app-shell__content">{children}</div>
+          <div className="ds-app-shell__content">
+            <RuntimeErrorBoundary
+              level="panel"
+              title="Không thể hiển thị nội dung trang."
+              description="Đã xảy ra lỗi khi hiển thị nội dung. Bạn có thể thử hiển thị lại hoặc chuyển sang tab khác."
+              resetKeys={[value]}
+            >
+              {children}
+            </RuntimeErrorBoundary>
+          </div>
         </div>
       </div>
     </Tabs>

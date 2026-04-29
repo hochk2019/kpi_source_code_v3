@@ -280,6 +280,12 @@ export default function useDataImporterImportFlow({
     isProcessingRef.current = true;
     setIsImporting(true);
 
+    // UX-006: Show sticky toast for long operation
+    const stickyToastId = toast?.sticky?.("Đang import dữ liệu...", {
+      kind: "info",
+      description: `Đang xử lý file ${selectedFile || "XLSX"}, vui lòng chờ.`,
+    });
+
     try {
       const importGate = resolveImportEligibility({
       canUploadFiles,
@@ -360,7 +366,8 @@ export default function useDataImporterImportFlow({
         lockedDeclarations: result.lockedDeclarations,
       });
 
-      alert(`Import xong: thêm ${insertedLabel}, cập nhật ${updatedLabel}, ${skippedSummary}.`);
+      // UX-006: Replace alert with toast.success
+      toast?.success?.(`Import xong: thêm ${insertedLabel}, cập nhật ${updatedLabel}, ${skippedSummary}.`);
 
       if (fileRef?.current) {
         fileRef.current.value = "";
@@ -369,6 +376,10 @@ export default function useDataImporterImportFlow({
       loadSavedRows?.({ bypassConfirm: true });
       fetchAlerts?.();
     } finally {
+      // UX-006: Dismiss sticky toast
+      if (stickyToastId) {
+        toast?.dismiss?.(stickyToastId);
+      }
       // CRIT-001: Always reset processing lock
       isProcessingRef.current = false;
       setIsImporting(false);

@@ -22,6 +22,7 @@ import {
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
 import PageSizeControl from "@/components/mst-assignment/table/PageSizeControl.jsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
+import { Skeleton } from "@/components/ui/skeleton.jsx";
 
 import { useKpiAdjustmentForm } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js";
 import { useKpiAdjustmentFilters } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js";
@@ -92,28 +93,31 @@ const FORM_FIELD_IDS = Object.freeze({
 
   quantity: "kpi-adjust-quantity",
 
-  unit: "kpi-adjust-unit",
+  unitPoints: "kpi-adjust-unitpoints",
 
-  extraQuantity: "kpi-adjust-extra-quantity",
+  gradeValue: "kpi-adjust-gradevalue",
 
-  extraUnit: "kpi-adjust-extra-unit",
+  extraQuantity: "kpi-adjust-extraquantity",
 
-  filterMonth: "kpi-adjust-filter-month",
-
-  filterStatus: "kpi-adjust-filter-status",
-
-  filterMine: "kpi-adjust-filter-mine",
-
-  filterStaff: "kpi-adjust-filter-staff",
-
-  decisionNote: "kpi-adjust-decision-note",
+  extraUnitPoints: "kpi-adjust-extraunitpoints",
 
 });
 
-
+function TabLoadingSkeleton() {
+  return (
+    <div className="space-y-4 p-4">
+      <Skeleton className="h-8 w-1/3" />
+      <Skeleton className="h-32 w-full" />
+      <div className="grid grid-cols-2 gap-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+      <Skeleton className="h-10 w-full" />
+    </div>
+  );
+}
 
 const SELECT_FIELD_CLASS =
-
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring/40";
 
 
@@ -193,6 +197,8 @@ export default function KPIAdjustments({ currentUser }) {
   const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
 
   const [roster, setRoster] = useState(() => getTeamRoster());
+
+  const [isLoading, setIsLoading] = useState(true);
 
   const [detailEntry, setDetailEntry] = useState(null);
 
@@ -456,6 +462,11 @@ export default function KPIAdjustments({ currentUser }) {
     setRoster(getTeamRoster());
 
   }, [currentUser]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
 
 
@@ -833,9 +844,13 @@ export default function KPIAdjustments({ currentUser }) {
         </TabsList>
 
         <TabsContent value="form" className="space-y-6 mt-0">
-          <KpiAdjustmentOverviewPanel stats={stats} formatInt={formatInt} formatDecimal={formatDecimal} />
+          {isLoading ? (
+            <TabLoadingSkeleton />
+          ) : (
+            <>
+              <KpiAdjustmentOverviewPanel stats={stats} formatInt={formatInt} formatDecimal={formatDecimal} />
 
-          <KpiAdjustmentFormPanel
+              <KpiAdjustmentFormPanel
             canApprove={canApprove}
             autoApproveEnabled={autoApproveEnabled}
             autoApproveSaving={autoApproveSaving}
@@ -888,10 +903,15 @@ export default function KPIAdjustments({ currentUser }) {
             historyEntries={historyEntries}
             formatDateTime={formatDateTime}
           />
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="list" className="space-y-6 mt-0">
-          <KpiAdjustmentListPanel
+          {isLoading ? (
+            <TabLoadingSkeleton />
+          ) : (
+            <KpiAdjustmentListPanel
             formFieldIds={FORM_FIELD_IDS}
             selectFieldClass={SELECT_FIELD_CLASS}
             filterMonth={filterMonth}
@@ -937,10 +957,14 @@ export default function KPIAdjustments({ currentUser }) {
             onReject={(item) => setDetailEntry({ entry: item, intent: "reject" })}
             onDelete={handleDelete}
           />
+          )}
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-6 mt-0">
-          <KpiAdjustmentSettingsDialog
+          {isLoading ? (
+            <TabLoadingSkeleton />
+          ) : (
+            <KpiAdjustmentSettingsDialog
             embedded
             open={true}
             focusCategory={settingsFocusCategory}
@@ -955,6 +979,7 @@ export default function KPIAdjustments({ currentUser }) {
             buildSettingsFieldId={buildSettingsFieldId}
             buildLicenseFieldId={buildLicenseFieldId}
           />
+          )}
         </TabsContent>
       </Tabs>
     </div>
