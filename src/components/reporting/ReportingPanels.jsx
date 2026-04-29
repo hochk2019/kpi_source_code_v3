@@ -300,7 +300,7 @@ function WorkspaceJumpLink({ href, title, detail }) {
   );
 }
 
-export function ReportingWorkspaceGuidePanel({ canManageSchedule = false }) {
+export const ReportingWorkspaceGuidePanel = React.memo(function ReportingWorkspaceGuidePanel({ canManageSchedule = false }) {
   return (
     <SectionSurface className="print:hidden" aria-label="Sơ đồ điều hướng report center">
       <SectionHeader
@@ -332,9 +332,9 @@ export function ReportingWorkspaceGuidePanel({ canManageSchedule = false }) {
       </div>
     </SectionSurface>
   );
-}
+});
 
-export function ReportingControlsPanel({
+export const ReportingControlsPanel = React.memo(function ReportingControlsPanel({
   summaryDeclsText,
   selectedRuleName,
   reloading,
@@ -506,9 +506,9 @@ export function ReportingControlsPanel({
       </div>
     </SectionSurface>
   );
-}
+});
 
-export function ReportingSchedulePanel({
+export const ReportingSchedulePanel = React.memo(function ReportingSchedulePanel({
   collapsed,
   onToggleCollapsed,
   nextScheduleRun,
@@ -890,4 +890,4 @@ export function ReportingSchedulePanel({
       ) : null}
     </SectionSurface>
   );
-}
+});

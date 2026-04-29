@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { toast } from "@/shared/toast";
 
@@ -459,7 +460,14 @@ export default function AuditLog({ currentUser }) {
 
   }, [filter, fromDate, logs, toDate, typeFilter]);
 
-
+  // PERF-001: Virtualization cho AuditLogTable
+  const parentRef = useRef(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredLogs.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 48,
+    overscan: 10,
+  });
 
   const availableCategories = useMemo(() => {
 
@@ -1609,7 +1617,7 @@ export default function AuditLog({ currentUser }) {
 
 
 
-        <div className="overflow-hidden rounded-xl border border-slate-200/50 bg-white/30 dark:border-slate-700/50 dark:bg-slate-800/30">
+        <div ref={parentRef} className="overflow-auto rounded-xl border border-slate-200/50 bg-white/30 dark:border-slate-700/50 dark:bg-slate-800/30 max-h-[600px]">
 
           <table className="min-w-full divide-y divide-slate-200/40 text-sm text-slate-600 dark:divide-slate-700/40 dark:text-slate-300">
 
@@ -1651,7 +1659,10 @@ export default function AuditLog({ currentUser }) {
 
               ) : (
 
-                filteredLogs.map((entry, index) => (
+                rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const index = virtualRow.index;
+                  const entry = filteredLogs[index];
+                  return (
 
                   <tr
 
@@ -1730,11 +1741,9 @@ export default function AuditLog({ currentUser }) {
                     <td className="px-3 py-2 align-top text-[color:var(--ds-text-secondary)]">{normalizeNote(entry.note) || "—"}</td>
 
                   </tr>
-
-                ))
-
-              )}
-
+                );
+              })
+            )}
             </tbody>
 
           </table>

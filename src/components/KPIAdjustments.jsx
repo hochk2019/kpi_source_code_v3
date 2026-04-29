@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   getKpiAdjustments,
@@ -44,12 +44,18 @@ import { CATEGORY_OPTIONS } from "@/components/kpi-adjustments/model/categoryOpt
 import { parseReferences } from "@/components/kpi-adjustments/model/referenceParsing.js";
 import { buildSettingsDraft } from "@/components/kpi-adjustments/model/settingsDraft.js";
 import { buildStaffOptions } from "@/components/kpi-adjustments/model/staffOptions.js";
-import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
+const KpiAdjustmentDetailDialog = React.lazy(() =>
+  import("@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx")
+);
 import KpiAdjustmentFormPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx";
-import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx";
+const KpiAdjustmentGuidanceDialog = React.lazy(() =>
+  import("@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx")
+);
 import KpiAdjustmentListPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx";
 import KpiAdjustmentOverviewPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx";
-import KpiAdjustmentSettingsDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx";
+const KpiAdjustmentSettingsDialog = React.lazy(() =>
+  import("@/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx")
+);
 import useKpiAdjustmentSelection from "@/components/kpi-adjustments/hooks/useKpiAdjustmentSelection.js";
 import usePagination from "@/hooks/usePagination.js";
 
@@ -785,56 +791,62 @@ export default function KPIAdjustments({ currentUser }) {
 
   return (
     <div className="space-y-6">
-      <KpiAdjustmentDetailDialog
-        open={Boolean(detailEntry)}
-        detailLabel={detailLabel}
-        detailData={detailData}
-        detailCategoryConfig={detailCategoryConfig}
-        detailExtraQuantity={detailExtraQuantity}
-        detailExtraUnit={detailExtraUnit}
-        detailExtraTotal={detailExtraTotal}
-        detailIntent={detailIntent}
-        statusLabels={STATUS_LABELS}
-        formatDecimal={formatDecimal}
-        formatDateTime={formatDateTime}
-        decisionNote={decisionNote}
-        onDecisionNoteChange={setDecisionNote}
-        showClearLicenseAction={Boolean(form.licenseCode)}
-        onClearLicenseCode={() => handleLicenseChange("")}
-        onClose={closeDetailDialog}
-        onConfirm={handleDetailConfirm}
-        decisionNoteFieldId={FORM_FIELD_IDS.decisionNote}
-      />
+      <Suspense fallback={null}>
+        <KpiAdjustmentDetailDialog
+          open={Boolean(detailEntry)}
+          detailLabel={detailLabel}
+          detailData={detailData}
+          detailCategoryConfig={detailCategoryConfig}
+          detailExtraQuantity={detailExtraQuantity}
+          detailExtraUnit={detailExtraUnit}
+          detailExtraTotal={detailExtraTotal}
+          detailIntent={detailIntent}
+          statusLabels={STATUS_LABELS}
+          formatDecimal={formatDecimal}
+          formatDateTime={formatDateTime}
+          decisionNote={decisionNote}
+          onDecisionNoteChange={setDecisionNote}
+          showClearLicenseAction={Boolean(form.licenseCode)}
+          onClearLicenseCode={() => handleLicenseChange("")}
+          onClose={closeDetailDialog}
+          onConfirm={handleDetailConfirm}
+          decisionNoteFieldId={FORM_FIELD_IDS.decisionNote}
+        />
+      </Suspense>
 
 
 
-      <KpiAdjustmentGuidanceDialog
-        open={guidanceOpen}
-        fullscreen={guidanceFullscreen}
-        guidanceGroups={guidanceGroups}
-        formatDecimal={formatDecimal}
-        onOpenChange={setGuidanceOpen}
-        onToggleFullscreen={() => setGuidanceFullscreen((current) => !current)}
-        onOpenSettings={() => {
-          setGuidanceOpen(false);
-          openSettingsDialog();
-        }}
-      />
+      <Suspense fallback={null}>
+        <KpiAdjustmentGuidanceDialog
+          open={guidanceOpen}
+          fullscreen={guidanceFullscreen}
+          guidanceGroups={guidanceGroups}
+          formatDecimal={formatDecimal}
+          onOpenChange={setGuidanceOpen}
+          onToggleFullscreen={() => setGuidanceFullscreen((current) => !current)}
+          onOpenSettings={() => {
+            setGuidanceOpen(false);
+            openSettingsDialog();
+          }}
+        />
+      </Suspense>
 
-      <KpiAdjustmentSettingsDialog
-        open={settingsOpen}
-        focusCategory={settingsFocusCategory}
-        settingsDraft={settingsDraft}
-        settingsError={settingsError}
-        settingsSaving={settingsSaving}
-        onOpenChange={(open) => (open ? setSettingsOpen(true) : closeSettingsDialog())}
-        onClose={closeSettingsDialog}
-        onReset={handleSettingsReset}
-        onSubmit={handleSettingsSubmit}
+      <Suspense fallback={null}>
+        <KpiAdjustmentSettingsDialog
+          open={settingsOpen}
+          focusCategory={settingsFocusCategory}
+          settingsDraft={settingsDraft}
+          settingsError={settingsError}
+          settingsSaving={settingsSaving}
+          onOpenChange={(open) => (open ? setSettingsOpen(true) : closeSettingsDialog())}
+          onClose={closeSettingsDialog}
+          onReset={handleSettingsReset}
+          onSubmit={handleSettingsSubmit}
         onUpdateDraft={updateSettingsDraft}
         buildSettingsFieldId={buildSettingsFieldId}
         buildLicenseFieldId={buildLicenseFieldId}
-      />
+        />
+      </Suspense>
 
       <Tabs defaultValue="form" className="w-full">
         <TabsList className="mb-4">
@@ -964,21 +976,23 @@ export default function KPIAdjustments({ currentUser }) {
           {isLoading ? (
             <TabLoadingSkeleton />
           ) : (
-            <KpiAdjustmentSettingsDialog
-            embedded
-            open={true}
-            focusCategory={settingsFocusCategory}
-            settingsDraft={settingsDraft}
-            settingsError={settingsError}
-            settingsSaving={settingsSaving}
-            onOpenChange={() => {}}
-            onClose={() => {}}
-            onReset={handleSettingsReset}
-            onSubmit={handleSettingsSubmit}
-            onUpdateDraft={updateSettingsDraft}
-            buildSettingsFieldId={buildSettingsFieldId}
-            buildLicenseFieldId={buildLicenseFieldId}
-          />
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <KpiAdjustmentSettingsDialog
+              embedded
+              open={true}
+              focusCategory={settingsFocusCategory}
+              settingsDraft={settingsDraft}
+              settingsError={settingsError}
+              settingsSaving={settingsSaving}
+              onOpenChange={() => {}}
+              onClose={() => {}}
+              onReset={handleSettingsReset}
+              onSubmit={handleSettingsSubmit}
+              onUpdateDraft={updateSettingsDraft}
+              buildSettingsFieldId={buildSettingsFieldId}
+              buildLicenseFieldId={buildLicenseFieldId}
+            />
+            </Suspense>
           )}
         </TabsContent>
       </Tabs>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { QUICK_RANGE_OPTIONS, computeQuickRange } from "@/lib/reports.js";
 import {
@@ -180,16 +180,21 @@ export function loadReportPreferences() {
   }
 }
 
+let debounceTimer = null;
+
 export function saveReportPreferences(prefs) {
   if (typeof window === "undefined" || !window.localStorage) {
     return;
   }
 
-  try {
-    window.localStorage.setItem(REPORT_PREFS_STORAGE_KEY, JSON.stringify(prefs));
-  } catch (err) {
-    console.warn("Khong the luu bo loc bao cao vao localStorage", err);
-  }
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    try {
+      window.localStorage.setItem(REPORT_PREFS_STORAGE_KEY, JSON.stringify(prefs));
+    } catch (err) {
+      console.warn("Khong the luu bo loc bao cao vao localStorage", err);
+    }
+  }, 300);
 }
 
 export function sanitizeColumnVisibility(input = {}) {
