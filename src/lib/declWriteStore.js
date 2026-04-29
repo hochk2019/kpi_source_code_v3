@@ -448,12 +448,15 @@ export function createDeclWriteStore({
         total: 0,
       };
 
+    // CQ-001: Null guards for summary fields to prevent TypeError
+    const skippedCount = summary?.skipped ?? 0;
+    const lockedCount = summary?.locked ?? 0;
     const skipLabel =
-      summary.locked > 0
-        ? `${summary.skipped.toLocaleString("vi-VN")} bỏ qua (khóa ${summary.locked.toLocaleString(
+      lockedCount > 0
+        ? `${skippedCount.toLocaleString("vi-VN")} bỏ qua (khóa ${lockedCount.toLocaleString(
             "vi-VN",
           )})`
-        : `${summary.skipped.toLocaleString("vi-VN")} bỏ qua`;
+        : `${skippedCount.toLocaleString("vi-VN")} bỏ qua`;
     const auditDetail =
       detail && detail.trim()
         ? detail

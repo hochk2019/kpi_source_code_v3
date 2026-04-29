@@ -8,12 +8,9 @@ import { useMemo } from 'react';
  * @returns {Object} An object containing the unified permissions flags.
  */
 export function useKpiPermissions(auth) {
-    const effectiveAuth = useMemo(
-        () => auth || { username: 'guest', role: 'viewer', permissions: {} },
-        [auth],
-    );
-
+    // CQ-002: Single useMemo to avoid re-render from effectiveAuth object reference changes
     return useMemo(() => {
+        const effectiveAuth = auth || { username: 'guest', role: 'viewer', permissions: {} };
         const permissions = effectiveAuth.permissions || {};
         return {
             effectiveAuth,
@@ -31,5 +28,5 @@ export function useKpiPermissions(auth) {
             canManageDataHealth: !!permissions.dataHealthManage,
             canViewDataHealth: !!permissions.dataHealthView || !!permissions.dataHealthManage,
         };
-    }, [effectiveAuth]);
+    }, [auth]);
 }
