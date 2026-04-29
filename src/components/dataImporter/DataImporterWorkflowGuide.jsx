@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { buildWorkflowGuideState } from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
+import { ChevronDown, ChevronUp } from "lucide-react";
+
+const COLLAPSED_STORAGE_KEY = "dataImporterWorkflowGuide.collapsed";
 
 export default function DataImporterWorkflowGuide({
   mode = "saved",
@@ -23,6 +26,20 @@ export default function DataImporterWorkflowGuide({
   onPreviewSync,
   onRunSync,
 }) {
+  // UX-001: Collapsible workflow guide with localStorage persistence
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(COLLAPSED_STORAGE_KEY) === "true";
+  });
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next));
+      return next;
+    });
+  }, []);
+
   const { actions, currentStep, headline } = buildWorkflowGuideState({
     mode,
     canEdit,
@@ -58,12 +75,23 @@ export default function DataImporterWorkflowGuide({
           </p>
         </div>
 
-        <div className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700 ring-1 ring-inset ring-teal-600/20">
-          GIAI ĐOẠN {currentStep}/3
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700 ring-1 ring-inset ring-teal-600/20">
+            GIAI ĐOẠN {currentStep}/3
+          </div>
+          {/* UX-001: Toggle collapse button */}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+            aria-label={collapsed ? "Mở rộng" : "Thu gọn"}
+          >
+            {collapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+          </button>
         </div>
       </div>
 
-      {actions.length > 0 && (
+      {!collapsed && actions.length > 0 && (
         <div className="mt-4 relative z-10 flex flex-wrap gap-3 items-center">
           <span className="text-xs uppercase tracking-widest text-gray-400 font-semibold mr-2">Hành động:</span>
           {actions.map((action) => {
