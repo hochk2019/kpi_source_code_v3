@@ -26,6 +26,10 @@ import {
   flattenStaffComboboxMembers,
 } from "@/components/shared/staffComboboxOptions.js";
 
+/**
+ * Hook for managing account creation, deletion, permissions, and staff assignment
+ * @returns {object} Account manager state and actions
+ */
 export function useAccountManager() {
   // State
   const [accounts, setAccounts] = useState(() => listAccounts());

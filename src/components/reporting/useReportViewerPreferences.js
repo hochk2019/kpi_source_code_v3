@@ -20,6 +20,11 @@ const EXPORT_COLUMN_KEYS = ["items", "licenses", "co", "coLines", "licenseCodes"
 const QUICK_RANGE_VALUES = new Set([...QUICK_RANGE_OPTIONS.map((option) => option.value), "custom"]);
 const SCOPE_VALUES = new Set(["staff", "team"]);
 
+/**
+ * Sanitizes quick range value to ensure valid option
+ * @param {string} value - Input value
+ * @returns {string} Valid quick range value
+ */
 export function sanitizeQuickRange(value) {
   if (typeof value !== "string") {
     return "this_month";
@@ -29,10 +34,20 @@ export function sanitizeQuickRange(value) {
   return QUICK_RANGE_VALUES.has(normalized) ? normalized : "this_month";
 }
 
+/**
+ * Sanitizes sort key to ensure valid metric
+ * @param {string} value - Input value
+ * @returns {string} Valid sort key (kpi | decls | licenses)
+ */
 export function sanitizeSortKey(value) {
   return METRIC_SORT_KEYS.includes(value) ? value : "kpi";
 }
 
+/**
+ * Sanitizes scope value to ensure valid scope
+ * @param {string} value - Input value
+ * @returns {string} Valid scope (staff | team)
+ */
 export function sanitizeScope(value) {
   if (typeof value !== "string") {
     return "staff";
@@ -42,10 +57,20 @@ export function sanitizeScope(value) {
   return SCOPE_VALUES.has(normalized) ? normalized : "staff";
 }
 
+/**
+ * Sanitizes top staff metric value
+ * @param {string} value - Input value
+ * @returns {string} Valid metric (decls | kpi)
+ */
 export function sanitizeTopStaffMetric(value) {
   return value === "decls" ? "decls" : "kpi";
 }
 
+/**
+ * Sanitizes visible count for top staff display
+ * @param {string|number} value - Input value
+ * @returns {number|string} Valid count or "auto"
+ */
 export function sanitizeTopStaffVisibleCount(value) {
   if (value === "auto") {
     return "auto";
@@ -60,6 +85,11 @@ export function sanitizeTopStaffVisibleCount(value) {
   return TOP_STAFF_VISIBLE_COUNT_SET.has(rounded) ? rounded : "auto";
 }
 
+/**
+ * Sanitizes selection value
+ * @param {string} value - Input value
+ * @returns {string} Valid selection or "all"
+ */
 export function sanitizeSelection(value) {
   if (typeof value !== "string") {
     return "all";
@@ -69,6 +99,11 @@ export function sanitizeSelection(value) {
   return normalized || "all";
 }
 
+/**
+ * Sanitizes adjustment page size
+ * @param {number} value - Input value
+ * @returns {number} Valid page size
+ */
 export function sanitizeAdjustmentPageSize(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) {
@@ -78,6 +113,11 @@ export function sanitizeAdjustmentPageSize(value) {
   return ADJUSTMENT_PAGE_SIZE_OPTIONS.includes(num) ? num : DEFAULT_ADJUSTMENT_PAGE_SIZE;
 }
 
+/**
+ * Sanitizes detail page size with clamp
+ * @param {number} value - Input value
+ * @returns {number} Valid page size (1-500)
+ */
 export function sanitizeDetailPageSize(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) {
@@ -88,6 +128,11 @@ export function sanitizeDetailPageSize(value) {
   return Math.max(1, Math.min(normalized, 500));
 }
 
+/**
+ * Sanitizes rule preference string
+ * @param {string} value - Input value
+ * @returns {string} Trimmed value
+ */
 export function sanitizeRulePreference(value) {
   if (typeof value !== "string") {
     return "";
@@ -96,6 +141,12 @@ export function sanitizeRulePreference(value) {
   return value.trim();
 }
 
+/**
+ * Sanitizes date input with fallback
+ * @param {string} value - Input value
+ * @param {string} fallback - Fallback value
+ * @returns {string} Valid date string
+ */
 export function sanitizeDateInput(value, fallback) {
   if (typeof value !== "string") {
     return fallback;
@@ -105,6 +156,11 @@ export function sanitizeDateInput(value, fallback) {
   return normalized || fallback;
 }
 
+/**
+ * Builds sanitized report template payload from raw values
+ * @param {object} params - Template parameters
+ * @returns {object} Sanitized payload
+ */
 export function buildReportTemplatePayload({
   quickRange,
   from,
@@ -139,6 +195,11 @@ export function buildReportTemplatePayload({
   };
 }
 
+/**
+ * Sanitizes report template filters with computed date range
+ * @param {object} input - Raw filter values
+ * @returns {object} Sanitized filters
+ */
 export function sanitizeReportTemplateFilters(input = {}) {
   const quickRange = sanitizeQuickRange(input.quickRange);
   const quickRangeBase = quickRange === "custom" ? "this_month" : quickRange;
@@ -162,6 +223,10 @@ export function sanitizeReportTemplateFilters(input = {}) {
   });
 }
 
+/**
+ * Loads report preferences from localStorage
+ * @returns {object} Saved preferences or empty object
+ */
 export function loadReportPreferences() {
   if (typeof window === "undefined" || !window.localStorage) {
     return {};
@@ -182,6 +247,10 @@ export function loadReportPreferences() {
 
 let debounceTimer = null;
 
+/**
+ * Saves report preferences to localStorage with debounce
+ * @param {object} prefs - Preferences to save
+ */
 export function saveReportPreferences(prefs) {
   if (typeof window === "undefined" || !window.localStorage) {
     return;
@@ -197,6 +266,11 @@ export function saveReportPreferences(prefs) {
   }, 300);
 }
 
+/**
+ * Sanitizes column visibility configuration
+ * @param {object} input - Raw visibility config
+ * @returns {object} Sanitized visibility config
+ */
 export function sanitizeColumnVisibility(input = {}) {
   if (!input || typeof input !== "object") {
     return {};
@@ -212,6 +286,11 @@ export function sanitizeColumnVisibility(input = {}) {
   return result;
 }
 
+/**
+ * Builds column visibility state from stored preferences
+ * @param {object} storedColumnPrefs - Stored column preferences
+ * @returns {object} Column visibility state
+ */
 function buildColumnVisibilityState(storedColumnPrefs) {
   return {
     items: storedColumnPrefs.items !== false,
@@ -222,6 +301,10 @@ function buildColumnVisibilityState(storedColumnPrefs) {
   };
 }
 
+/**
+ * Hook for managing report viewer preferences with localStorage persistence
+ * @returns {object} Preference state and setters
+ */
 export function useReportViewerPreferences() {
   const storedPrefs = useMemo(() => loadReportPreferences(), []);
   const storedRuleId = useMemo(
