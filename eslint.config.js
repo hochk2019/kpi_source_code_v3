@@ -56,7 +56,15 @@ export default [
 
       ...reactHooks.configs.recommended.rules,
 
-      "no-unused-vars": ["warn", { varsIgnorePattern: "^[A-Z_]" }],
+      "no-unused-vars": [
+        "warn",
+        {
+          varsIgnorePattern: "^[A-Z_]|^React$",
+          argsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
 
       "linebreak-style": linebreakRule,
 

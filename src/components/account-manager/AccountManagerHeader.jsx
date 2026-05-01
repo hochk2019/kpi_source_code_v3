@@ -1,5 +1,7 @@
 import React from "react";
 
+import { t } from "@/lib/i18n.js";
+
 export default function AccountManagerHeader() {
   return (
     <div className="group/hq-header relative mb-6">
@@ -9,14 +11,11 @@ export default function AccountManagerHeader() {
         <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-col gap-1.5 max-w-2xl">
             <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              Quản trị Tài khoản Hệ thống
+              {t("account.title")}
             </h2>
             <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-              Quản lý tài khoản đăng nhập cho hệ thống KPI, gán quyền và nhân viên phụ trách theo từng tổ đội.
+              {t("account.description")}
             </p>
-            <div className="mt-2 flex items-center gap-3 text-[0.8rem] text-slate-500 dark:text-slate-400">
-              <span className="hidden sm:inline-block">Mọi thao tác đều được ghi nhận trong màn hình Giám sát.</span>
-            </div>
           </div>
         </div>
       </div>
