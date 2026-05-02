@@ -120,8 +120,56 @@ const translations = {
     // StaffCombobox
     'staff.noSelection': 'Chọn nhân viên...',
     'staff.searchPlaceholder': 'Tìm nhân viên...',
+
+    // Notification
+    'notification.title': 'Thông báo hệ thống',
+    'notification.loading': 'Đang tải…',
+    'notification.itemCount': '{count} mục',
+    'notification.empty': 'Chưa có thông báo nào.',
+    'notification.markAllRead': 'Đánh dấu tất cả đã đọc',
+    'notification.unknownDate': 'Khác',
+    'notification.new': 'Mới',
+    'notification.unknownType': 'thông báo',
+    'notification.unknownTime': 'Không xác định',
+
+    // Audit Log
+    'audit.title': 'Nhật ký Hệ thống',
+    'audit.description': 'Lưu trữ lịch sử thao tác người dùng, truy vết hoạt động cấu hình hệ thống và quản lý trạng thái sao lưu dữ liệu.',
+    'audit.refresh': 'Làm mới',
+    'audit.noRecords': 'Không có bản ghi phù hợp.',
+    'audit.clearConfirm': 'Xóa toàn bộ nhật ký và ghi lại thao tác này?',
+    'audit.clearNote': 'Xóa nhật ký thủ công',
+    'audit.exportSuccess': 'Đang tải file nhật ký...',
+
+    // Backup
+    'backup.title': 'Quản lý Sao lưu CSDL',
+    'backup.schedule': 'Lịch sao lưu CSDL',
+    'backup.scheduleLabel': 'Lịch sao lưu tự động (cron)',
+    'backup.cronHint': 'Nhập "never" để tắt tự động sao lưu.',
+    'backup.retentionLabel': 'Số bản sao lưu giữ lại',
+    'backup.retentionHint': 'Để trống hoặc nhập 0 để không giới hạn.',
+    'backup.directoryLabel': 'Thư mục sao lưu',
+    'backup.unlimited': 'Không giới hạn',
+    'backup.copies': '{count} bản sao lưu',
+    'backup.loadingError': 'Không thể tải thông tin sao lưu',
+    'backup.loading': 'Đang tải thông tin sao lưu...',
+    'backup.unknownSchedule': 'Không xác định',
+    'backup.nextRun': 'Lần chạy tiếp theo',
+    'backup.retentionError': 'Số bản sao lưu giữ lại phải là số nguyên không âm hoặc để trống.',
+    'backup.updateError': 'Không thể cập nhật lịch sao lưu.',
+    'backup.updateSuccess': 'Đã cập nhật lịch sao lưu CSDL.',
+    'backup.runSuccess': 'Đã khởi chạy sao lưu thủ công.',
+    'backup.runError': 'Không thể sao lưu ngay.',
+    'backup.listError': 'Không thể tải danh sách bản sao lưu.',
+    'backup.selectFileError': 'Vui lòng chọn file sao lưu cần khôi phục.',
+    'backup.restoreConfirm': 'Khôi phục CSDL sẽ ghi đè dữ liệu hiện tại. Bạn có chắc chắn muốn tiếp tục?',
+    'backup.restoreSuccess': 'Khôi phục CSDL thành công. Vui lòng tải lại trang để đồng bộ dữ liệu.',
+    'backup.restoreError': 'Không thể khôi phục CSDL.',
+    'backup.fileError': 'Không thể tải file nhật ký.',
+    'backup.browserNotSupported': 'Trình duyệt không hỗ trợ tải thông tin sao lưu.',
   },
 };
+
 
 let currentLocale = 'vi';
 

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import clsx from 'clsx';
 
+import { t } from '@/lib/i18n.js';
+
 import {
 
   fetchNotificationHistory,
@@ -16,7 +18,7 @@ import { subscribeCommand } from '@/lib/commandBus.js';
 
 function formatDate(value) {
 
-  if (!value) return 'Không xác định';
+  if (!value) return t('notification.unknownTime');
 
   try {
 
@@ -270,7 +272,7 @@ export default function NotificationCenter({ className }) {
 
         )}
 
-        aria-label="Thông báo hệ thống"
+        aria-label={t('notification.title')}
 
       >
 
@@ -310,9 +312,9 @@ export default function NotificationCenter({ className }) {
 
             <div className="flex min-w-0 items-center gap-2">
 
-              <span>Thông báo hệ thống</span>
+              <span>{t('notification.title')}</span>
 
-              <span className="font-normal text-gray-400">{loading ? 'Đang tải…' : `${events.length} mục`}</span>
+              <span className="font-normal text-gray-400">{loading ? t('notification.loading') : t('notification.itemCount', { count: events.length })}</span>
 
             </div>
 
@@ -327,7 +329,7 @@ export default function NotificationCenter({ className }) {
                   : 'cursor-not-allowed border-gray-200 text-gray-300 dark:border-slate-700 dark:text-gray-600'
               )}
             >
-              Đánh dấu tất cả đã đọc
+              {t('notification.markAllRead')}
             </button>
 
           </div>
@@ -336,7 +338,7 @@ export default function NotificationCenter({ className }) {
 
             {events.length === 0 && !loading ? (
 
-              <p className="text-xs text-gray-500">Chưa có thông báo nào.</p>
+              <p className="text-xs text-gray-500">{t('notification.empty')}</p>
 
             ) : null}
 
@@ -346,7 +348,7 @@ export default function NotificationCenter({ className }) {
 
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
 
-                  {group.date === 'khac' ? 'Khác' : new Date(group.date).toLocaleDateString('vi-VN')}
+                  {group.date === 'khac' ? t('notification.unknownDate') : new Date(group.date).toLocaleDateString('vi-VN')}
 
                 </div>
 
@@ -371,10 +373,10 @@ export default function NotificationCenter({ className }) {
                         <div className="flex items-start justify-between gap-2 text-[11px] uppercase tracking-wide">
 
                           <span className="flex items-center gap-1.5">
-                            {event?.type || 'thông báo'}
+                            {event?.type || t('notification.unknownType')}
                             {isUnread ? (
                               <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700 dark:bg-slate-900/70 dark:text-sky-200">
-                                Mới
+                                {t('notification.new')}
                               </span>
                             ) : null}
                           </span>

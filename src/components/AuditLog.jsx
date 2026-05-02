@@ -1,466 +1,238 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-
 import { toast } from "@/shared/toast";
-
+import { t } from '@/lib/i18n.js';
 import { fetchWithAuth } from '@/auth/localAuth.js';
 import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
-
-
-
 import { getAuditLogs, clearAuditLogs } from "@/lib/store.js";
-
 import {
-
   BACKUP_REASON_LABELS,
-
   translateBackupFailure,
-
 } from '../../packages/domain/src/backupMessages.js';
 
-
-
 function formatTime(value) {
-
   if (!value) return "";
-
   try {
-
     return new Date(value).toLocaleString("vi-VN", {
-
       hour12: false,
-
     });
-
   } catch {
-
     return value;
-
   }
-
 }
-
-
 
 function formatBytes(bytes) {
-
   const value = Number(bytes);
-
   if (!Number.isFinite(value) || value <= 0) {
-
     return "";
-
   }
-
   const units = ["B", "KB", "MB", "GB", "TB"];
-
   let size = value;
-
   let unitIndex = 0;
-
   while (size >= 1024 && unitIndex < units.length - 1) {
-
     size /= 1024;
-
     unitIndex += 1;
-
   }
-
   const display = size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1);
-
   return `${display} ${units[unitIndex]}`;
-
 }
-
-
 
 function inferCategoryFromAction(action) {
-
   if (typeof action !== "string" || !action) {
-
     return "khac";
-
   }
-
   const normalized = action.trim();
-
   const index = normalized.indexOf(".");
-
   if (index <= 0) {
-
     return normalized || "khac";
-
   }
-
   return normalized.slice(0, index);
-
 }
-
-
 
 function normalizeNote(value) {
-
   if (value === null || value === undefined) {
-
     return "";
-
   }
-
   return `${value}`.trim();
-
 }
 
-
-
 const CONTROL_CLASS =
-
   "w-full rounded-xl border border-slate-200/60 bg-white/40 px-3 py-2 text-sm text-slate-800 shadow-sm placeholder-slate-400 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200 dark:focus:bg-slate-800 transition-all";
 
 const CONTROL_CLASS_COMPACT =
-
   "w-full rounded-xl border border-slate-200/60 bg-white/40 px-2 py-1.5 text-sm text-slate-800 shadow-sm placeholder-slate-400 focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200 dark:focus:bg-slate-800 transition-all";
 
-
-
 export default function AuditLog({ currentUser }) {
-
   const [logs, setLogs] = useState(() => getAuditLogs(200));
-
   const [filter, setFilter] = useState("");
-
   const [typeFilter, setTypeFilter] = useState("all");
-
   const [fromDate, setFromDate] = useState("");
-
   const [toDate, setToDate] = useState("");
-
   const [summary, setSummary] = useState(null);
-
   const [summaryError, setSummaryError] = useState("");
-
   const [summaryLoading, setSummaryLoading] = useState(false);
-
   const [cronDraft, setCronDraft] = useState("");
-
   const [cronError, setCronError] = useState("");
-
   const [savingCron, setSavingCron] = useState(false);
-
   const [retentionDraft, setRetentionDraft] = useState("");
-
   const [retentionError, setRetentionError] = useState("");
-
   const [directoryDraft, setDirectoryDraft] = useState("");
-
   const [directoryError, setDirectoryError] = useState("");
-
   const [backupFiles, setBackupFiles] = useState([]);
-
   const [loadingBackups, setLoadingBackups] = useState(false);
-
   const [runningBackup, setRunningBackup] = useState(false);
-
   const [restoring, setRestoring] = useState(false);
-
   const [selectedBackup, setSelectedBackup] = useState("");
-
   const [backupNote, setBackupNote] = useState("");
-
   const [manualDirectory, setManualDirectory] = useState("");
-
   const [manualDirectoryError, setManualDirectoryError] = useState("");
-
   const [restoreNote, setRestoreNote] = useState("");
 
-
-
   const canManageBackups = Boolean(
-
     currentUser?.role === "admin" && currentUser?.permissions?.accountManage
-
   );
 
-
-
   const refreshLogs = useCallback(() => {
-
     setLogs(getAuditLogs(200));
-
   }, []);
-
-
 
   const loadSummary = useCallback(async () => {
-
     if (typeof fetch !== "function") {
-
       setSummary(null);
-
-      setSummaryError("Trình duyệt không hỗ trợ tải thông tin sao lưu.");
-
+      setSummaryError(t('backup.browserNotSupported'));
       setSummaryLoading(false);
-
       return;
-
     }
-
     setSummaryLoading(true);
-
     setSummaryError("");
-
     try {
-
       const response = await fetchWithAuth(API_V4_ROUTES.backups.summary, {
-
         cache: "no-store",
-
       });
-
       if (!response.ok) {
-
         throw new Error(response.statusText || `HTTP ${response.status}`);
-
       }
-
       const payload = await response.json();
-
       setSummary(payload?.summary ?? null);
-
     } catch (err) {
-
       setSummary(null);
-
-      setSummaryError(err?.message || "Không thể tải thông tin sao lưu.");
-
+      setSummaryError(err?.message || t('backup.loadingError'));
     } finally {
-
       setSummaryLoading(false);
-
     }
-
   }, []);
 
-
-
   const fetchBackupFiles = useCallback(async () => {
-
     if (!canManageBackups || typeof fetch !== "function") {
-
       return;
-
     }
-
     setLoadingBackups(true);
-
     try {
-
       const response = await fetchWithAuth(API_V4_ROUTES.backups.files, {
-
         cache: "no-store",
-
       });
-
       const payload = await response.json().catch(() => ({}));
-
       if (!response.ok || payload?.ok === false) {
-
         const message = payload?.error || response.statusText || `HTTP ${response.status}`;
-
-        toast.error(message || "Không thể tải danh sách bản sao lưu.");
-
+        toast.error(message || t('backup.listError'));
         return;
-
       }
-
       const files = Array.isArray(payload?.files) ? payload.files : [];
-
       setBackupFiles(files);
-
       setSelectedBackup((prev) => {
-
         if (prev && files.some((file) => file?.filename === prev)) {
-
           return prev;
-
         }
-
         return files.length > 0 ? files[0].filename : "";
-
       });
-
     } catch (err) {
-
-      toast.error(err?.message || "Không thể tải danh sách bản sao lưu.");
-
+      toast.error(err?.message || t('backup.listError'));
     } finally {
-
       setLoadingBackups(false);
-
     }
-
   }, [canManageBackups]);
 
-
-
   const refresh = useCallback(() => {
-
     refreshLogs();
-
     void loadSummary();
-
     void fetchBackupFiles();
-
   }, [fetchBackupFiles, loadSummary, refreshLogs]);
 
-
-
   useEffect(() => {
-
     refresh();
-
   }, [refresh]);
 
-
-
   useEffect(() => {
-
     if (canManageBackups) {
-
       void fetchBackupFiles();
-
     }
-
   }, [canManageBackups, fetchBackupFiles]);
 
-
-
   const schedule = summary?.schedule;
-
   useEffect(() => {
-
     if (schedule && typeof schedule.cron === "string") {
-
       setCronDraft(schedule.cron);
-
     }
-
     if (schedule) {
-
       if (schedule.retentionCopies === null || schedule.retentionCopies === undefined) {
-
         setRetentionDraft("");
-
       } else {
-
         setRetentionDraft(String(schedule.retentionCopies));
-
       }
-
       const rawDirectory = schedule.directoryRaw || "";
-
       const effectiveDirectory = rawDirectory || schedule.directory || "";
-
       setDirectoryDraft(rawDirectory || effectiveDirectory);
-
       setManualDirectory(schedule.directory || "");
-
       setDirectoryError("");
-
       setManualDirectoryError("");
-
     } else {
-
       setDirectoryDraft("");
-
       setManualDirectory("");
-
       setDirectoryError("");
-
       setManualDirectoryError("");
-
     }
-
   }, [schedule]);
 
-
-
   const filteredLogs = useMemo(() => {
-
     const keyword = filter.trim().toLowerCase();
-
     const typeValue = (typeFilter || "all").toLowerCase();
-
     const fromMs = fromDate ? Date.parse(`${fromDate}T00:00:00`) : Number.NaN;
-
     const toMs = toDate ? Date.parse(`${toDate}T23:59:59.999`) : Number.NaN;
 
-
-
     return logs.filter((entry) => {
-
       if (!entry || typeof entry !== "object") {
-
         return false;
-
       }
-
       const category = (entry.category || inferCategoryFromAction(entry.action)).toLowerCase();
-
       if (typeValue && typeValue !== "all" && category !== typeValue) {
-
         return false;
-
       }
-
       const ts = entry.ts ? Date.parse(entry.ts) : Number.NaN;
-
       if (!Number.isNaN(fromMs) && Number.isFinite(fromMs) && Number.isFinite(ts) && ts < fromMs) {
-
         return false;
-
       }
-
       if (!Number.isNaN(toMs) && Number.isFinite(toMs) && Number.isFinite(ts) && ts > toMs) {
-
         return false;
-
       }
-
       if (!keyword) {
-
         return true;
-
       }
-
       const haystack = [
-
         entry.actor,
-
         entry.action,
-
         entry.detail,
-
         entry.note,
-
         entry.result,
-
         category,
-
         entry.meta ? JSON.stringify(entry.meta) : "",
-
       ]
-
         .filter(Boolean)
-
         .map((text) => `${text}`.toLowerCase());
 
       return haystack.some((text) => text.includes(keyword));
-
     });
-
   }, [filter, fromDate, logs, toDate, typeFilter]);
 
-  // PERF-001: Virtualization cho AuditLogTable
   const parentRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: filteredLogs.length,
@@ -470,397 +242,202 @@ export default function AuditLog({ currentUser }) {
   });
 
   const availableCategories = useMemo(() => {
-
     const set = new Set();
-
     for (const entry of logs) {
-
       if (!entry) continue;
-
       const category = (entry.category || inferCategoryFromAction(entry.action)).toLowerCase();
-
       if (category) {
-
         set.add(category);
-
       }
-
     }
-
     return ["all", ...Array.from(set).sort()];
-
   }, [logs]);
 
-
-
   const handleCronSubmit = useCallback(
-
     async (event) => {
-
       event.preventDefault();
-
       if (!canManageBackups) return;
-
       const value = cronDraft.trim();
-
       if (!value) {
-
         setCronError("Vui lòng nhập biểu thức cron.");
-
         return;
-
       }
-
       const retentionValueRaw = retentionDraft.trim();
-
       let retentionPayload = null;
-
       if (retentionValueRaw) {
-
         if (!/^\d+$/.test(retentionValueRaw)) {
-
-          setRetentionError("Số bản sao lưu giữ lại phải là số nguyên không âm hoặc để trống.");
-
+          setRetentionError(t('backup.retentionError'));
           return;
-
         }
-
         retentionPayload = Number.parseInt(retentionValueRaw, 10);
-
       }
-
       setSavingCron(true);
-
       setCronError("");
-
       setRetentionError("");
-
       setDirectoryError("");
-
       try {
-
         const directoryPayload = directoryDraft.trim();
-
         const response = await fetchWithAuth(API_V4_ROUTES.backups.schedule, {
-
           method: "POST",
-
           headers: { "Content-Type": "application/json" },
-
           body: JSON.stringify({
-
             cron: value,
-
             retentionCopies: retentionValueRaw ? retentionPayload : null,
-
             directory: directoryPayload,
-
           }),
-
         });
-
         const payload = await response.json().catch(() => ({}));
-
         if (!response.ok || payload?.ok === false) {
-
           const message = payload?.error || response.statusText || `HTTP ${response.status}`;
-
           setCronError(message);
-
           if (payload?.field === "retentionCopies") {
-
             setRetentionError(message);
-
           }
-
           if (payload?.field === "directory") {
-
             setDirectoryError(message);
-
           }
-
-          toast.error(message || "Không thể cập nhật lịch sao lưu.");
-
+          toast.error(message || t('backup.updateError'));
           return;
-
         }
-
         if (typeof payload?.config?.cron === "string") {
-
           setCronDraft(payload.config.cron);
-
         }
-
         if (payload?.config && Object.prototype.hasOwnProperty.call(payload.config, "retentionCopies")) {
-
           const storedRetention = payload.config.retentionCopies;
-
           if (storedRetention === null || storedRetention === undefined) {
-
             setRetentionDraft("");
-
           } else {
-
             setRetentionDraft(String(storedRetention));
-
           }
-
         }
-
         if (payload?.config) {
-
           const nextDirectoryRaw = payload.config.directoryRaw || "";
-
           const nextDirectoryEffective = nextDirectoryRaw || payload.config.directory || "";
-
           setDirectoryDraft(nextDirectoryRaw || nextDirectoryEffective);
-
           setManualDirectory(payload.config.directory || "");
-
           setManualDirectoryError("");
-
         }
-
         if (payload?.summary) {
-
           setSummary(payload.summary);
-
         } else {
-
           await loadSummary();
-
         }
-
-        toast.success("Đã cập nhật lịch sao lưu CSDL.");
-
+        toast.success(t('backup.updateSuccess'));
       } catch (err) {
-
-        const message = err?.message || "Không thể cập nhật lịch sao lưu.";
-
+        const message = err?.message || t('backup.updateError');
         setCronError(message);
-
         toast.error(message);
-
       } finally {
-
         setSavingCron(false);
-
       }
-
     },
-
     [canManageBackups, cronDraft, directoryDraft, loadSummary, retentionDraft]
-
   );
 
-
-
   const handleClear = () => {
-
-    if (!window.confirm("Xóa toàn bộ nhật ký và ghi lại thao tác này?")) return;
-
-    clearAuditLogs({ actor: currentUser?.username || "system", note: "Xóa nhật ký thủ công" });
-
+    if (!window.confirm(t('audit.clearConfirm'))) return;
+    clearAuditLogs({ actor: currentUser?.username || "system", note: t('audit.clearNote') });
     refresh();
-
   };
 
-
-
   const handleResetFilters = useCallback(() => {
-
     setFilter("");
-
     setTypeFilter("all");
-
     setFromDate("");
-
     setToDate("");
-
   }, []);
 
-
-
   const handleDownload = useCallback(async () => {
-
     try {
-
       const params = new URLSearchParams();
-
       if (fromDate) params.set("from", fromDate);
-
       if (toDate) params.set("to", toDate);
-
       if (typeFilter && typeFilter !== "all") params.set("type", typeFilter);
-
       const query = params.toString();
-
       const endpoint = query
         ? `${API_V4_ROUTES.reporting.adminAuditExport}?${query}`
         : API_V4_ROUTES.reporting.adminAuditExport;
-
       const response = await fetchWithAuth(endpoint, {
-
         headers: { Accept: "text/csv" },
-
       });
-
       let payload = null;
-
       if (!response.ok) {
-
         try {
-
           payload = await response.json();
-
         } catch {
-
           payload = null;
-
         }
-
         const message = payload?.error || response.statusText || `HTTP ${response.status}`;
-
         throw new Error(message);
-
       }
-
       const blob = await response.blob();
-
       const url = URL.createObjectURL(blob);
-
       const link = document.createElement("a");
-
       link.href = url;
-
       link.download = `audit-log-${Date.now()}.csv`;
-
       document.body.appendChild(link);
-
       link.click();
-
       document.body.removeChild(link);
-
       URL.revokeObjectURL(url);
-
-      toast.success("Đang tải file nhật ký...");
-
+      toast.success(t('audit.exportSuccess'));
     } catch (err) {
-
-      toast.error(err?.message || "Không thể tải file nhật ký.");
-
+      toast.error(err?.message || t('backup.fileError'));
     }
-
   }, [fromDate, toDate, typeFilter]);
 
-
-
   const handleBackupNow = useCallback(
-
     async (event) => {
-
       event.preventDefault();
-
       if (!canManageBackups) return;
-
       setRunningBackup(true);
-
       setManualDirectoryError("");
-
       try {
-
         const directoryValue = manualDirectory.trim();
-
         const response = await fetchWithAuth(API_V4_ROUTES.backups.run, {
-
           method: "POST",
-
           headers: { "Content-Type": "application/json" },
-
           body: JSON.stringify({
-
             reason: "manual-ui",
-
             note: backupNote.trim() || null,
-
             directory: directoryValue,
-
           }),
-
         });
-
         const payload = await response.json().catch(() => ({}));
-
         if (!response.ok || payload?.ok === false) {
-
           const message = payload?.error || response.statusText || `HTTP ${response.status}`;
-
           if (payload?.field === "directory") {
-
             setManualDirectoryError(message);
-
           }
-
           throw new Error(message);
-
         }
-
-        toast.success("Đã khởi chạy sao lưu thủ công.");
-
+        toast.success(t('backup.runSuccess'));
         setBackupNote("");
-
         setManualDirectory(directoryValue);
-
         await loadSummary();
-
         await fetchBackupFiles();
-
         refreshLogs();
-
       } catch (err) {
-
-        toast.error(err?.message || "Không thể sao lưu ngay.");
-
+        toast.error(err?.message || t('backup.runError'));
       } finally {
-
         setRunningBackup(false);
-
       }
-
     },
-
     [backupNote, canManageBackups, fetchBackupFiles, loadSummary, manualDirectory, refreshLogs]
-
   );
 
-
-
   const handleRestoreSubmit = useCallback(
-
     async (event) => {
-
       event.preventDefault();
-
       if (!canManageBackups) return;
-
       if (!selectedBackup) {
-
-        toast.error("Vui lòng chọn file sao lưu cần khôi phục.");
-
+        toast.error(t('backup.selectFileError'));
         return;
-
       }
-
       if (
-
         !window.confirm(
-
-          "Khôi phục CSDL sẽ ghi đè dữ liệu hiện tại. Bạn có chắc chắn muốn tiếp tục?"
-
+          t('backup.restoreConfirm')
         )
-
       ) {
-
         return;
 
       }
@@ -889,7 +466,7 @@ export default function AuditLog({ currentUser }) {
 
         }
 
-        toast.success("Khôi phục CSDL thành công. Vui lòng tải lại trang để đồng bộ dữ liệu.");
+        toast.success(t('backup.restoreSuccess'));
 
         setRestoreNote("");
 
@@ -901,7 +478,7 @@ export default function AuditLog({ currentUser }) {
 
       } catch (err) {
 
-        toast.error(err?.message || "Không thể khôi phục CSDL.");
+        toast.error(err?.message || t('backup.restoreError'));
 
       } finally {
 
@@ -963,17 +540,17 @@ export default function AuditLog({ currentUser }) {
 
     if (schedule.retentionCopies === null || schedule.retentionCopies === undefined) {
 
-      return "Không giới hạn";
+      return t('backup.unlimited');
 
     }
 
     if (schedule.retentionCopies === 0) {
 
-      return "Không giới hạn";
+      return t('backup.unlimited');
 
     }
 
-    return `${schedule.retentionCopies} bản sao lưu`;
+    return t('backup.copies', { count: schedule.retentionCopies });
 
   })();
 
@@ -989,11 +566,11 @@ export default function AuditLog({ currentUser }) {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-teal-50/40 via-transparent to-primary/5 dark:from-teal-900/20 dark:to-transparent" />
           <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex flex-col gap-1.5 max-w-2xl">
-              <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">Nhật ký Hệ thống</h2>
-              <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">Lưu trữ lịch sử thao tác người dùng, truy vết hoạt động cấu hình hệ thống và quản lý trạng thái sao lưu dữ liệu.</p>
+              <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">{t('audit.title')}</h2>
+              <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{t('audit.description')}</p>
             </div>
             <div className="flex shrink-0 items-center justify-end gap-3 mt-4 lg:mt-0">
-              <button type="button" onClick={refreshLogs} className="inline-flex items-center gap-2 rounded-xl border border-slate-200/60 bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800">Làm mới</button>
+              <button type="button" onClick={refreshLogs} className="inline-flex items-center gap-2 rounded-xl border border-slate-200/60 bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800">{t('audit.refresh')}</button>
             </div>
           </div>
         </div>
@@ -1001,13 +578,13 @@ export default function AuditLog({ currentUser }) {
 
       <section className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/60 p-6 shadow-sm backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/60 space-y-4">
 
-        <h3 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-200/40 dark:border-slate-700/40 pb-4">Quản lý Sao lưu CSDL</h3>
+        <h3 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-200/40 dark:border-slate-700/40 pb-4">{t('backup.title')}</h3>
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
 
           <div>
 
-            <div className="text-sm font-semibold uppercase text-[color:var(--ds-text-muted)]">Lịch sao lưu CSDL</div>
+            <div className="text-sm font-semibold uppercase text-[color:var(--ds-text-muted)]">{t('backup.schedule')}</div>
 
             {schedule?.refreshedAt && (
 
@@ -1051,13 +628,13 @@ export default function AuditLog({ currentUser }) {
 
           <div className="mt-3 rounded border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-300">
 
-            Không thể tải thông tin sao lưu: {summaryError}
+            {t('backup.loadingError')}: {summaryError}
 
           </div>
 
         ) : summaryLoading && !summary ? (
 
-          <div className="mt-3 text-sm text-[color:var(--ds-text-muted)]">Đang tải thông tin sao lưu...</div>
+          <div className="mt-3 text-sm text-[color:var(--ds-text-muted)]">{t('backup.loading')}</div>
 
         ) : summary ? (
 
@@ -1651,7 +1228,7 @@ export default function AuditLog({ currentUser }) {
 
                   <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={7}>
 
-                    Không có bản ghi phù hợp.
+                    {t('audit.noRecords')}
 
                   </td>
 
