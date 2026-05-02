@@ -1,5 +1,7 @@
 import React from "react";
 
+import { t } from '@/lib/i18n.js';
+
 function TeamManagerToolbar({
   dirty,
   isReadOnly,
@@ -20,17 +22,17 @@ function TeamManagerToolbar({
         className={`px-3 py-1 rounded text-white ${
           dirty && !isReadOnly ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gray-400"
         }`}
-        title={isReadOnly ? "Chỉ người được cấp quyền mới có thể lưu" : "Lưu thay đổi tổ đội"}
+        title={isReadOnly ? t('team.toolbar.saveDisabledTooltip') : t('team.toolbar.saveTooltip')}
       >
-        Lưu thay đổi
+        {t('team.toolbar.save')}
       </button>
 
       <button onClick={onReloadRoster} className="px-3 py-1 rounded border">
-        Hoàn tác về dữ liệu đã lưu
+        {t('team.toolbar.revert')}
       </button>
 
       <button onClick={onRefreshMST} className="px-3 py-1 rounded border">
-        Tải lại dữ liệu MST
+        {t('team.toolbar.refreshMST')}
       </button>
 
       <button
@@ -41,18 +43,18 @@ function TeamManagerToolbar({
         }`}
         title={
           historyOpen
-            ? "Ẩn bảng lịch sử thay đổi tổ đội và gán MST"
-            : "Xem lịch sử thay đổi tổ đội, team và trường MST liên quan"
+            ? t('team.toolbar.historyHideTooltip')
+            : t('team.toolbar.historyShowTooltip')
         }
         data-tooltip="Xem/ẩn lịch sử thay đổi team và MST"
       >
-        {historyOpen ? "Ẩn lịch sử" : "Lịch sử cập nhật"}
+        {historyOpen ? t('team.toolbar.historyHide') : t('team.toolbar.historyShow')}
       </button>
 
-      {dirty && !isReadOnly && <span className="text-sm text-amber-600">Có thay đổi chưa lưu</span>}
+      {dirty && !isReadOnly && <span className="text-sm text-amber-600">{t('team.toolbar.unsaved')}</span>}
 
       {isReadOnly && (
-        <span className="text-sm text-amber-600">Chế độ chỉ xem — không thể lưu thay đổi</span>
+        <span className="text-sm text-amber-600">{t('team.toolbar.readOnly')}</span>
       )}
 
       <button
@@ -60,11 +62,11 @@ function TeamManagerToolbar({
         onClick={onExportExcel}
         className="ml-auto px-3 py-1 rounded border bg-white hover:bg-gray-50"
       >
-        Export Excel
+        {t('team.toolbar.exportExcel')}
       </button>
 
       <span className="text-sm text-gray-500 ml-2">
-        Tổng cộng {roster.teams.length} tổ đội — {totalMembers} thành viên
+        {t('team.toolbar.stats', { teams: roster.teams.length, members: totalMembers })}
       </span>
     </div>
   );

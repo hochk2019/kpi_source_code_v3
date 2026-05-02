@@ -1,5 +1,6 @@
 import React from "react";
 
+import { t } from '@/lib/i18n.js';
 import {
   MST_HISTORY_FIELD_LABELS,
   formatTeamManagerHistoryTimestamp,
@@ -18,7 +19,7 @@ function TeamManagerHistoryPanel({
   return (
     <div className="border rounded-lg bg-white shadow-sm p-4 space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-semibold text-gray-700">Lịch sử thay đổi</span>
+        <span className="font-semibold text-gray-700">{t('team.toolbar.historyShowTooltip')}</span>
         <button
           type="button"
           onClick={() => onHistoryTabChange("team")}
@@ -27,10 +28,10 @@ function TeamManagerHistoryPanel({
               ? "bg-blue-600 text-white border-blue-600"
               : "bg-white hover:bg-gray-50"
           }`}
-          title="Các lần lưu chỉnh sửa tổ đội"
+          title={t('team.history.tabTeamTooltip')}
           data-tooltip="Hiển thị lịch sử lưu tổ đội"
         >
-          Tổ đội
+          {t('team.history.tabTeam')}
         </button>
         <button
           type="button"
@@ -40,19 +41,19 @@ function TeamManagerHistoryPanel({
               ? "bg-blue-600 text-white border-blue-600"
               : "bg-white hover:bg-gray-50"
           }`}
-          title="Các lần chỉnh sửa trường MST (người phụ trách, hiệu lực)"
+          title={t('team.history.tabMSTTooltip')}
           data-tooltip="Hiển thị lịch sử chỉnh sửa MST"
         >
-          MST
+          {t('team.history.tabMST')}
         </button>
         <button
           type="button"
           onClick={onRefresh}
           className="ml-auto px-3 py-1 rounded border text-xs bg-white hover:bg-gray-50"
-          title="Làm mới lịch sử từ bộ nhớ"
+          title={t('audit.refresh')}
           data-tooltip="Tải lại lịch sử"
         >
-          Làm mới
+          {t('audit.refresh')}
         </button>
       </div>
 
@@ -66,21 +67,21 @@ function TeamManagerHistoryPanel({
                   className="border rounded px-3 py-2 bg-gray-50"
                 >
                   <div className="font-medium text-gray-800">
-                    {formatTeamManagerHistoryTimestamp(entry.ts)} — {entry.actor || "Hệ thống"}
+                    {formatTeamManagerHistoryTimestamp(entry.ts)} — {entry.actor || t('team.history.actorSystem')}
                   </div>
-                  <div className="text-xs text-gray-600">{entry.detail || "Cập nhật tổ đội"}</div>
+                  <div className="text-xs text-gray-600">{entry.detail || t('team.history.defaultDetail')}</div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="italic text-gray-500">Chưa ghi nhận lịch sử lưu tổ đội.</p>
+            <p className="italic text-gray-500">{t('team.history.emptyTeam')}</p>
           )
         ) : mstHistory.length ? (
           <ul className="space-y-2">
             {mstHistory.map((entry) => (
               <li key={entry.id} className="border rounded px-3 py-2 bg-gray-50">
                 <div className="font-medium text-gray-800">
-                  {formatTeamManagerHistoryTimestamp(entry.timestamp)} — {entry.actor || "Hệ thống"}
+                  {formatTeamManagerHistoryTimestamp(entry.timestamp)} — {entry.actor || t('team.history.actorSystem')}
                 </div>
                 <div className="text-xs text-gray-600">
                   MST: <span className="font-semibold">{entry.mst}</span> ·{" Trường: "}
@@ -106,7 +107,7 @@ function TeamManagerHistoryPanel({
             ))}
           </ul>
         ) : (
-          <p className="italic text-gray-500">Chưa ghi nhận lịch sử thay đổi trường MST.</p>
+          <p className="italic text-gray-500">{t('team.history.emptyMST')}</p>
         )}
       </div>
     </div>

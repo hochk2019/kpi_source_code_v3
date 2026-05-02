@@ -1,5 +1,7 @@
 import React from "react";
 
+import { t } from '@/lib/i18n.js';
+
 function TeamManagerCompaniesPanel({
   activeMember,
   selectedTeam,
@@ -17,12 +19,12 @@ function TeamManagerCompaniesPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold text-sm uppercase text-gray-500">
           {activeMember
-            ? `Doanh nghiệp phụ trách của ${activeMember.name}`
-            : `Doanh nghiệp theo ${selectedTeam.name}`}
+            ? t('team.companies.titleMember', { name: activeMember.name })
+            : t('team.companies.titleTeam', { name: selectedTeam.name })}
         </h3>
 
         <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>{displayCompanies.length} doanh nghiệp đang được gán</span>
+          <span>{t('team.companies.count', { count: displayCompanies.length })}</span>
 
           {activeMember && (
             <button
@@ -30,7 +32,7 @@ function TeamManagerCompaniesPanel({
               onClick={onShowAllTeamCompanies}
               className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
             >
-              Xem toàn bộ team
+              {t('team.companies.viewAllTeam')}
             </button>
           )}
         </div>
@@ -40,8 +42,8 @@ function TeamManagerCompaniesPanel({
         {displayCompanies.length === 0 ? (
           <div className="p-4 text-sm text-gray-500">
             {activeMember
-              ? "Thành viên này chưa được gán doanh nghiệp nào trong bảng MST."
-              : "Team chưa được gán doanh nghiệp nào trong bảng MST."}
+              ? t('team.companies.emptyMember')
+              : t('team.companies.emptyTeam')}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -50,14 +52,14 @@ function TeamManagerCompaniesPanel({
                 <th className="p-2 text-left w-28">MST</th>
                 <th className="p-2 text-left">Công ty</th>
                 {activeMember ? (
-                  <th className="p-2 text-left w-24">Vai trò</th>
+                  <th className="p-2 text-left w-24">{t('team.companies.role')}</th>
                 ) : (
                   <>
-                    <th className="p-2 text-left w-40">Phụ trách Nhập</th>
-                    <th className="p-2 text-left w-40">Phụ trách Xuất</th>
+                    <th className="p-2 text-left w-40">{t('team.companies.importPerson')}</th>
+                    <th className="p-2 text-left w-40">{t('team.companies.exportPerson')}</th>
                   </>
                 )}
-                <th className="p-2 text-left w-32">Áp dụng từ</th>
+                <th className="p-2 text-left w-32">{t('team.companies.effectiveFrom')}</th>
               </tr>
             </thead>
 
@@ -97,11 +99,11 @@ function TeamManagerCompaniesPanel({
               currentCompanyPage <= 1 ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
-            ← Trước
+            ← {t('common.previous')}
           </button>
 
           <span>
-            Trang {currentCompanyPage}/{totalCompanyPages}
+            {t('common.page')} {currentCompanyPage}/{totalCompanyPages}
           </span>
 
           <button
@@ -112,7 +114,7 @@ function TeamManagerCompaniesPanel({
               currentCompanyPage >= totalCompanyPages ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
-            Sau →
+            {t('common.next')} →
           </button>
         </div>
       )}

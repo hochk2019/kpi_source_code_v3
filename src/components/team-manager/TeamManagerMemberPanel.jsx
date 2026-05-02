@@ -1,4 +1,6 @@
 import React from "react";
+
+import { t } from '@/lib/i18n.js';
 import { normalizeName } from "@/lib/storeCoreHelpers.js";
 
 function TeamManagerMemberPanel({
@@ -26,7 +28,7 @@ function TeamManagerMemberPanel({
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200/60 p-4 space-y-4 bg-white/60 backdrop-blur-md shadow-sm">
         <h3 className="font-semibold text-sm uppercase text-gray-500 tracking-wider">
-          Thành viên team {selectedTeam.name}
+          {t('team.members.title', { name: selectedTeam.name })}
         </h3>
 
         {canEdit ? (
@@ -34,23 +36,23 @@ function TeamManagerMemberPanel({
             <input
               value={newMemberName}
               onChange={(event) => onNewMemberNameChange(event.target.value)}
-              placeholder="Tên thành viên mới"
+              placeholder={t('team.members.newPlaceholder')}
               className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white/80"
             />
             <button type="submit" className="px-4 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium transition-colors">
-              Thêm
+              {t('team.members.add')}
             </button>
           </form>
         ) : (
           <div className="rounded border border-dashed p-3 text-sm text-gray-500">
-            Đăng nhập bằng tài khoản được cấp quyền để thêm thành viên mới.
+            {t('team.members.loginRequired')}
           </div>
         )}
 
         <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-gray-200 bg-white/40">
           {selectedTeam.members.length === 0 ? (
             <div className="p-6 text-sm text-gray-400 text-center italic">
-              Chưa có thành viên trong team này.
+              {t('team.members.empty')}
             </div>
           ) : (
             <ul className="p-1 space-y-1">
@@ -66,8 +68,9 @@ function TeamManagerMemberPanel({
                   .substring(0, 2)
                   .toUpperCase();
 
-                const role = assigned > 30 ? "Lead" : "Staff";
-                const roleBadgeColor = role === "Lead" ? "bg-amber-100 text-amber-700" : "bg-teal-100 text-teal-700";
+                const isLead = assigned > 30;
+                const role = isLead ? t('team.members.roleLead') : t('team.members.roleStaff');
+                const roleBadgeColor = isLead ? "bg-amber-100 text-amber-700" : "bg-teal-100 text-teal-700";
 
                 return (
                   <li key={member.id}>
@@ -86,13 +89,13 @@ function TeamManagerMemberPanel({
                           {member.name}
                         </div>
                         <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span> Active
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span> {t('team.members.active')}
                         </div>
                       </div>
 
                       <div className="flex flex-col items-end gap-1">
                         <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-md ${roleBadgeColor}`}>{role}</span>
-                        <span className="text-xs text-gray-500 font-medium">{assigned} DN</span>
+                        <span className="text-xs text-gray-500 font-medium">{t('team.members.companiesCount', { count: assigned })}</span>
                       </div>
                     </button>
                   </li>
@@ -104,12 +107,12 @@ function TeamManagerMemberPanel({
       </div>
 
       <div className="rounded-xl border border-gray-200/60 p-4 bg-white/60 backdrop-blur-md shadow-sm space-y-3">
-        <h3 className="font-semibold text-sm uppercase text-gray-500 tracking-wider">Chi tiết nhân sự</h3>
+        <h3 className="font-semibold text-sm uppercase text-gray-500 tracking-wider">{t('team.members.detailTitle')}</h3>
 
         {activeMember ? (
           <div className="space-y-4 text-sm">
             <div>
-              <label className="text-xs font-semibold uppercase text-gray-500">Tên thành viên</label>
+              <label className="text-xs font-semibold uppercase text-gray-500">{t('team.members.nameLabel')}</label>
               <input
                 value={memberNameDraft}
                 onChange={(event) => onMemberNameDraftChange(event.target.value)}
@@ -122,7 +125,7 @@ function TeamManagerMemberPanel({
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase text-gray-500">Thuộc tổ đội</label>
+              <label className="text-xs font-semibold uppercase text-gray-500">{t('team.members.teamLabel')}</label>
               <select
                 value={selectedTeamId ?? ""}
                 onChange={(event) => onMoveMember(activeMember.id, event.target.value)}
@@ -140,25 +143,25 @@ function TeamManagerMemberPanel({
             {canEdit && (
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={onCommitMemberName} className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 font-medium">
-                  Cập nhật tên
+                  {t('team.members.updateName')}
                 </button>
                 <button
                   type="button"
                   onClick={() => onRemoveMember(activeMember.id)}
                   className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium"
                 >
-                  Xóa khỏi team
+                  {t('team.members.remove')}
                 </button>
               </div>
             )}
 
             <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
-              Thành viên đang phụ trách {memberCompanies.length} doanh nghiệp.
+              {t('team.members.companies', { count: memberCompanies.length })}
             </div>
           </div>
         ) : (
           <div className="text-sm text-gray-400 italic py-4">
-            Chọn một thành viên từ màn hình danh sách để xem chi tiết và đối chiếu.
+            {t('team.members.selectHint')}
           </div>
         )}
       </div>

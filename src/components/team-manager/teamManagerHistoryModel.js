@@ -1,7 +1,9 @@
+import { t } from '@/lib/i18n.js';
+
 export const MST_HISTORY_FIELD_LABELS = {
-  person_import: "Người phụ trách Nhập",
-  person_export: "Người phụ trách Xuất",
-  effective_from: "Áp dụng từ ngày",
+  person_import: t('mst.personImport'),
+  person_export: t('mst.personExport'),
+  effective_from: t('mst.effectiveFrom'),
 };
 
 export const formatTeamManagerHistoryTimestamp = (value) => {
