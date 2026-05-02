@@ -5,6 +5,7 @@ import {
   ROLE_OPTIONS,
   getPasswordMinLengthPlaceholder,
 } from "@/auth/localAuth.js";
+import { t } from "@/lib/i18n.js";
 import { FilterSelect, StatusBadge } from "@/components/designSystem/primitives.jsx";
 import { SectionHeader } from "@/components/designSystem/shellPrimitives.jsx";
 import AccountPermissionGroupsPanel from "@/components/account-manager/AccountPermissionGroupsPanel.jsx";
@@ -38,13 +39,13 @@ export default function AccountCreateFormPanel({
   return (
     <>
       <SectionHeader
-        title="Tạo tài khoản mới"
-        description="Điền thông tin đăng nhập, gắn nhân viên KPI (nếu có) và xác định quyền tương ứng trước khi tạo tài khoản."
+        title={t('account.createNew')}
+        description={t('account.createDescription')}
       />
 
       <form className="grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Tài khoản *</label>
+          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">{t('form.username')}</label>
           <input
             className={CONTROL_CLASS}
             value={form.username}
@@ -55,17 +56,17 @@ export default function AccountCreateFormPanel({
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Nhân viên KPI</label>
+          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">{t('form.staffLabel')}</label>
           <StaffCombobox
             value={form.memberId}
             onSelect={onSelectStaff}
             teams={staffTeams}
             disabled={staffOptions.length === 0}
-            ariaLabel="Nhân viên KPI cho tài khoản mới"
+            ariaLabel={t('form.staffAriaLabel')}
             selectionMode="member"
-            searchPlaceholder="Tìm theo tên nhân viên hoặc tổ đội…"
-            clearGroupLabel="Tùy chọn chung"
-            clearLabel="Không gắn nhân viên"
+            searchPlaceholder={t('form.searchStaff')}
+            clearGroupLabel={t('form.clearGroupLabel')}
+            clearLabel={t('form.clearLabel')}
             showClearWhenEmpty
             buttonClassName={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${staffOptions.length === 0 ? "cursor-not-allowed opacity-60" : ""
               }`}
@@ -74,33 +75,33 @@ export default function AccountCreateFormPanel({
           />
           {form.memberId ? (
             <p className="text-xs text-[color:var(--ds-text-muted)]">
-              Sẽ gắn tài khoản với {form.memberName || form.memberId}
+              {t('form.willLink', { name: form.memberName || form.memberId })}
               {form.teamName ? ` • ${form.teamName}` : ""}
             </p>
           ) : (
             <p className="text-xs text-[color:var(--ds-text-muted)]">
-              Tùy chọn: gắn tài khoản với nhân viên trong danh sách KPI.
+              {t('form.optionalLink')}
             </p>
           )}
           {staffOptions.length === 0 ? (
             <StatusBadge tone="warning">
-              Chưa có dữ liệu tổ đội. Hãy cập nhật trong mục Quản lý tổ đội trước.
+              {t('form.noStaff')}
             </StatusBadge>
           ) : null}
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Họ tên hiển thị</label>
+          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">{t('form.displayName')}</label>
           <input
             className={CONTROL_CLASS}
             value={form.name}
             onChange={(event) => onNameChange(event.target.value)}
-            placeholder="Tên người dùng"
+            placeholder={t('form.displayNamePlaceholder')}
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Mật khẩu tạm *</label>
+          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">{t('form.passwordTemp')}</label>
           <input
             type="password"
             className={CONTROL_CLASS}
@@ -112,12 +113,12 @@ export default function AccountCreateFormPanel({
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Vai trò</label>
+          <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">{t('form.role')}</label>
           <FilterSelect
             value={form.role}
             onChange={onRoleChange}
             options={ROLE_OPTIONS}
-            placeholder="Chọn vai trò"
+            placeholder={t('form.selectRole')}
             triggerClassName="w-full"
           />
         </div>
@@ -125,9 +126,9 @@ export default function AccountCreateFormPanel({
         <div className="md:col-span-2 space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">Quyền chức năng</div>
+              <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">{t('form.permissions')}</div>
               <p className="text-xs text-[color:var(--ds-text-muted)]">
-                Chọn quyền tương ứng cho tài khoản. Những quyền bị làm mờ thuộc nhóm chỉ dành cho quản trị viên.
+                {t('form.permissionsDescription')}
               </p>
             </div>
             {groupedPermissions.length > 0 ? (
@@ -138,7 +139,7 @@ export default function AccountCreateFormPanel({
                   className={GROUP_TOGGLE_BUTTON_CLASS}
                   disabled={allPermissionGroupsCollapsed}
                 >
-                  Thu gọn tất cả
+                  {t('common.collapseAll')}
                 </button>
                 <button
                   type="button"
@@ -146,7 +147,7 @@ export default function AccountCreateFormPanel({
                   className={GROUP_TOGGLE_BUTTON_CLASS}
                   disabled={noPermissionGroupCollapsed}
                 >
-                  Mở rộng tất cả
+                  {t('common.expandAll')}
                 </button>
               </div>
             ) : null}
@@ -160,7 +161,7 @@ export default function AccountCreateFormPanel({
             scope="account-create"
             onPermissionChange={onPermissionChange}
             isPermissionDisabled={(item) => item.key === "accountManage" && form.role !== ADMIN_ROLE}
-            countLabelFormatter={(enabledCount, totalCount) => `${enabledCount}/${totalCount} quyền`}
+            countLabelFormatter={(enabledCount, totalCount) => t('permission.countShort', { enabled: enabledCount, total: totalCount })}
             headingVariant="compact"
           />
         </div>
@@ -171,17 +172,17 @@ export default function AccountCreateFormPanel({
           <button
             type="submit"
             className="rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-teal-700 hover:to-teal-600 focus:ring-2 focus:ring-teal-500/50"
-            data-tooltip="Tạo tài khoản mới với thông tin và quyền đã chọn"
+            data-tooltip={t('account.createTooltip')}
           >
-            Tạo tài khoản
+            {t('common.create')}
           </button>
           <button
             type="button"
             onClick={onReset}
             className="rounded-xl border border-slate-200/60 bg-white/50 px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800"
-            data-tooltip="Xóa nội dung biểu mẫu và nhập lại từ đầu"
+            data-tooltip={t('account.resetTooltip')}
           >
-            Nhập lại
+            {t('common.reset')}
           </button>
         </div>
       </form>

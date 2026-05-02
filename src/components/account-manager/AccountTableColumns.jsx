@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { StatusBadge } from '@/components/designSystem/primitives.jsx';
+import { t } from '@/lib/i18n.js';
 
 export function buildAccountTableColumns({
   pendingAccounts,
@@ -13,7 +14,7 @@ export function buildAccountTableColumns({
     const isPending = pendingAccounts.has(account.username);
     const permissionSummary = account.permissions?.summary || {};
     const hasCustom = permissionSummary.hasCustom || false;
-    const roleLabel = account.roleLabel || 'Chưa phân quyền';
+    const roleLabel = account.roleLabel || t('permission.noAssignment');
 
     return (
       <div className="space-y-2">
@@ -21,13 +22,13 @@ export function buildAccountTableColumns({
           <StatusBadge status={hasCustom ? 'warning' : 'success'}>
             {roleLabel}
           </StatusBadge>
-          {isPending && <span className="text-xs text-amber-600">Đang cập nhật...</span>}
+          {isPending && <span className="text-xs text-amber-600">{t('common.loading')}</span>}
         </div>
         <button
           onClick={() => onOpenPermissionDialog(account)}
           className="text-xs text-blue-600 hover:underline"
         >
-          {hasCustom ? 'Sửa quyền' : 'Phân quyền'}
+          {hasCustom ? t('permission.edit') : t('permission.assign')}
         </button>
       </div>
     );
@@ -42,7 +43,7 @@ export function buildAccountTableColumns({
           disabled={isPending}
           className="text-xs text-red-600 hover:underline disabled:opacity-50"
         >
-          Xóa
+          {t('common.delete')}
         </button>
       </div>
     );
@@ -51,26 +52,26 @@ export function buildAccountTableColumns({
   return [
     {
       key: 'username',
-      header: 'Tài khoản',
+      header: t('table.column.account'),
       cell: (account) => (
         <div className="font-medium">{account.username}</div>
       ),
     },
     {
       key: 'staff',
-      header: 'Nhân viên',
+      header: t('table.column.staff'),
       cell: (account) => (
         <div>{account.staffName || account.staffId || '-'}</div>
       ),
     },
     {
       key: 'role',
-      header: 'Vai trò',
+      header: t('table.column.role'),
       cell: renderPermissionCell,
     },
     {
       key: 'actions',
-      header: 'Thao tác',
+      header: t('table.column.actions'),
       cell: renderActionsCell,
     },
   ];

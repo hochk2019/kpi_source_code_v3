@@ -4,6 +4,7 @@ import {
   AppDialog, AppDialogClose, AppDialogContent, AppDialogDescription,
   AppDialogFooter, AppDialogHeader, AppDialogTitle,
 } from '@/components/designSystem/primitives.jsx';
+import { t } from '@/lib/i18n.js';
 
 export default function AccountDeleteDialog({
   open, onOpenChange, account, confirmText, onConfirmTextChange,
@@ -16,29 +17,29 @@ export default function AccountDeleteDialog({
     <AppDialog open={open} onOpenChange={onOpenChange}>
       <AppDialogContent>
         <AppDialogHeader>
-          <AppDialogTitle>Xác nhận xóa tài khoản</AppDialogTitle>
+          <AppDialogTitle>{t('account.deleteConfirm')}</AppDialogTitle>
           <AppDialogDescription>
-            Tài khoản <strong>{account?.username}</strong> sẽ bị xóa vĩnh viễn.
-            Nhập <code>{expectedText}</code> để xác nhận.
+            {t('account.deleteWarning', { username: account?.username })}
+            {t('account.deleteConfirmText', { text: expectedText })}
           </AppDialogDescription>
         </AppDialogHeader>
         <div className="space-y-4">
           <input
             value={confirmText}
             onChange={(e) => onConfirmTextChange(e.target.value)}
-            placeholder={`Nhập "${expectedText}"`}
+            placeholder={t('account.deleteConfirmText', { text: expectedText })}
             className="w-full rounded border px-3 py-2"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
         <AppDialogFooter>
-          <AppDialogClose disabled={isDeleting}>Hủy</AppDialogClose>
+          <AppDialogClose disabled={isDeleting}>{t('common.cancel')}</AppDialogClose>
           <button
             onClick={onConfirm}
             disabled={!canConfirm}
             className="rounded bg-red-600 px-4 py-2 text-white disabled:opacity-50"
           >
-            {isDeleting ? 'Đang xóa...' : 'Xóa'}
+            {isDeleting ? t('common.loading') : t('common.delete')}
           </button>
         </AppDialogFooter>
       </AppDialogContent>

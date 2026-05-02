@@ -1,6 +1,7 @@
 import React from "react";
 
 import { ADMIN_ROLE } from "@/auth/localAuth.js";
+import { t } from "@/lib/i18n.js";
 import {
   AppDialog,
   AppDialogClose,
@@ -43,11 +44,11 @@ export default function AccountPermissionsDialog({
         className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-h-[85vh]"
       >
         <AppDialogHeader className="px-6 pb-3 pt-6">
-          <AppDialogTitle>Quản lý quyền</AppDialogTitle>
+          <AppDialogTitle>{t('permission.title')}</AppDialogTitle>
           <AppDialogDescription>
             {permissionAccount
-              ? `Điều chỉnh quyền truy cập cho tài khoản ${permissionAccount.username}.`
-              : "Chọn tài khoản để điều chỉnh quyền."}
+              ? t('permission.description', { username: permissionAccount.username })
+              : t('permission.selectAccount')}
           </AppDialogDescription>
         </AppDialogHeader>
 
@@ -78,7 +79,7 @@ export default function AccountPermissionsDialog({
                 </div>
 
                 {permissionAccountPending ? (
-                  <StatusBadge tone="info">Đang lưu thay đổi…</StatusBadge>
+                  <StatusBadge tone="info">{t('common.loading')}</StatusBadge>
                 ) : null}
 
                 {groupedPermissions.length > 0 ? (
@@ -89,7 +90,7 @@ export default function AccountPermissionsDialog({
                       className={GROUP_TOGGLE_BUTTON_CLASS}
                       disabled={allPermissionGroupsCollapsed}
                     >
-                      Thu gọn tất cả
+                      {t('common.collapseAll')}
                     </button>
                     <button
                       type="button"
@@ -97,7 +98,7 @@ export default function AccountPermissionsDialog({
                       className={GROUP_TOGGLE_BUTTON_CLASS}
                       disabled={noPermissionGroupCollapsed}
                     >
-                      Mở rộng tất cả
+                      {t('common.expandAll')}
                     </button>
                   </div>
                 ) : null}
@@ -114,13 +115,13 @@ export default function AccountPermissionsDialog({
                     (item.key === "accountManage" && permissionAccount.role !== ADMIN_ROLE)
                   }
                   countLabelFormatter={(enabledCount, totalCount) =>
-                    `${enabledCount}/${totalCount} quyền đang bật`
+                    t('permission.enabledCount', { enabled: enabledCount, total: totalCount })
                   }
                 />
               </>
             ) : (
               <p className="text-sm text-[color:var(--ds-text-muted)]">
-                Không tìm thấy thông tin tài khoản đã chọn.
+                {t('permission.notFound')}
               </p>
             )}
           </div>
@@ -133,7 +134,7 @@ export default function AccountPermissionsDialog({
             className={GROUP_TOGGLE_BUTTON_CLASS}
             disabled={!canScrollUp}
           >
-            Cuộn lên đầu
+            {t('common.scrollToTop')}
           </button>
           <button
             type="button"
@@ -141,7 +142,7 @@ export default function AccountPermissionsDialog({
             className={GROUP_TOGGLE_BUTTON_CLASS}
             disabled={!canScrollDown}
           >
-            Cuộn xuống cuối
+            {t('common.scrollToBottom')}
           </button>
 
           <AppDialogClose asChild>
@@ -150,7 +151,7 @@ export default function AccountPermissionsDialog({
               onClick={onClose}
               className="inline-flex items-center justify-center rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ds-accent-ring)] focus-visible:ring-offset-0"
             >
-              Đóng
+              {t('common.close')}
             </button>
           </AppDialogClose>
         </AppDialogFooter>

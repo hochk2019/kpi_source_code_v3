@@ -25,6 +25,10 @@ const translations = {
     'common.next': 'Tiếp theo',
     'common.submit': 'Gửi',
     'common.reset': 'Nhập lại',
+    'common.collapseAll': 'Thu gọn tất cả',
+    'common.expandAll': 'Mở rộng tất cả',
+    'common.scrollToTop': 'Cuộn lên đầu',
+    'common.scrollToBottom': 'Cuộn xuống cuối',
 
     // Account Manager
     'account.title': 'Quản trị Tài khoản Hệ thống',
@@ -45,6 +49,9 @@ const translations = {
     'account.deleteError': 'Không thể xóa tài khoản',
     'account.searchPlaceholder': 'Tìm theo tài khoản, vai trò, tên nhân viên...',
     'account.total': 'Tổng {count} tài khoản',
+    'account.createDescription': 'Điền thông tin đăng nhập, gắn nhân viên KPI (nếu có) và xác định quyền tương ứng trước khi tạo tài khoản.',
+    'account.createTooltip': 'Tạo tài khoản mới với thông tin và quyền đã chọn',
+    'account.resetTooltip': 'Xóa nội dung biểu mẫu và nhập lại từ đầu',
     'account.noResults': 'Không tìm thấy tài khoản nào',
     'account.validation.usernameRequired': 'Vui lòng nhập tên đăng nhập',
     'account.validation.passwordLength': 'Mật khẩu phải có ít nhất {min} ký tự',
@@ -69,6 +76,50 @@ const translations = {
     'table.column.staff': 'Nhân viên',
     'table.column.team': 'Tổ đội',
     'table.column.actions': 'Thao tác',
+
+    // Permission actions
+    'permission.edit': 'Sửa quyền',
+    'permission.assign': 'Phân quyền',
+    'permission.enabledCount': '{enabled}/{total} quyền đang bật',
+    'permission.countShort': '{enabled}/{total} quyền',
+    'permission.noAssignment': 'Chưa phân quyền',
+
+    // Form labels
+    'form.username': 'Tài khoản *',
+    'form.password': 'Mật khẩu *',
+    'form.confirmPassword': 'Xác nhận mật khẩu *',
+    'form.role': 'Vai trò',
+    'form.selectRole': 'Chọn vai trò',
+    'form.searchStaff': 'Tìm theo tên nhân viên hoặc tổ đội…',
+    'form.staffLabel': 'Nhân viên KPI',
+    'form.staffAriaLabel': 'Nhân viên KPI cho tài khoản mới',
+    'form.clearGroupLabel': 'Tùy chọn chung',
+    'form.clearLabel': 'Không gắn nhân viên',
+    'form.willLink': 'Sẽ gắn tài khoản với {name}',
+    'form.optionalLink': 'Tùy chọn: gắn tài khoản với nhân viên trong danh sách KPI.',
+    'form.noStaff': 'Chưa có nhân viên nào trong danh sách.',
+    'form.displayName': 'Họ tên hiển thị',
+    'form.displayNamePlaceholder': 'Tên người dùng',
+    'form.passwordTemp': 'Mật khẩu tạm *',
+    'form.permissions': 'Quyền chức năng',
+    'form.permissionsDescription': 'Chọn quyền tương ứng cho tài khoản. Những quyền bị làm mờ thuộc nhóm chỉ dành cho quản trị viên.',
+
+    // Error messages
+    'error.loadAccounts': 'Không thể tải danh sách tài khoản',
+    'error.createAccount': 'Không thể tạo tài khoản',
+    'error.deleteAccount': 'Không thể xóa tài khoản',
+    'error.updatePermissions': 'Không thể cập nhật quyền',
+    'error.updateStaff': 'Không thể cập nhật nhân viên',
+    'error.resetPassword': 'Không thể đặt lại mật khẩu',
+
+    // Validation
+    'validation.required': 'Vui lòng nhập {field}',
+    'validation.minLength': '{field} phải có ít nhất {min} ký tự',
+    'validation.match': '{field} không khớp',
+
+    // StaffCombobox
+    'staff.noSelection': 'Chọn nhân viên...',
+    'staff.searchPlaceholder': 'Tìm nhân viên...',
   },
 };
 
