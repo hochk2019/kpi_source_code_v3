@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n.js';
 import { Button } from "@/components/ui/button.jsx";
 import {
   Dialog,
@@ -39,7 +40,7 @@ export default function KpiAdjustmentSettingsDialog({
           className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground"
           data-testid="kpi-adjust-settings-focus-banner"
         >
-          Đang chỉnh nhanh cho: <span className="font-semibold">{focusLabel}</span>
+          {t('kpi.settings.focusLabel', { category: focusLabel })}
         </div>
       ) : null}
 
@@ -64,7 +65,7 @@ export default function KpiAdjustmentSettingsDialog({
               <div className="mt-3 space-y-3">
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground" htmlFor={defaultUnitId}>
-                    Điểm mặc định
+                    {t('kpi.settings.defaultPoints')}
                   </label>
                   <Input
                     id={defaultUnitId}
@@ -80,7 +81,7 @@ export default function KpiAdjustmentSettingsDialog({
                 {config.extraPointConfig ? (
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground" htmlFor={extraUnitId}>
-                      {config.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+                      {config.extraPointConfig.unitLabel || t('kpi.settings.extraUnitPoints')}
                     </label>
                     <Input
                       id={extraUnitId}
@@ -98,7 +99,7 @@ export default function KpiAdjustmentSettingsDialog({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground" htmlFor={defaultModeId}>
-                        Chế độ mặc định
+                        {t('kpi.settings.defaultMode')}
                       </label>
                       <select
                         id={defaultModeId}
@@ -106,7 +107,7 @@ export default function KpiAdjustmentSettingsDialog({
                         value={draft.defaultMode || ""}
                         onChange={(event) => onUpdateDraft(category, "defaultMode", event.target.value)}
                       >
-                        <option value="">Theo hệ thống</option>
+                        <option value="">{t('kpi.settings.systemDefault')}</option>
                         {config.modes.map((mode) => (
                           <option key={mode.value} value={mode.value}>
                             {mode.label}
@@ -121,7 +122,7 @@ export default function KpiAdjustmentSettingsDialog({
                       return (
                         <div key={mode.value}>
                           <label className="text-xs font-semibold text-muted-foreground" htmlFor={modeUnitId}>
-                            Điểm chế độ {mode.label}
+                            {t('kpi.settings.modePoints', { mode: mode.label })}
                           </label>
                           <Input
                             id={modeUnitId}
@@ -148,7 +149,7 @@ export default function KpiAdjustmentSettingsDialog({
                       return (
                         <div key={code}>
                           <label className="text-xs font-semibold text-muted-foreground" htmlFor={licenseFieldId}>
-                            Mã {code}
+                            {t('kpi.settings.licenseCode', { code })}
                           </label>
                           <Input
                             id={licenseFieldId}
@@ -180,15 +181,15 @@ export default function KpiAdjustmentSettingsDialog({
 
       <div className={embedded ? "flex gap-3 pt-4 border-t" : ""}>
         <Button type="button" variant="ghost" onClick={onClose} disabled={settingsSaving}>
-          Hủy
+          {t('common.cancel')}
         </Button>
 
         <Button type="button" variant="outline" onClick={onReset} disabled={settingsSaving}>
-          Đặt lại
+          {t('kpi.settings.reset')}
         </Button>
 
         <Button type="submit" disabled={settingsSaving}>
-          {settingsSaving ? "Đang lưu..." : "Lưu cấu hình"}
+          {settingsSaving ? t('common.saving') : t('kpi.settings.save')}
         </Button>
       </div>
     </form>
@@ -198,9 +199,9 @@ export default function KpiAdjustmentSettingsDialog({
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="mb-6">
-          <h2 className="text-lg font-semibold">Cấu hình điểm mặc định</h2>
+          <h2 className="text-lg font-semibold">{t('kpi.settings.title')}</h2>
           <p className="text-sm text-gray-500">
-            Chỉ áp dụng cho Admin/Quản lý. Để trống sẽ dùng giá trị hệ thống.
+            {t('kpi.settings.adminHint')}
           </p>
         </div>
         {formContent}
@@ -212,9 +213,9 @@ export default function KpiAdjustmentSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Cấu hình điểm mặc định</DialogTitle>
+          <DialogTitle>{t('kpi.settings.title')}</DialogTitle>
           <DialogDescription>
-            Chỉ áp dụng cho Admin/Quản lý. Để trống sẽ dùng giá trị hệ thống.
+            {t('kpi.settings.adminHint')}
           </DialogDescription>
         </DialogHeader>
         {formContent}

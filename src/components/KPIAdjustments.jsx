@@ -1,5 +1,7 @@
 ﻿import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
+import { t } from '@/lib/i18n.js';
+
 import {
   getKpiAdjustments,
   updateKpiAdjustmentStatus,
@@ -62,13 +64,9 @@ import usePagination from "@/hooks/usePagination.js";
 
 
 const STATUS_LABELS = {
-
-  pending: "Chờ duyệt",
-
-  approved: "Đã duyệt",
-
-  rejected: "Đã từ chối",
-
+  pending: t('kpi.status.pending'),
+  approved: t('kpi.status.approved'),
+  rejected: t('kpi.status.rejected'),
 };
 
 
@@ -138,7 +136,7 @@ function formatDateTime(value) {
 
   } catch (err) {
 
-    console.warn("Khong the dinh dang thoi gian dieu chinh KPI", value, err);
+    console.warn(t('kpi.error.formatDate'), value, err);
 
     return value;
 
@@ -183,7 +181,7 @@ function resolveStaffDefaults(user, roster) {
 
     } catch (error) {
 
-      console.warn("Khong the lay thong tin to doi mac dinh cho nhan vien", error);
+      console.warn(t('kpi.error.defaultTeam'), error);
 
     }
 

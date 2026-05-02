@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n.js';
 import { Button } from "@/components/ui/button.jsx";
 import {
   Dialog,
@@ -50,37 +51,37 @@ export default function KpiAdjustmentDetailDialog({
       <DialogContent data-testid="kpi-adjust-detail-dialog" className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{detailLabel}</DialogTitle>
-          <DialogDescription>Xem nhanh chi tiết điểm KPI trước khi duyệt.</DialogDescription>
+          <DialogDescription>{t('kpi.detail.description')}</DialogDescription>
         </DialogHeader>
         {detailData ? (
           <div className="space-y-4 text-sm text-foreground">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Nhân viên</div>
-                <div className="mt-1 font-medium text-foreground">{detailData.staffName || "Chưa gán"}</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.staff')}</div>
+                <div className="mt-1 font-medium text-foreground">{detailData.staffName || t('kpi.common.notAssigned')}</div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Tổ đội</div>
-                <div className="mt-1 font-medium text-foreground">{detailData.teamName || "—"}</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.team')}</div>
+                <div className="mt-1 font-medium text-foreground">{detailData.teamName || t('kpi.common.dash')}</div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Hạng mục</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.category')}</div>
                 <div className="mt-1 font-medium text-foreground">
                   {KPI_ADJUSTMENT_CATEGORY_CONFIG[detailData.category]?.label || detailData.category}
                 </div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Trạng thái</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.status')}</div>
                 <div className="mt-1 font-medium text-foreground">
                   {statusLabels[detailData.status] || detailData.status}
                 </div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Công ty</div>
-                <div className="mt-1 font-medium text-foreground">{detailData.companyName || "—"}</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.company')}</div>
+                <div className="mt-1 font-medium text-foreground">{detailData.companyName || t('kpi.common.dash')}</div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Mã số thuế</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.taxCode')}</div>
                 {detailData.taxCode ? (
                   <div className="mt-1 flex flex-col items-start gap-2">
                     <span className="font-medium text-foreground">{detailData.taxCode}</span>
@@ -91,7 +92,7 @@ export default function KpiAdjustmentDetailDialog({
                       className="h-auto px-0 py-0 text-xs font-medium text-primary hover:bg-transparent"
                       onClick={() => openWorkflowLookup("mst", "review", detailData.taxCode)}
                     >
-                      Mở MST
+                      {t('kpi.detail.openMST')}
                     </Button>
                   </div>
                 ) : (
@@ -102,52 +103,52 @@ export default function KpiAdjustmentDetailDialog({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Số lượng</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.quantity')}</div>
                 <div className="mt-1 font-medium text-foreground">{formatDecimal(detailData.quantity ?? 0)}</div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Điểm mỗi đơn vị</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.unitPoints')}</div>
                 <div className="mt-1 font-medium text-foreground">{formatDecimal(detailData.unitPoints ?? 0)}</div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Tổng điểm</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.totalPoints')}</div>
                 <div className="mt-1 font-semibold text-foreground">{formatDecimal(detailData.totalPoints ?? 0)}</div>
               </div>
               {detailCategoryConfig.extraPointConfig ? (
                 <>
                   <div>
                     <div className="text-xs font-medium uppercase text-muted-foreground">
-                      {detailCategoryConfig.extraPointConfig.quantityLabel || "Số lượng bổ sung"}
+                      {detailCategoryConfig.extraPointConfig.quantityLabel || t('kpi.detail.extraQuantity')}
                     </div>
                     <div className="mt-1 font-medium text-foreground">{formatDecimal(detailExtraQuantity)}</div>
                   </div>
                   <div>
                     <div className="text-xs font-medium uppercase text-muted-foreground">
-                      {detailCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+                      {detailCategoryConfig.extraPointConfig.unitLabel || t('kpi.detail.extraUnitPoints')}
                     </div>
                     <div className="mt-1 font-medium text-foreground">{formatDecimal(detailExtraUnit)}</div>
                   </div>
                   <div className="sm:col-span-2">
-                    <div className="text-xs font-medium uppercase text-muted-foreground">Điểm bổ sung</div>
+                    <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.extraTotal')}</div>
                     <div className="mt-1 font-medium text-foreground">{formatDecimal(detailExtraTotal)}</div>
                   </div>
                 </>
               ) : null}
               {detailData.licenseCode ? (
                 <div>
-                  <div className="text-xs font-medium uppercase text-muted-foreground">Giấy phép</div>
+                  <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.license')}</div>
                   <div className="mt-1 font-medium text-foreground">{detailData.licenseCode}</div>
                 </div>
               ) : null}
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase text-muted-foreground">Ghi chú</div>
+              <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.note')}</div>
               <div className="mt-1 whitespace-pre-line text-foreground">{detailData.note || "—"}</div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase text-muted-foreground">Tham chiếu</div>
+              <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.reference')}</div>
               {Array.isArray(detailData.references) && detailData.references.length ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {detailData.references.map((ref) => (
@@ -156,7 +157,7 @@ export default function KpiAdjustmentDetailDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      aria-label={`Mở tờ khai ${ref}`}
+                      aria-label={t('kpi.common.openDeclaration', { ref })}
                       onClick={() => openWorkflowLookup("import", "review", ref)}
                     >
                       {ref}
@@ -164,13 +165,13 @@ export default function KpiAdjustmentDetailDialog({
                   ))}
                 </div>
               ) : (
-                <div className="mt-1 text-muted-foreground">Không có tham chiếu.</div>
+                <div className="mt-1 text-muted-foreground">{t('kpi.detail.noReference')}</div>
               )}
             </div>
 
             {detailData.history && detailData.history.length ? (
               <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Lịch sử</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">{t('kpi.detail.history')}</div>
                 <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                   {detailData.history
                     .slice()
@@ -189,14 +190,14 @@ export default function KpiAdjustmentDetailDialog({
             {detailIntent === "reject" ? (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground" htmlFor={decisionNoteFieldId}>
-                  Lý do từ chối (tuỳ chọn)
+                  {t('kpi.detail.rejectReason')}
                 </label>
                 <Textarea
                   id={decisionNoteFieldId}
                   rows={3}
                   value={decisionNote}
                   onChange={(event) => onDecisionNoteChange(event.target.value)}
-                  placeholder="Ghi chú lý do từ chối..."
+                  placeholder={t('kpi.detail.rejectPlaceholder')}
                 />
                 {showClearLicenseAction ? (
                   <div className="mt-2">
@@ -205,10 +206,10 @@ export default function KpiAdjustmentDetailDialog({
                       variant="outline"
                       onClick={onClearLicenseCode}
                       className="px-2 py-1"
-                      data-tooltip="Xóa mã giấy phép"
-                      aria-label="Xóa mã giấy phép"
+                      data-tooltip={t('kpi.detail.clearLicense')}
+                      aria-label={t('kpi.detail.clearLicense')}
                     >
-                      Xoá
+                      {t('kpi.detail.delete')}
                     </Button>
                   </div>
                 ) : null}
@@ -218,16 +219,16 @@ export default function KpiAdjustmentDetailDialog({
         ) : null}
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>
-            Đóng
+            {t('kpi.settings.close')}
           </Button>
           {detailIntent === "approve" ? (
             <Button type="button" onClick={onConfirm}>
-              Duyệt
+              {t('kpi.detail.approve')}
             </Button>
           ) : null}
           {detailIntent === "reject" ? (
             <Button type="button" variant="destructive" onClick={onConfirm}>
-              Từ chối
+              {t('kpi.detail.reject')}
             </Button>
           ) : null}
         </DialogFooter>

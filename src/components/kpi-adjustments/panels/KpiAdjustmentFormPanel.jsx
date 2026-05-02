@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 
+import { t } from '@/lib/i18n.js';
+
 import { Button } from "@/components/ui/button.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Input } from "@/components/ui/input.jsx";
@@ -93,8 +95,8 @@ export default function KpiAdjustmentFormPanel({
     <Card>
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle className="text-lg font-semibold text-foreground">Thêm điểm KPI +/-</CardTitle>
-          <CardDescription>Ghi nhận cộng/trừ điểm cho từng nhân viên.</CardDescription>
+          <CardTitle className="text-lg font-semibold text-foreground">{t('kpi.form.title')}</CardTitle>
+          <CardDescription>{t('kpi.form.description')}</CardDescription>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:items-end">
           <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -110,21 +112,21 @@ export default function KpiAdjustmentFormPanel({
               >
                 <Sparkles className="mr-1 h-4 w-4" />
                 {autoApproveSaving
-                  ? "Dang cap nhat..."
+                  ? t('kpi.form.autoApproveSaving')
                   : autoApproveEnabled
-                    ? "Tat duyet tu dong"
-                    : "Bat duyet tu dong"}
+                    ? t('kpi.form.autoApproveOn')
+                    : t('kpi.form.autoApproveOff')}
               </Button>
             ) : null}
             <Button type="button" variant="ghost" size="sm" onClick={onRefreshDeclarations}>
-              Làm mới tham chiếu
+              {t('kpi.form.refreshReference')}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={onOpenGuidance}>
-              Hướng dẫn
+              {t('kpi.form.guide')}
             </Button>
             {canApprove ? (
               <Button type="button" variant="secondary" size="sm" onClick={onOpenSettings}>
-                Cấu hình mặc định
+                {t('kpi.form.defaultSettings')}
               </Button>
             ) : null}
             <Button
@@ -136,7 +138,7 @@ export default function KpiAdjustmentFormPanel({
               className={!isFormOpen ? "bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100" : ""}
             >
               {isFormOpen ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
-              {isFormOpen ? "Thu gọn" : "Mở form thêm điểm"}
+              {isFormOpen ? t('kpi.form.collapse') : t('kpi.form.openForm')}
             </Button>
           </div>
 
@@ -154,7 +156,7 @@ export default function KpiAdjustmentFormPanel({
             <div className="grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.month}>
-                  Tháng áp dụng
+                  {t('kpi.form.month')}
                 </label>
                 <Input
                   id={formFieldIds.month}
@@ -168,12 +170,12 @@ export default function KpiAdjustmentFormPanel({
 
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.staff}>
-                  Nhân viên
+                  {t('kpi.form.staff')}
                 </label>
                 <Input
                   id={formFieldIds.staff}
                   list="kpi-adjust-staff-options"
-                  placeholder="Nhập tên nhân viên"
+                  placeholder={t('kpi.form.staffPlaceholder')}
                   value={form.staffName}
                   onChange={(event) => {
                     const nextName = event.target.value;
@@ -199,12 +201,12 @@ export default function KpiAdjustmentFormPanel({
 
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.team}>
-                  Tổ đội
+                  {t('kpi.form.team')}
                 </label>
                 <Input
                   id={formFieldIds.team}
                   list="kpi-adjust-team-options"
-                  placeholder="Ví dụ: Team 1"
+                  placeholder={t('kpi.form.teamPlaceholder')}
                   value={form.teamName}
                   onChange={(event) => {
                     const nextTeam = event.target.value;
@@ -240,12 +242,12 @@ export default function KpiAdjustmentFormPanel({
 
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.taxCode}>
-                  Mã số thuế
+                  {t('kpi.detail.taxCode')}
                 </label>
                 <Input
                   id={formFieldIds.taxCode}
                   list="kpi-adjust-taxcode-options"
-                  placeholder="Ví dụ: 0312345678"
+                  placeholder={t('kpi.form.taxCodePlaceholder')}
                   value={form.taxCode}
                   onChange={(event) => onTaxCodeInput(event.target.value)}
                   className="mt-1"
@@ -257,17 +259,17 @@ export default function KpiAdjustmentFormPanel({
                     </option>
                   ))}
                 </datalist>
-                <p className="mt-1 text-xs text-muted-foreground">Chọn MST để tự điền tên công ty tương ứng.</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t('kpi.form.taxCodeHint')}</p>
               </div>
 
               <div className="md:col-span-2 xl:col-span-2">
                 <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.company}>
-                  Công ty
+                  {t('kpi.detail.company')}
                 </label>
                 <Input
                   id={formFieldIds.company}
                   list="kpi-adjust-company-options"
-                  placeholder="Nhập tên công ty hoặc chọn từ danh sách"
+                  placeholder={t('kpi.form.companyPlaceholder')}
                   value={form.companyName}
                   onChange={(event) => onCompanyInput(event.target.value)}
                   className="mt-1"
@@ -280,13 +282,13 @@ export default function KpiAdjustmentFormPanel({
                   ))}
                 </datalist>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Khi chọn công ty, hệ thống sẽ gợi ý lại MST nếu chưa chính xác.
+                  {t('kpi.form.companyHint')}
                 </p>
               </div>
 
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.category}>
-                  Hạng mục
+                  {t('kpi.form.category')}
                 </label>
                 <select
                   id={formFieldIds.category}
@@ -305,14 +307,14 @@ export default function KpiAdjustmentFormPanel({
               {formCategoryConfig.requiresLicenseCode ? (
                 <div>
                   <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.license}>
-                    Mã giấy phép
+                    {t('kpi.form.license')}
                   </label>
 
                   <div className="mt-1 flex items-center gap-2">
                     <Input
                       id={formFieldIds.license}
                       list="kpi-adjust-license-options"
-                      placeholder="Ví dụ: ZB02"
+                      placeholder={t('kpi.form.licensePlaceholder')}
                       value={form.licenseCode}
                       onChange={(event) => onLicenseChange(event.target.value)}
                       className="flex-1"
@@ -323,10 +325,10 @@ export default function KpiAdjustmentFormPanel({
                         variant="outline"
                         onClick={() => onLicenseChange("")}
                         className="px-2 py-1"
-                        data-tooltip="Xóa mã giấy phép"
-                        aria-label="Xóa mã giấy phép"
+                        data-tooltip={t('kpi.form.clearLicense')}
+                        aria-label={t('kpi.form.clearLicense')}
                       >
-                        Xóa
+                        {t('kpi.form.delete')}
                       </Button>
                     ) : null}
                   </div>
@@ -344,7 +346,7 @@ export default function KpiAdjustmentFormPanel({
               {isEditing && canApprove ? (
                 <div>
                   <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.status}>
-                    Trạng thái
+                    {t('kpi.form.status')}
                   </label>
                   <select
                     id={formFieldIds.status}
@@ -369,24 +371,24 @@ export default function KpiAdjustmentFormPanel({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Cấu hình đang áp dụng
+                    {t('kpi.form.activeSettings')}
                   </div>
                   <div className="mt-1 font-semibold text-foreground">{categoryLabel}</div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Các giá trị dưới đây được dùng làm mặc định khi chọn hạng mục hiện tại.
+                    {t('kpi.form.settingsHint')}
                   </p>
                 </div>
 
                 {canApprove ? (
                   <Button type="button" variant="secondary" size="sm" onClick={onOpenCategorySettings}>
-                    Chỉnh cấu hình hạng mục này
+                    {t('kpi.form.editCategorySettings')}
                   </Button>
                 ) : null}
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                  <div className="text-xs font-semibold text-muted-foreground">Điểm mặc định</div>
+                  <div className="text-xs font-semibold text-muted-foreground">{t('kpi.form.defaultPoints')}</div>
                   <div className="mt-1 font-medium text-foreground">
                     {formatSettingValue(activeCategorySettings?.defaultUnit)}
                   </div>
@@ -394,7 +396,7 @@ export default function KpiAdjustmentFormPanel({
 
                 {formCategoryConfig.type === "hybrid" ? (
                   <div>
-                    <div className="text-xs font-semibold text-muted-foreground">Chế độ mặc định</div>
+                    <div className="text-xs font-semibold text-muted-foreground">{t('kpi.form.defaultMode')}</div>
                     <div className="mt-1 font-medium text-foreground">{defaultModeLabel}</div>
                   </div>
                 ) : null}
@@ -402,7 +404,7 @@ export default function KpiAdjustmentFormPanel({
                 {formCategoryConfig.extraPointConfig ? (
                   <div>
                     <div className="text-xs font-semibold text-muted-foreground">
-                      {formCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+                      {formCategoryConfig.extraPointConfig.unitLabel || t('kpi.form.extraPointsUnit')}
                     </div>
                     <div className="mt-1 font-medium text-foreground">
                       {formatSettingValue(activeCategorySettings?.extraUnitPoints)}
@@ -412,7 +414,7 @@ export default function KpiAdjustmentFormPanel({
 
                 {formCategoryConfig.requiresLicenseCode ? (
                   <div className="md:col-span-2 xl:col-span-2">
-                    <div className="text-xs font-semibold text-muted-foreground">Mã giấy phép</div>
+                    <div className="text-xs font-semibold text-muted-foreground">{t('kpi.detail.license')}</div>
                     <div className="mt-1 text-foreground">
                       {activeLicensePoints.length ? (
                         activeLicensePoints.map(([code, value]) => (
@@ -421,7 +423,7 @@ export default function KpiAdjustmentFormPanel({
                           </span>
                         ))
                       ) : (
-                        <span className="text-muted-foreground">Theo hệ thống</span>
+                        <span className="text-muted-foreground">{t('kpi.form.systemDefault')}</span>
                       )}
                     </div>
                   </div>
@@ -429,7 +431,7 @@ export default function KpiAdjustmentFormPanel({
 
                 {formCategoryConfig.type === "hybrid" && activeModeUnits.length ? (
                   <div className="md:col-span-2 xl:col-span-2">
-                    <div className="text-xs font-semibold text-muted-foreground">Điểm theo chế độ</div>
+                    <div className="text-xs font-semibold text-muted-foreground">{t('kpi.form.modePointsLabel')}</div>
                     <div className="mt-1 text-foreground">
                       {activeModeUnits.map(([modeKey, value]) => {
                         const label = modeOptions.find((option) => option.value === modeKey)?.label || modeKey;
@@ -449,30 +451,30 @@ export default function KpiAdjustmentFormPanel({
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.note}>
-                    Mô tả / ghi chú
+                    {t('kpi.form.note')}
                   </label>
                   <Textarea
                     id={formFieldIds.note}
                     className="mt-1 min-h-24"
                     value={form.note}
                     onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
-                    placeholder="Nhập ghi chú, lý do cộng/trừ điểm..."
+                    placeholder={t('kpi.form.notePlaceholder')}
                   />
                 </div>
 
                 <div>
                   <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.references}>
-                    Tham chiếu tờ khai / quyết định
+                    {t('kpi.form.references')}
                   </label>
                   <Textarea
                     id={formFieldIds.references}
                     className="mt-1 min-h-28"
                     value={form.referencesInput}
                     onChange={(event) => setForm((prev) => ({ ...prev, referencesInput: event.target.value }))}
-                    placeholder="Nhập số tờ khai, mỗi dòng một số hoặc ngăn cách bằng dấu phẩy"
+                    placeholder={t('kpi.form.referencesPlaceholder')}
                   />
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>Gợi ý gần đây:</span>
+                    <span>{t('kpi.form.suggestions')}</span>
                     {quickDeclarationSuggestions.length ? (
                       quickDeclarationSuggestions.map((decl) => (
                         <Button
@@ -487,7 +489,7 @@ export default function KpiAdjustmentFormPanel({
                         </Button>
                       ))
                     ) : (
-                      <span className="text-muted-foreground">Không có tờ khai gần đây.</span>
+                      <span className="text-muted-foreground">{t('kpi.form.noRecentDeclarations')}</span>
                     )}
                     <Button
                       type="button"
@@ -496,21 +498,21 @@ export default function KpiAdjustmentFormPanel({
                       className="h-7 px-2 text-xs"
                       onClick={onRefreshDeclarations}
                     >
-                      Làm mới danh sách
+                      {t('kpi.form.refreshList')}
                     </Button>
                   </div>
 
                   <div className="mt-3 space-y-3 rounded-xl border border-dashed border-border/60 p-3">
-                    <div className="text-xs font-semibold uppercase text-muted-foreground">Tra cứu tờ khai</div>
+                    <div className="text-xs font-semibold uppercase text-muted-foreground">{t('kpi.form.declarationSearch')}</div>
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                       <div>
                         <Input
                           value={declarationSearch}
                           onChange={(event) => onDeclarationSearchChange(event.target.value)}
-                          placeholder="Tìm theo số tờ khai, MST hoặc tên công ty"
+                          placeholder={t('kpi.form.searchPlaceholder')}
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Chọn kết quả để thêm tham chiếu và tự điền thông tin doanh nghiệp.
+                          {t('kpi.form.searchHint')}
                         </p>
                       </div>
 
@@ -537,15 +539,15 @@ export default function KpiAdjustmentFormPanel({
                                 className="h-7 px-2 text-xs"
                                 onClick={() => onReferencePick(decl)}
                               >
-                                Thêm
+                                {t('kpi.form.add')}
                               </Button>
                             </div>
                           ))
                         ) : (
                           <div className="rounded-md bg-muted/40 p-3 text-muted-foreground">
                             {declarationSearch
-                              ? "Không tìm thấy tờ khai phù hợp."
-                              : "Nhập từ khoá để tra cứu tờ khai."}
+                              ? t('kpi.form.noResults')
+                              : t('kpi.form.searchPrompt')}
                           </div>
                         )}
                       </div>
@@ -557,7 +559,7 @@ export default function KpiAdjustmentFormPanel({
               <div className="space-y-4">
                 {formCategoryConfig.type === "grade" ? (
                   <div>
-                    <div className="text-sm font-medium text-foreground">Chọn mức đánh giá</div>
+                    <div className="text-sm font-medium text-foreground">{t('kpi.form.selectGrade')}</div>
                     <div className="mt-2 grid gap-2">
                       {(formCategoryConfig.grades || []).map((grade) => (
                         <label
@@ -588,7 +590,7 @@ export default function KpiAdjustmentFormPanel({
                     {formCategoryConfig.type === "hybrid" ? (
                       <div>
                         <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.mode}>
-                          Chế độ tính điểm
+                          {t('kpi.form.calculationMode')}
                         </label>
                         <select
                           id={formFieldIds.mode}

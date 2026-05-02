@@ -1,5 +1,7 @@
 import { Badge } from "@/components/ui/badge.jsx";
 import { Button } from "@/components/ui/button.jsx";
+
+import { t } from '@/lib/i18n.js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Input } from "@/components/ui/input.jsx";
@@ -78,14 +80,14 @@ export default function KpiAdjustmentListPanel({
   return (
     <div className="bg-white/40 backdrop-blur-md rounded-2xl p-6 shadow-sm border border-gray-100">
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Danh sách điểm KPI +/-</h3>
-        <p className="text-sm text-gray-500">Lọc và duyệt các đề xuất cộng/trừ điểm.</p>
+        <h3 className="text-lg font-semibold text-gray-900 tracking-tight">{t('kpi.list.title')}</h3>
+        <p className="text-sm text-gray-500">{t('kpi.list.description')}</p>
       </div>
       <div>
         <div className="grid gap-4 text-sm md:grid-cols-4">
           <div>
             <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.filterMonth}>
-              Lọc theo tháng
+              {t('kpi.list.filterMonth')}
             </label>
             <Input
               id={formFieldIds.filterMonth}
@@ -98,7 +100,7 @@ export default function KpiAdjustmentListPanel({
 
           <div>
             <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.filterStatus}>
-              Trạng thái
+              {t('kpi.list.filterStatus')}
             </label>
             <select
               id={formFieldIds.filterStatus}
@@ -106,17 +108,17 @@ export default function KpiAdjustmentListPanel({
               value={filterStatus}
               onChange={(event) => onFilterStatusChange(event.target.value)}
             >
-              <option value="all">Tất cả</option>
-              <option value="approved">Đã duyệt</option>
-              <option value="pending">Chờ duyệt</option>
-              <option value="rejected">Đã từ chối</option>
+              <option value="all">{t('kpi.list.all')}</option>
+              <option value="approved">{t('kpi.status.approved')}</option>
+              <option value="pending">{t('kpi.status.pending')}</option>
+              <option value="rejected">{t('kpi.status.rejected')}</option>
             </select>
           </div>
 
           {showMineToggle ? (
             <div>
               <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.filterMine}>
-                Chỉ hiển thị điểm bổ sung của tôi
+                {t('kpi.list.filterMine')}
               </label>
               <div className="mt-2 flex items-center gap-3">
                 <Switch
@@ -126,7 +128,7 @@ export default function KpiAdjustmentListPanel({
                   disabled={!currentStaffKey}
                 />
                 <span className="text-xs text-muted-foreground">
-                  {showMineOnly ? "Đang lọc theo chính bạn" : "Đang xem tất cả"}
+                  {showMineOnly ? t('kpi.list.filterMineOn') : t('kpi.list.filterMineOff')}
                 </span>
               </div>
             </div>
@@ -135,7 +137,7 @@ export default function KpiAdjustmentListPanel({
           {canApprove ? (
             <div>
               <label className="text-sm font-medium text-foreground" htmlFor={formFieldIds.filterStaff}>
-                Lọc theo nhân viên
+                {t('kpi.list.filterStaff')}
               </label>
               <select
                 id={formFieldIds.filterStaff}
@@ -144,7 +146,7 @@ export default function KpiAdjustmentListPanel({
                 onChange={(event) => onStaffFilterChange(event.target.value)}
                 disabled={showMineOnly || staffFilterOptions.length === 0}
               >
-                <option value="all">Tất cả</option>
+                <option value="all">{t('kpi.list.all')}</option>
                 {staffFilterOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -159,12 +161,12 @@ export default function KpiAdjustmentListPanel({
           <div className="space-y-1 text-sm text-muted-foreground">
             <p>
               {totalItems > 0
-                ? `Hiển thị ${rangeStart}-${rangeEnd} / ${totalItems} mục`
-                : "Không có mục nào khớp bộ lọc hiện tại"}
+                ? t('kpi.list.range', { start: rangeStart, end: rangeEnd, total: totalItems })
+                : t('kpi.list.empty')}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <span>
-                Trang {page} / {pageCount}
+                {t('kpi.list.page', { page, count: pageCount })}
               </span>
               <Button
                 variant="outline"
@@ -173,7 +175,7 @@ export default function KpiAdjustmentListPanel({
                 onClick={onPreviousPage}
                 disabled={!canGoPrevious}
               >
-                Trang trước
+                {t('kpi.list.prevPage')}
               </Button>
               <Button
                 variant="outline"
@@ -182,7 +184,7 @@ export default function KpiAdjustmentListPanel({
                 onClick={onNextPage}
                 disabled={!canGoNext}
               >
-                Trang sau
+                {t('kpi.list.nextPage')}
               </Button>
             </div>
           </div>
@@ -202,11 +204,11 @@ export default function KpiAdjustmentListPanel({
             <div className="space-y-1 text-sm">
               <p className="font-medium text-foreground">
                 {selectedAdjustmentCount > 0
-                  ? `Đã chọn ${selectedAdjustmentCount} mục trên trang hiện tại`
-                  : "Chưa chọn mục nào để xử lý hàng loạt"}
+                  ? t('kpi.list.selected', { count: selectedAdjustmentCount })
+                  : t('kpi.list.noneSelected')}
               </p>
               <p className="text-xs text-muted-foreground">
-                Chọn các dòng đang hiển thị rồi duyệt hoặc từ chối cùng lúc để giảm thao tác lặp lại.
+                {t('kpi.list.selectHint')}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -217,7 +219,7 @@ export default function KpiAdjustmentListPanel({
                 onClick={onClearSelection}
                 disabled={selectedAdjustmentCount === 0}
               >
-                Bỏ chọn
+                {t('kpi.list.deselect')}
               </Button>
               <Button
                 size="sm"
@@ -225,7 +227,7 @@ export default function KpiAdjustmentListPanel({
                 onClick={onBulkApprove}
                 disabled={bulkApproveCount === 0}
               >
-                Duyệt đã chọn ({bulkApproveCount})
+                {t('kpi.list.approveSelected', { count: bulkApproveCount })}
               </Button>
               <Button
                 variant="destructive"
@@ -234,7 +236,7 @@ export default function KpiAdjustmentListPanel({
                 onClick={onBulkReject}
                 disabled={bulkRejectCount === 0}
               >
-                Từ chối đã chọn ({bulkRejectCount})
+                {t('kpi.list.rejectSelected', { count: bulkRejectCount })}
               </Button>
             </div>
           </div>
