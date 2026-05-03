@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { t } from '@/lib/i18n.js';
 import {
   Bot,
   ShieldAlert,
@@ -18,12 +19,12 @@ import { useAiAssistantInsightWorkspace } from '@/components/ai-assistant/hooks/
 
 function formatDateTime(value) {
   if (!value) {
-    return 'Chưa có';
+    return t('ai.date.none');
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return 'Chưa có';
+    return t('ai.date.none');
   }
 
   return date.toLocaleString('vi-VN');
@@ -40,13 +41,13 @@ function formatUsage(usage) {
   const parts = [];
 
   if (Number.isFinite(prompt)) {
-    parts.push(`Prompt: ${prompt}`);
+    parts.push(`${t('ai.usage.prompt')}: ${prompt}`);
   }
   if (Number.isFinite(completion)) {
-    parts.push(`Hoàn thành: ${completion}`);
+    parts.push(`${t('ai.usage.completion')}: ${completion}`);
   }
   if (Number.isFinite(total)) {
-    parts.push(`Tổng: ${total}`);
+    parts.push(`${t('ai.usage.total')}: ${total}`);
   }
 
   return parts.length > 0 ? parts.join(' • ') : null;
@@ -145,7 +146,7 @@ const AI_PROVIDER_PRESETS = [
   },
   {
     key: 'custom',
-    label: 'Nhà cung cấp tùy chỉnh',
+    label: t('ai.provider.custom'),
     idBase: 'custom-provider',
     type: 'custom',
     endpoint: '',
@@ -156,9 +157,9 @@ const AI_PROVIDER_PRESETS = [
 const ASSISTANT_MODES = [
   {
     id: 'business',
-    label: 'Tư vấn nghiệp vụ',
+    label: t('ai.mode.business'),
     scope: 'business',
-    description: 'Giải đáp quy trình nghiệp vụ, chính sách KPI và phối hợp giữa các bộ phận.',
+    description: t('ai.mode.businessDesc'),
     systemPrompt:
       'Bạn là chuyên gia nghiệp vụ hải quan tại Golden Logistics. Hãy cung cấp câu trả lời chi tiết, bám sát quy trình nội bộ, '
       + 'đưa ra khuyến nghị hành động rõ ràng và nhấn mạnh các bước kiểm soát rủi ro.',
@@ -181,9 +182,9 @@ const ASSISTANT_MODES = [
   },
   {
     id: 'analytics',
-    label: 'Thống kê nhanh',
+    label: t('ai.mode.analytics'),
     scope: 'analytics',
-    description: 'Thực hiện tổng hợp số liệu KPI, so sánh xu hướng và nêu điểm bất thường.',
+    description: t('ai.mode.analyticsDesc'),
     systemPrompt:
       'Bạn là chuyên gia phân tích dữ liệu KPI. Hãy sử dụng giọng điệu súc tích, cung cấp số liệu theo bảng/bullet, '
       + 'nhấn mạnh các chênh lệch đáng chú ý và đề xuất hành động xử lý.',
@@ -206,9 +207,9 @@ const ASSISTANT_MODES = [
   },
   {
     id: 'data-entry',
-    label: 'Trợ giúp nhập liệu',
+    label: t('ai.mode.dataEntry'),
     scope: 'data-entry',
-    description: 'Hướng dẫn chuẩn hóa tờ khai, loại trừ trùng lặp và cập nhật giấy phép nhanh chóng.',
+    description: t('ai.mode.dataEntryDesc'),
     systemPrompt:
       'Bạn là trợ lý hỗ trợ nhập liệu tờ khai. Hãy cung cấp hướng dẫn từng bước, nêu rõ vị trí thao tác trong hệ thống và '
       + 'nhắc nhở kiểm tra dữ liệu trùng hoặc thiếu.',
@@ -238,9 +239,9 @@ const CONTROL_CLASS_COMPACT =
 const SECONDARY_BUTTON_CLASS =
   'rounded-lg border border-slate-200/60 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700';
 const SUMMARY_RANGE_OPTIONS = [
-  { value: 'this_month', label: 'Tháng này' },
-  { value: 'last_month', label: 'Tháng trước' },
-  { value: 'this_quarter', label: 'Quý này' },
+  { value: 'this_month', label: t('ai.range.thisMonth') },
+  { value: 'last_month', label: t('ai.range.lastMonth') },
+  { value: 'this_quarter', label: t('ai.range.thisQuarter') },
 ];
 
 export default function AiAssistant({ currentUser }) {
@@ -293,12 +294,9 @@ export default function AiAssistant({ currentUser }) {
               <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Chưa có quyền truy cập</h3>
+              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">{t('ai.noAccess')}</h3>
               <p className="mt-1 text-sm text-amber-700 dark:text-amber-400/80">
-                Tài khoản hiện chưa được cấp quyền sử dụng trợ lý AI. Vui lòng liên hệ quản trị viên để được kích hoạt quyền{' '}
-                <code className="rounded bg-amber-200/60 px-1.5 py-0.5 text-xs font-mono font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
-                  aiAssistUse
-                </code>.
+                {t('ai.noAccessDesc', { permission: 'aiAssistUse' })}
               </p>
             </div>
           </div>

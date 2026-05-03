@@ -1,5 +1,5 @@
 import React from 'react';
-
+import { t } from '@/lib/i18n.js';
 import clsx from 'clsx';
 
 import { isOllamaProvider } from '@/components/ai-assistant/providerConfig.js';
