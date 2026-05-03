@@ -1,5 +1,18 @@
 ﻿# Changelog
 
+## [2.1.0] - 2026-05-03
+### Internationalization (i18n)
+- Triển khai hệ thống i18n toàn diện với 567 translation keys.
+- Tất cả 13 module chính đã được chuyển đổi từ hardcoded tiếng Việt sang sử dụng `t()`:
+  - Account Manager, Notification Center, Audit Log, Team Manager
+  - KPI Adjustments, AI Assistant, Report Viewer, Data Health Dashboard
+  - HQ Agency Manager, KPICalculator, Rules Editor, Support Center, Data Importer
+- Các namespace: `common`, `account`, `permission`, `table`, `form`, `error`, `validation`,
+  `staff`, `notification`, `audit`, `backup`, `team`, `mst`, `kpi`, `ai`, `report`,
+  `health`, `hq`, `shell`, `rules`, `support`, `import`.
+- Hỗ trợ parameter interpolation: `t('key', { param: value })`.
+- Sẵn sàng mở rộng thêm ngôn ngữ (tiếng Anh, v.v.) qua `setLocale()`.
+
 ## [2.0.0] - 2025-10-05
 ### Backend
 - Đồng bộ chuẩn hóa \so_tk\ 11 chữ số ở tầng API (\
