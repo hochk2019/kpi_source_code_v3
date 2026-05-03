@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { t } from '@/lib/i18n.js';
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
 import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
@@ -20,8 +21,7 @@ import {
 } from '@/lib/frontendPerformanceTelemetry.js';
 
 function formatDate(value) {
-
-  if (!value) return 'Không xác định';
+  if (!value) return t('health.date.unknown');
 
   try {
 
@@ -46,8 +46,7 @@ function formatDate(value) {
 
 
 function formatDateOnly(value) {
-
-  if (!value) return 'Không xác định';
+  if (!value) return t('health.date.unknown');
 
   try {
 

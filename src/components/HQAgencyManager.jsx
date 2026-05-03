@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { t } from '@/lib/i18n.js';
 
 import {
   upsertHQAgencies,
@@ -72,7 +73,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   const [openHistory, setOpenHistory] = useState([]);
 
   const [loadError, setLoadError] = useState(() =>
-    initialErrorRef.current ? "Không thể tải danh sách Đại lý HQ. Vui lòng thử lại." : null,
+    initialErrorRef.current ? t('hq.error.load') : null,
   );
 
   const fileRef = useRef(null);

@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { t } from '@/lib/i18n.js';
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
 
@@ -25,7 +26,7 @@ function formatHistoryTimestamp(value) {
 
   } catch (err) {
 
-    console.warn("Không thể định dạng thời gian lịch sử quy tắc", value, err);
+    console.warn(t('rules.error.formatHistory'), value, err);
 
     return value;
 

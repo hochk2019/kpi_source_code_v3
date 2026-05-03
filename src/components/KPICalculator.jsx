@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect } from 'react';
+import { t } from '@/lib/i18n.js';
 
 import { TabsContent } from '@/components/ui/tabs.jsx';
 import { useKpiPermissions } from '@/hooks/useKpiPermissions.js';
@@ -44,8 +45,8 @@ import {
 const TabPanelLoadingState = ({ tabLabel }) => (
   <div aria-live="polite" role="status">
     <AppShellLoadingState
-      title={`Đang tải ${tabLabel}`}
-      description="Shell đang khởi tạo module và giữ nguyên ngữ cảnh điều hướng hiện tại."
+      title={t('shell.loading', { module: tabLabel })}
+      description={t('shell.loadingDesc')}
     />
   </div>
 );
@@ -53,8 +54,8 @@ const TabPanelLoadingState = ({ tabLabel }) => (
 const TabPanel = ({ children, panelRootId, tabLabel, panelClassName = 'ds-panel__inner' }) => (
   <RuntimeErrorBoundary
     level="panel"
-    title={`Không thể hiển thị ${tabLabel}.`}
-    description="Bạn có thể thử hiển thị lại module này hoặc chuyển sang tab khác để tiếp tục công việc."
+    title={t('shell.error.title', { module: tabLabel })}
+    description={t('shell.error.desc')}
   >
     <div className={panelClassName} id={panelRootId} tabIndex={-1}>
       <Suspense fallback={<TabPanelLoadingState tabLabel={tabLabel} />}>{children}</Suspense>
