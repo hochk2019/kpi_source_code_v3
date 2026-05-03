@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { t } from '@/lib/i18n.js';
 
 import "../print.css";
 
@@ -242,9 +243,9 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     return sets.map((set) => {
       const versionLabel = Number.isFinite(Number(set.version)) ? `v${Number(set.version)}` : "";
 
-      const activeBadge = ruleCollection?.activeId === set.id ? " • Đang áp dụng" : "";
+      const activeBadge = ruleCollection?.activeId === set.id ? ` • ${t('report.rule.activeBadge')}` : "";
 
-      const name = set.name || set.id || "Bộ quy tắc";
+      const name = set.name || set.id || t('report.rule.defaultName');
 
       return {
         value: set.id,
@@ -291,9 +292,9 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       return "";
     }
 
-    const kpiLabel = `${ruleComparison.kpi >= 0 ? "+" : ""}${formatDecimal(ruleComparison.kpi || 0)} điểm`;
+    const kpiLabel = `${ruleComparison.kpi >= 0 ? "+" : ""}${formatDecimal(ruleComparison.kpi || 0)} ${t('report.unit.points')}`;
 
-    const declLabel = `${ruleComparison.decls >= 0 ? "+" : ""}${formatInt(ruleComparison.decls || 0)} tờ khai`;
+    const declLabel = `${ruleComparison.decls >= 0 ? "+" : ""}${formatInt(ruleComparison.decls || 0)} ${t('report.unit.declarations')}`;
 
     return `${kpiLabel} • ${declLabel}`;
   }, [ruleComparison]);
@@ -325,14 +326,14 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
 
   const staffOptions = useMemo(() => {
-    const base = [{ value: "all", label: `Tất cả nhân viên (${report.staff.list.length})` }];
+    const base = [{ value: "all", label: t('report.filter.allStaff', { count: report.staff.list.length }) }];
 
     return base.concat(
       report.staff.list.map((item) => ({
         value: item.key,
 
         label:
-          item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
+          item.teamLabel && item.teamLabel !== t('report.status.noTeamAssigned')
             ? `${item.name} — ${item.teamLabel}`
             : item.name,
       })),
@@ -340,7 +341,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   }, [report.staff.list]);
 
   const teamOptions = useMemo(() => {
-    const base = [{ value: "all", label: `Tất cả tổ đội (${report.teams.list.length})` }];
+    const base = [{ value: "all", label: t('report.filter.allTeams', { count: report.teams.list.length }) }];
 
     return base.concat(report.teams.list.map((item) => ({ value: item.key, label: item.name })));
   }, [report.teams.list]);
@@ -451,16 +452,16 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     reportError,
   });
 
-  const excludeCodes = report.rules?.licenseExcludedSummary || "Không có";
+  const excludeCodes = report.rules?.licenseExcludedSummary || t('report.status.none');
 
-  const ruleApply = report.rules?.ruleApply || "Cấu hình chuẩn hệ thống";
+  const ruleApply = report.rules?.ruleApply || t('report.rule.systemDefault');
 
   const ruleComparisonLabel = ruleComparison ? ruleDeltaLabel : "";
 
   const activeRuleMessage =
     ruleCollection?.activeId === (selectedRuleMeta?.id || "")
-      ? "Đang xem đúng bộ quy tắc đang áp dụng."
-      : `Bộ đang áp dụng: ${activeRule?.name || "—"}`;
+      ? t('report.rule.activeMessage')
+      : `${t('report.rule.activeLabel')} ${activeRule?.name || "—"}`;
 
   return (
     <div className="space-y-6">
@@ -470,12 +471,12 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
           className="flex items-center gap-1.5 text-slate-500 hover:text-amber-600 font-medium transition-colors"
         >
           <ArrowLeft size={16} />
-          <span>Quay lại Dashboard Tổng quan</span>
+          <span>{t('report.action.backToDashboard')}</span>
         </button>
       </div>
 
       <ReportingControlsPanel
-        summaryDeclsText={`${formatInt(summary.decls)} tờ khai hợp lệ`}
+        summaryDeclsText={`${formatInt(summary.decls)} ${t('report.unit.declarations')}`}
         selectedRuleName={selectedRuleMeta?.name || ""}
         reloading={reloading}
         onReloadData={handleReloadData}
@@ -520,11 +521,11 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
 
 
-      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.explorer} aria-label="Khám phá phạm vi báo cáo KPI">
+      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.explorer} aria-label={t('report.section.explorerAria')}>
         <SectionHeader
-          title="Khám phá phạm vi báo cáo"
+          title={t('report.section.explorerTitle')}
           titleAs="h3"
-          description="Đổi lát cắt theo nhân viên hoặc tổ đội, tinh chỉnh cột hiển thị và xuất đúng phần dữ liệu đang cần kiểm tra."
+          description={t('report.section.explorerDesc')}
         />
         <ReportingScopeExplorerPanel
           scope={scope}
@@ -607,32 +608,19 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
         </div>
       ) : null}
 
-      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.notes} aria-label="Ghi chú báo cáo KPI">
+      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.notes} aria-label={t('report.section.notesTitle')}>
         <SectionHeader
-          title="Ghi chú báo cáo KPI"
+          title={t('report.section.notesTitle')}
           titleAs="h3"
-          description="Giữ lại các quy tắc tính điểm và lưu ý export ở cuối workspace để phần đọc insight không bị chìm giữa nội dung vận hành."
+          description={t('report.section.notesDesc')}
         />
 
         <div className="space-y-2 text-sm text-gray-600">
-          <p>
-            Điểm KPI được tính tự động dựa trên quy tắc trong mục “Quy tắc KPI”. Khi bạn import tờ
-            khai hợp lệ từ Excel, hệ thống sẽ áp dụng quy tắc hiện hành để tính điểm cho từng bản
-            ghi và cộng dồn theo nhân viên, tổ đội.
-          </p>
+          <p>{t('report.notes.kpiCalculation')}</p>
 
-          <p>
-            Các loại giấy phép bị loại trừ khỏi việc tính điểm: <strong>{excludeCodes}</strong>.
-            Bạn có thể điều chỉnh danh sách này trong phần cấu hình quy tắc.
-          </p>
+          <p>{t('report.notes.excludedLicenses', { codes: excludeCodes })}</p>
 
-          <p>
-            Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng tổ
-            hợp phím
-            <strong> Ctrl+P</strong> (hoặc Command+P trên macOS). Khi cần lưu trữ hoặc chia sẻ, sử
-            dụng nút “Xuất Excel” để tải file theo template chứa bảng tổng hợp và bảng chi tiết
-            tương ứng.
-          </p>
+          <p>{t('report.notes.printExport', { shortcut: 'Ctrl+P' })}</p>
         </div>
       </SectionSurface>
     </div>

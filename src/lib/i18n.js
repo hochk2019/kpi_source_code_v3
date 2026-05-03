@@ -404,6 +404,28 @@ const translations = {
     'ai.status.offline': 'Ngừng hoạt động',
     'ai.insight.title': 'Thông tin nhanh',
     'ai.insight.generate': 'Tạo thông tin',
+
+    // Report Viewer
+    'report.rule.activeBadge': 'Đang áp dụng',
+    'report.rule.defaultName': 'Bộ quy tắc',
+    'report.rule.systemDefault': 'Cấu hình chuẩn hệ thống',
+    'report.rule.activeMessage': 'Đang xem đúng bộ quy tắc đang áp dụng.',
+    'report.rule.activeLabel': 'Bộ đang áp dụng:',
+    'report.unit.points': 'điểm',
+    'report.unit.declarations': 'tờ khai',
+    'report.filter.allStaff': 'Tất cả nhân viên ({count})',
+    'report.filter.allTeams': 'Tất cả tổ đội ({count})',
+    'report.status.noTeamAssigned': 'Chưa gán tổ đội',
+    'report.status.none': 'Không có',
+    'report.action.backToDashboard': 'Quay lại Dashboard Tổng quan',
+    'report.section.explorerAria': 'Khám phá phạm vi báo cáo KPI',
+    'report.section.explorerTitle': 'Khám phá phạm vi báo cáo',
+    'report.section.explorerDesc': 'Đổi lát cắt theo nhân viên hoặc tổ đội, tinh chỉnh cột hiển thị và xuất đúng phần dữ liệu đang cần kiểm tra.',
+    'report.section.notesTitle': 'Ghi chú báo cáo KPI',
+    'report.section.notesDesc': 'Giữ lại các quy tắc tính điểm và lưu ý export ở cuối workspace để phần đọc insight không bị chìm giữa nội dung vận hành.',
+    'report.notes.kpiCalculation': 'Điểm KPI được tính tự động dựa trên quy tắc trong mục "Quy tắc KPI". Khi bạn import tờ khai hợp lệ từ Excel, hệ thống sẽ áp dụng quy tắc hiện hành để tính điểm cho từng bản ghi và cộng dồn theo nhân viên, tổ đội.',
+    'report.notes.excludedLicenses': 'Các loại giấy phép bị loại trừ khỏi việc tính điểm: {codes}. Bạn có thể điều chỉnh danh sách này trong phần cấu hình quy tắc.',
+    'report.notes.printExport': 'Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng tổ hợp phím {shortcut} (hoặc Command+P trên macOS). Khi cần lưu trữ hoặc chia sẻ, sử dụng nút "Xuất Excel" để tải file theo template chứa bảng tổng hợp và bảng chi tiết tương ứng.',
   },
 };
 
