@@ -517,6 +517,15 @@ const translations = {
     'support.thanks': 'Cảm ơn bạn đã góp ý!',
     'support.category': 'Danh mục',
     'support.contactPlaceholder': 'Email hoặc số điện thoại (tùy chọn)',
+    'support.error.saveProgress': 'Không thể lưu tiến độ đào tạo vào localStorage',
+    'support.error.loadResources': 'Không thể tải tài liệu đào tạo',
+    'support.training.duration': 'Thời lượng',
+    'support.training.format': 'Định dạng',
+    'support.training.tags': 'Từ khóa',
+    'support.training.openDoc': 'Mở tài liệu',
+    'support.training.markComplete': 'Đánh dấu đã hoàn thành',
+    'support.training.markIncomplete': 'Đánh dấu chưa hoàn thành',
+    'support.training.completedAt': 'Hoàn thành lúc',
 
     // Data Importer
     'import.title': 'Import dữ liệu',
@@ -539,8 +548,26 @@ const translations = {
     'import.stage.preview': 'Xem trước',
     'import.stage.import': 'Import',
     'import.stage.done': 'Hoàn tất',
+    'import.noPermission.title': 'Bạn chưa được cấp quyền tải file Import Data.',
+    'import.noPermission.desc': 'Liên hệ quản lý hoặc quản trị viên để bật quyền {permission}. Nếu cần xử lý gấp, hãy gửi file cho quản trị viên để họ hỗ trợ import thay.',
+    'import.readonly.view': 'Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.',
+    'import.readonly.alerts': 'Bạn có thể rà soát và đánh dấu các tờ khai thiếu thông tin nhưng không thể chỉnh sửa dữ liệu tờ khai.',
+    'import.step.source.title': '1. Nạp nguồn',
+    'import.step.source.desc': 'Chuẩn bị nguồn dữ liệu bằng file XLSX hoặc đồng bộ ECUS trước khi chuyển sang bước rà soát.',
+    'import.step.review.title': '2. Rà soát dữ liệu',
+    'import.step.review.desc.preview': 'Kiểm tra dữ liệu xem trước, xử lý bộ lọc và quyết định có import vào workspace hay không.',
+    'import.step.review.desc.sync': 'Kiểm tra dữ liệu xem trước từ ECUS, áp bộ lọc rà soát, rồi quyết định có chạy đồng bộ vào workspace hay không.',
+    'import.step.review.desc.workspace': 'Điều chỉnh bộ lọc và cách hiển thị để rà soát workspace trước khi chốt thay đổi.',
+    'import.step.save.title': '3. Lưu và theo dõi',
+    'import.step.save.desc.preview': 'Sau khi import, dữ liệu sẽ chuyển sang workspace đã lưu để tiếp tục theo dõi và xử lý hậu kiểm.',
+    'import.step.save.desc.workspace': 'Chốt thay đổi, theo dõi cảnh báo sau đồng bộ, và tiếp tục giám sát dữ liệu đã lưu.',
+    'import.loading.source': 'Đang tải khối nạp nguồn dữ liệu...',
+    'import.loading.review': 'Đang tải khối rà soát dữ liệu...',
+    'import.loading.save': 'Đang tải khối lưu và theo dõi...',
+    'import.afterImport.note': 'Import xong, toàn bộ workspace đã lưu và bề mặt theo dõi cảnh báo sẽ xuất hiện ở bước này.',
   },
 };
+
 
 
 let currentLocale = 'vi';

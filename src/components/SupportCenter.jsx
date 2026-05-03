@@ -11,6 +11,7 @@ import React, {
   useTransition,
 
 } from 'react';
+import { t } from '@/lib/i18n.js';
 
 import * as Dialog from '@radix-ui/react-dialog';
 
@@ -101,7 +102,7 @@ function saveProgress(value) {
 
   } catch (err) {
 
-    console.warn('Không thể lưu tiến độ đào tạo vào localStorage', err);
+    console.warn(t('support.error.saveProgress'), err);
 
   }
 
@@ -113,7 +114,7 @@ function formatDateTime(value) {
 
   if (!value) {
 
-    return 'Chưa xác định';
+    return t('health.date.unknown');
 
   }
 
@@ -121,7 +122,7 @@ function formatDateTime(value) {
 
   if (Number.isNaN(date.getTime())) {
 
-    return 'Chưa xác định';
+    return t('health.date.unknown');
 
   }
 
@@ -165,7 +166,7 @@ function TrainingCard({ item, completedAt, onToggle }) {
 
         <div className="flex flex-wrap items-center gap-1">
 
-          <dt className="font-semibold text-gray-600 dark:text-gray-300">Thời lượng:</dt>
+          <dt className="font-semibold text-gray-600 dark:text-gray-300">{t('support.training.duration')}:</dt>
 
           <dd>{item.duration}</dd>
 
@@ -173,7 +174,7 @@ function TrainingCard({ item, completedAt, onToggle }) {
 
         <div className="flex flex-wrap items-center gap-1">
 
-          <dt className="font-semibold text-gray-600 dark:text-gray-300">Định dạng:</dt>
+          <dt className="font-semibold text-gray-600 dark:text-gray-300">{t('support.training.format')}:</dt>
 
           <dd>{item.format}</dd>
 
@@ -183,7 +184,7 @@ function TrainingCard({ item, completedAt, onToggle }) {
 
           <div className="flex flex-wrap items-center gap-1">
 
-            <dt className="font-semibold text-gray-600 dark:text-gray-300">Từ khóa:</dt>
+            <dt className="font-semibold text-gray-600 dark:text-gray-300">{t('support.training.tags')}:</dt>
 
             <dd className="flex flex-wrap items-center gap-1">
 
@@ -219,7 +220,7 @@ function TrainingCard({ item, completedAt, onToggle }) {
 
         >
 
-          Mở tài liệu
+          {t('support.training.openDoc')}
 
         </a>
 
@@ -241,7 +242,7 @@ function TrainingCard({ item, completedAt, onToggle }) {
 
         >
 
-          {completedAt ? 'Đánh dấu chưa hoàn thành' : 'Đánh dấu đã hoàn thành'}
+          {completedAt ? t('support.training.markIncomplete') : t('support.training.markComplete')}
 
         </button>
 
@@ -249,7 +250,7 @@ function TrainingCard({ item, completedAt, onToggle }) {
 
       {completedAt ? (
 
-        <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-300">Hoàn thành lúc {formatDateTime(completedAt)}</p>
+        <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-300">{t('support.training.completedAt')} {formatDateTime(completedAt)}</p>
 
       ) : null}
 
@@ -369,7 +370,7 @@ export default function SupportCenter({ currentTabId = 'reports' }) {
 
         if (!cancelled) {
 
-          setError(err?.message || 'Không thể tải tài liệu đào tạo');
+          setError(err?.message || t('support.error.loadResources'));
 
         }
 

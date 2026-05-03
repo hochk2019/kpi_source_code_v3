@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import { t } from '@/lib/i18n.js';
 
 import DataImporterSummaryCards from "@/components/dataImporter/DataImporterSummaryCards.jsx";
 import DataImporterUpdatedRowsBanner from "@/components/dataImporter/DataImporterUpdatedRowsBanner.jsx";
@@ -124,24 +125,20 @@ export default function DataImporterShell({
       <div ref={rootRef} className="import-data-view space-y-3">
         {!canUploadFiles && (
           <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
-            <div className="font-semibold">Bạn chưa được cấp quyền tải file Import Data.</div>
+            <div className="font-semibold">{t('import.noPermission.title')}</div>
             <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">
-              Liên hệ quản lý hoặc quản trị viên để bật quyền{" "}
-              <strong>Import Data – tải file</strong>. Nếu cần xử lý gấp, hãy gửi file cho quản trị
-              viên để họ hỗ trợ import thay.
+              {t('import.noPermission.desc', { permission: 'Import Data – tải file' })}
             </p>
           </div>
         )}
         {isReadOnlyForEdits && !canManageAlerts && (
           <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
-            Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa
-            và lưu dữ liệu tờ khai.
+            {t('import.readonly.view')}
           </div>
         )}
         {isReadOnlyForEdits && canManageAlerts && (
           <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-200">
-            Bạn có thể rà soát và đánh dấu các tờ khai thiếu thông tin nhưng không thể chỉnh sửa dữ
-            liệu tờ khai.
+            {t('import.readonly.alerts')}
           </div>
         )}
 
@@ -150,12 +147,12 @@ export default function DataImporterShell({
         {workflowState.currentStep === 1 && (
           <WorkflowStageSection
             id={stageIdByNumber.get(1)}
-            ariaLabel="Bước 1: Nạp nguồn"
-            title="1. Nạp nguồn"
-            description="Chuẩn bị nguồn dữ liệu bằng file XLSX hoặc đồng bộ ECUS trước khi chuyển sang bước rà soát."
+            ariaLabel={t('import.step.source.title')}
+            title={t('import.step.source.title')}
+            description={t('import.step.source.desc')}
             status={sourceStageStatus}
           >
-            <Suspense fallback={<StageLoadingState message="Đang tải khối nạp nguồn dữ liệu..." />}>
+            <Suspense fallback={<StageLoadingState message={t('import.loading.source')} />}>
               <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
               {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
               <DataImporterFileActions {...fileActionsProps} />
@@ -166,18 +163,18 @@ export default function DataImporterShell({
         {workflowState.currentStep === 2 && (
           <WorkflowStageSection
             id={stageIdByNumber.get(2)}
-            ariaLabel="Bước 2: Rà soát dữ liệu"
-            title="2. Rà soát dữ liệu"
+            ariaLabel={t('import.step.review.title')}
+            title={t('import.step.review.title')}
             description={
               mode === "preview"
                 ? previewSource === "sync"
-                  ? "Kiểm tra dữ liệu xem trước từ ECUS, áp bộ lọc rà soát, rồi quyết định có chạy đồng bộ vào workspace hay không."
-                  : "Kiểm tra dữ liệu xem trước, xử lý bộ lọc và quyết định có import vào workspace hay không."
-                : "Điều chỉnh bộ lọc và cách hiển thị để rà soát workspace trước khi chốt thay đổi."
+                  ? t('import.step.review.desc.sync')
+                  : t('import.step.review.desc.preview')
+                : t('import.step.review.desc.workspace')
             }
             status={reviewStageStatus}
           >
-            <Suspense fallback={<StageLoadingState message="Đang tải khối rà soát dữ liệu..." />}>
+            <Suspense fallback={<StageLoadingState message={t('import.loading.review')} />}>
               {mode === "preview" ? (
                 <>
                   {!hasRows ? (
@@ -201,18 +198,18 @@ export default function DataImporterShell({
         {hasRows && (
           <WorkflowStageSection
             id={stageIdByNumber.get(3)}
-            ariaLabel="Bước 3: Lưu và theo dõi"
-            title="3. Lưu và theo dõi"
+            ariaLabel={t('import.step.save.title')}
+            title={t('import.step.save.title')}
             description={
               mode === "preview"
-                ? "Sau khi import, dữ liệu sẽ chuyển sang workspace đã lưu để tiếp tục theo dõi và xử lý hậu kiểm."
-                : "Chốt thay đổi, theo dõi cảnh báo sau đồng bộ, và tiếp tục giám sát dữ liệu đã lưu."
+                ? t('import.step.save.desc.preview')
+                : t('import.step.save.desc.workspace')
             }
             status={saveStageStatus}
           >
             <DataImporterSummaryCards {...summaryCardsProps} />
             <DataImporterUpdatedRowsBanner {...updatedRowsBannerProps} />
-            <Suspense fallback={<StageLoadingState message="Đang tải khối lưu và theo dõi..." />}>
+            <Suspense fallback={<StageLoadingState message={t('import.loading.save')} />}>
               <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
               {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
               <DataImporterFileActions {...fileActionsProps} />
@@ -226,7 +223,7 @@ export default function DataImporterShell({
             </Suspense>
             {mode === "preview" ? (
               <p className="text-xs text-[color:var(--ds-text-muted)]">
-                Import xong, toàn bộ workspace đã lưu và bề mặt theo dõi cảnh báo sẽ xuất hiện ở bước này.
+                {t('import.afterImport.note')}
               </p>
             ) : null}
           </WorkflowStageSection>
