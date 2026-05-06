@@ -970,3 +970,7 @@ export default function AuditLog({ currentUser }: AuditLogProps) {
     </div>
   );
 }
+
+// Re-exports from modular structure (Slice 7.2)
+export { AuditLogShell, AuditLogFilters, useAuditLogData } from "./audit-log";
+export type { AuditLogEntry, BackupFile, BackupSummary, AuditLogProps } from "./audit-log";
