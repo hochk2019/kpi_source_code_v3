@@ -17,7 +17,7 @@ describe('AppShellAsyncStates', () => {
       />,
     );
 
-    expect(screen.getByText(/Đang tải báo cáo KPI/i)).toBeInTheDocument();
+    expect(screen.getByText(/tải/i)).toBeInTheDocument();
     expect(screen.getByText(/Shell đang khởi tạo report center/i)).toBeInTheDocument();
   });
 

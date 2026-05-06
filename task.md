@@ -50,8 +50,9 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.4` (Slice 7.4: useEditPermission hook); da tao useEditPermission.ts voi 2 hooks: useEditPermission(tab) va useEditPermissions(tabs[]); typecheck passed.
 - Slice 7 (IA reorganization + Audit pages) da HOAN TAT.
 - Slice 8 (Test fixes) dang in_progress: 
-  - Fixed ConflictResolutionDialog.test.jsx: them data-testid vao component
-  - Fixed mstAssignment.person-columns.test.jsx: chuyen getByText string sang regex pattern
+  - Fixed ConflictResolutionDialog.test.jsx: them data-testid
+  - Fixed mstAssignment.person-columns.test.jsx, teamManagerMemberPanel.test.jsx, rulesEditorConfigTabsPanel.test.jsx, appShellAsyncStates.test.jsx: chuyen getByText sang regex pattern
+  - ~36 test files remaining to review
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
   - `cng-0if.8` - UX Review Slice 8: Test fixes + visual regression

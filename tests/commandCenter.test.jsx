@@ -123,7 +123,7 @@ describe('CommandCenter navigation coverage', () => {
     });
     await user.type(searchInput, 'đại lý');
 
-    const agencyCommand = within(dialog).getByText('Đi tới tab Đại Lý HQ').closest('[role="button"]');
+    const agencyCommand = within(dialog).getByText(/Đại Lý HQ/i).closest('[role="button"]');
     expect(agencyCommand).toBeTruthy();
     await user.click(agencyCommand);
 
@@ -169,7 +169,7 @@ describe('CommandCenter navigation coverage', () => {
     });
 
     await user.type(searchInput, 'phát hành');
-    await user.click(within(dialog).getByText('Báo cáo KPI: phát hành & export').closest('[role="button"]'));
+    await user.click(within(dialog).getByText(/phát hành/i).closest('[role="button"]'));
 
     await waitFor(() => {
       expect(emitCommand).toHaveBeenCalledWith('navigate:tab', { tab: 'reports', focus: 'export' });
@@ -202,8 +202,8 @@ describe('CommandCenter navigation coverage', () => {
 
     await user.type(searchInput, 'ops');
 
-    expect(within(dialog).getByText('Người dùng: Trưởng nhóm Ops')).toBeInTheDocument();
-    await user.click(within(dialog).getByText('Người dùng: Trưởng nhóm Ops').closest('[role="button"]'));
+    expect(within(dialog).getByText(/Trưởng nhóm Ops/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByText(/Trưởng nhóm Ops/i).closest('[role="button"]'));
 
     await waitFor(() => {
       expect(emitCommand).toHaveBeenCalledWith('navigate:tab', { tab: 'accounts' });

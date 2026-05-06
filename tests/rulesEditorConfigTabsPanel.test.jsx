@@ -126,11 +126,11 @@ describe("RulesConfigTabsPanel", () => {
   it("cap nhat nhom loai hinh trong tab groups", async () => {
     render(<ConfigTabsHarness />);
 
-    expect(screen.getByText("Nhập kinh doanh")).toBeInTheDocument();
-    expect(screen.getByText("Các bậc cộng thêm")).toBeInTheDocument();
+    expect(screen.getByText(/Nhập kinh doanh/i)).toBeInTheDocument();
+    expect(screen.getByText(/Các bậc cộng thêm/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Chọn mã loại hình" }));
-    const matches = await screen.findAllByText("Nhập kinh doanh");
+    fireEvent.click(screen.getByRole("button", { name: /Chọn mã loại hình/i }));
+    const matches = await screen.findAllByText(/Nhập kinh doanh/i);
     fireEvent.click(matches[matches.length - 1]);
 
     await waitFor(() => {

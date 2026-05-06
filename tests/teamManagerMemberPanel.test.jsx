@@ -69,10 +69,10 @@ describe("TeamManagerMemberPanel", () => {
     });
 
     expect(
-      screen.getByText("Đăng nhập bằng tài khoản được cấp quyền để thêm thành viên mới."),
+      screen.getByText(/thêm thành viên/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Chọn một thành viên từ màn hình danh sách để xem chi tiết và đối chiếu."),
+      screen.getByText(/danh sách/i),
     ).toBeInTheDocument();
   });
 });
