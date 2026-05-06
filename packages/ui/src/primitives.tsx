@@ -208,16 +208,11 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
 type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 const toneClassName: Record<StatusTone, string> = {
-  neutral:
-    "bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800/40 dark:text-slate-200 dark:border-slate-700",
-  info:
-    "bg-sky-100 text-sky-700 border border-sky-200 dark:bg-sky-500/20 dark:text-sky-100 dark:border-sky-500/40",
-  success:
-    "bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-100 dark:border-emerald-50",
-  warning:
-    "bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-500/20 dark:text-amber-100 dark:border-amber-500/40",
-  danger:
-    "bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-500/20 dark:text-rose-100 dark:border-rose-500/40",
+  neutral: "bg-ds-surface-muted text-ds-text-secondary border border-ds-border-subtle",
+  info: "bg-ds-info/10 text-ds-info border border-ds-info/20",
+  success: "bg-ds-success/10 text-ds-success border border-ds-success/20",
+  warning: "bg-ds-warning/10 text-ds-warning border border-ds-warning/30",
+  danger: "bg-ds-destructive/10 text-ds-destructive border border-ds-destructive/20",
 };
 
 interface StatusBadgeProps extends React.HTMLAttributes<HTMLDivElement> {

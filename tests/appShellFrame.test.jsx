@@ -62,7 +62,7 @@ describe('AppShellFrame', () => {
     vi.unstubAllGlobals();
   });
 
-  it('render sidebar groups and current workflow summary', () => {
+  it('render sidebar groups and hero section', () => {
     const onOpenCommandCenter = vi.fn();
 
     render(
@@ -73,13 +73,6 @@ describe('AppShellFrame', () => {
         currentTab={sections[1].tabs[0]}
         currentSection={sections[1]}
         currentUser={{ username: 'admin', role: 'admin' }}
-        workflowGuide={{
-          headline: 'Workflow báo cáo KPI đã được tách riêng.',
-          actions: [{ label: 'Mở dashboard KPI', onClick: vi.fn(), variant: 'primary' }],
-          steps: [
-            { number: 1, title: '1. Chốt phạm vi', detail: 'Khóa kỳ.', targetId: 'report-scope' },
-          ],
-        }}
         onOpenCommandCenter={onOpenCommandCenter}
       >
         <TabsContent value="reports">Dashboard KPI</TabsContent>
@@ -90,8 +83,6 @@ describe('AppShellFrame', () => {
     expect(screen.getAllByText('Hieu suat').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('tab', { name: /Bao cao KPI/i })).toBeInTheDocument();
     expect(screen.getByText(/Người dùng admin/i)).toBeInTheDocument();
-    expect(screen.getByText(/Workflow báo cáo KPI/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Xem va xuat bao cao KPI tong hop/i).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Command Center/i }).length).toBeGreaterThan(0);
   });
 
