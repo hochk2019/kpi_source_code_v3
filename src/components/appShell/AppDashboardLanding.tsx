@@ -1,13 +1,14 @@
 import React from 'react';
-import { ArrowRight, Info, RefreshCw, AlertCircle, FileBarChart, type LucideIcon } from 'lucide-react';
+import { ArrowRight, RefreshCw, AlertCircle, FileBarChart, type LucideIcon } from 'lucide-react';
 
-import { AppShellEmptyState, AppShellLoadingState } from '@/components/appShell/AppShellAsyncStates.jsx';
+import { AppShellLoadingState } from '@/components/appShell/AppShellAsyncStates.jsx';
 import { buildAppDashboardSummaryState } from '@/components/appShell/appDashboardSummary.js';
 import { useDashboardKpiOverview } from '@/hooks/useDashboardKpiOverview.js';
 import { useChartPalette } from '@/designSystem/hooks.js';
-import { ReportingExecutiveSummaryPanel } from '@/components/reporting/ReportingExecutiveSummaryPanel.jsx';
 import { SummaryCard, TeamPieWidget, TopStaffWidget, TrendLineChart } from '@/components/reporting/ReportingOverviewWidgets.jsx';
 import { formatInt, formatDecimal } from '@/components/reporting/reportingDetailUtils.js';
+import { PageHeader } from '@/components/designSystem/PageHeader';
+import { EmptyState } from '@/components/designSystem/primitives';
 import { t } from '@/lib/i18n.js';
 import type { AuthAccountView } from '@/types';
 
@@ -31,26 +32,22 @@ interface QuickAction {
 
 interface DashboardQuickActionProps {
   label: string;
-  detail: string;
+  detail?: string;
   onClick: () => void;
   icon?: LucideIcon;
 }
 
-function DashboardQuickAction({ label, detail, onClick, icon = ArrowRight }: DashboardQuickActionProps) {
+function DashboardQuickAction({ label, onClick, icon = ArrowRight }: DashboardQuickActionProps) {
   const ActionIcon = icon;
 
   return (
-    <button type="button" className="ds-dashboard__quick-action" onClick={onClick}>
-      <span className="ds-dashboard__quick-action-icon" aria-hidden="true">
-        <ActionIcon size={16} strokeWidth={1.75} />
-      </span>
-      <span className="ds-dashboard__quick-action-copy">
-        <span className="ds-dashboard__quick-action-label">{label}</span>
-        <span className="ds-dashboard__quick-action-detail">{detail}</span>
-      </span>
-      <span className="ds-dashboard__quick-action-arrow" aria-hidden="true">
-        <ArrowRight size={16} strokeWidth={1.75} />
-      </span>
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 text-sm text-ds-text-secondary hover:text-ds-accent transition-colors"
+    >
+      <ActionIcon size={14} strokeWidth={1.75} />
+      <span>{label}</span>
     </button>
   );
 }
@@ -136,137 +133,114 @@ export default function AppDashboardLanding({
     <section
       id="app-workflow-dashboard-landing"
       tabIndex={-1}
-      className="ds-dashboard w-full"
+      className="ds-dashboard w-full space-y-4"
       aria-label={t('dashboard.ariaLabel')}
     >
-      <div className="ds-dashboard__hero flex flex-wrap items-center justify-between pb-6 mb-6 border-b border-ds-border-subtle">
-        <div className="ds-dashboard__hero-copy">
-          <p className="ds-dashboard__eyebrow text-ds-accent font-medium tracking-wide text-xs uppercase mb-1">
-            {t('dashboard.overview')}
-          </p>
-          <div className="flex items-center gap-2">
-            <h3 className="ds-dashboard__title text-3xl font-bold text-ds-text-primary">
-              {isGuest ? t('dashboard.guestMode') : `${operatorName || 'Operator'}`}
-            </h3>
-            <button
-              className="text-ds-text-muted hover:text-ds-accent mt-1 transition-colors"
-              title={t('dashboard.infoTooltip')}
-            >
-              <Info size={20} />
-            </button>
-          </div>
-          <p className="text-sm text-ds-text-secondary mt-1">
-            {t('dashboard.currentPeriod', { from: dateRange.from, to: dateRange.to })}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <PageHeader
+        eyebrow={t('dashboard.overview')}
+        title={isGuest ? t('dashboard.guestMode') : `${operatorName || 'Operator'}`}
+        info={t('dashboard.infoTooltip')}
+        meta={[
+          <span key="period">{t('dashboard.currentPeriod', { from: dateRange.from, to: dateRange.to })}</span>,
+        ]}
+        actions={
           <button
             onClick={reload}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-ds-text-primary bg-ds-surface-card border border-ds-border-subtle rounded-lg hover:bg-ds-surface-muted disabled:opacity-50 transition-all shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-ds-text-primary bg-ds-surface-card border border-ds-border-subtle rounded-md hover:bg-ds-surface-muted disabled:opacity-50 transition-colors"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             {t('dashboard.refresh')}
           </button>
+        }
+      />
+
+      {error && (
+        <div className="p-3 bg-ds-destructive/10 text-ds-destructive rounded-lg border border-ds-destructive/20 flex items-start gap-2">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <div>
+            <h4 className="font-medium text-sm">{t('dashboard.error.title')}</h4>
+            <p className="text-sm">{error}</p>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="space-y-6">
-        {error && (
-          <div className="p-4 bg-ds-destructive/10 text-ds-destructive rounded-xl border border-ds-destructive/20 flex items-start gap-3">
-            <AlertCircle size={20} className="shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-semibold text-sm">{t('dashboard.error.title')}</h4>
-              <p className="text-sm mt-1">{error}</p>
-            </div>
+      {loading && !summary?.kpi ? (
+        <div className="min-h-[300px]">
+          <AppShellLoadingState title={t('dashboard.loading')} />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Metric Cards Grid */}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {summaryCards.map((card) => (
+              <SummaryCard
+                key={card.title}
+                title={card.title}
+                value={card.value}
+                subtitle={card.subtitle}
+              />
+            ))}
           </div>
-        )}
 
-        {loading && !summary?.kpi ? (
-          <div className="min-h-[400px]">
-            <AppShellLoadingState title={t('dashboard.loading')} />
-          </div>
-        ) : (
-          <>
-            <ReportingExecutiveSummaryPanel
-              summary={summary || {}}
-              adjustmentsReport={adjustmentsReport || {}}
-              trendComparison={trendComparison}
-              topStaffByKpi={topStaffByKpi || []}
-              teamPieData={teamPieData || []}
+          {/* Trend Chart */}
+          <TrendLineChart
+            data={trendSeries || []}
+            comparison={trendComparison}
+            palette={chartPalette}
+          />
+
+          {/* Team Distribution */}
+          {teamPieData?.length > 0 ? (
+            <TeamPieWidget
+              kpiData={teamPieData}
+              declData={teamDeclPieData}
+              palette={chartPalette}
               formatInt={formatInt}
               formatDecimal={formatDecimal}
             />
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {summaryCards.map((card) => (
-                <SummaryCard
-                  key={card.title}
-                  title={card.title}
-                  value={card.value}
-                  subtitle={card.subtitle}
-                />
-              ))}
-            </div>
-
-            <TrendLineChart
-              data={trendSeries || []}
-              comparison={trendComparison}
-              palette={chartPalette}
+          ) : (
+            <EmptyState
+              size="compact"
+              title={t('dashboard.empty.teamData.title')}
+              description={t('dashboard.empty.teamData.description')}
+              actions={[
+                { label: 'Mở Import →', onClick: () => onNavigate?.('import'), variant: 'secondary' }
+              ]}
             />
+          )}
 
-            {teamPieData?.length > 0 ? (
-              <TeamPieWidget
-                kpiData={teamPieData}
-                declData={teamDeclPieData}
-                palette={chartPalette}
-                formatInt={formatInt}
-                formatDecimal={formatDecimal}
+          {/* Top Staff */}
+          {(topStaffByKpi?.length > 0 || topStaffByDecls?.length > 0) && (
+            <TopStaffWidget
+              kpiData={topStaffByKpi || []}
+              declData={topStaffByDecls || []}
+              palette={chartPalette}
+              formatInt={formatInt}
+              formatDecimal={formatDecimal}
+              onMetricChange={() => {}}
+              onVisibleCountPreferenceChange={() => {}}
+            />
+          )}
+
+          {/* Quick Actions - Compact List */}
+          <div className="pt-4 border-t border-ds-border-subtle">
+            <h4 className="font-medium text-ds-text-primary mb-2 text-sm">
+              {t('dashboard.quickActions')}
+            </h4>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {quickActions.map((action: QuickAction) => (
+                <DashboardQuickAction key={action.label} {...action} />
+              ))}
+              <DashboardQuickAction
+                label={t('dashboard.quickAction.openReport')}
+                onClick={handleGoToReports}
+                icon={FileBarChart}
               />
-            ) : (
-              <AppShellEmptyState
-                title={t('dashboard.empty.teamData.title')}
-                description={t('dashboard.empty.teamData.description')}
-              />
-            )}
-
-            {(topStaffByKpi?.length > 0 || topStaffByDecls?.length > 0) && (
-              <TopStaffWidget
-                kpiData={topStaffByKpi || []}
-                declData={topStaffByDecls || []}
-                palette={chartPalette}
-                formatInt={formatInt}
-                formatDecimal={formatDecimal}
-                onMetricChange={() => {}}
-                onVisibleCountPreferenceChange={() => {}}
-              />
-            )}
-
-            <div className="mt-8 pt-6 border-t border-ds-border-subtle">
-              <h4 className="font-semibold text-ds-text-primary mb-4 text-lg">
-                {t('dashboard.quickActions')}
-              </h4>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {quickActions.map((action: QuickAction) => (
-                  <div key={action.label} className="bg-ds-surface-card rounded-xl shadow-ds-soft border border-ds-border-subtle overflow-hidden hover:border-ds-border-strong transition-colors">
-                    <DashboardQuickAction {...action} />
-                  </div>
-                ))}
-
-                <div className="bg-ds-surface-card rounded-xl shadow-ds-soft border border-ds-border-subtle overflow-hidden hover:border-ds-border-strong transition-colors">
-                  <DashboardQuickAction
-                    label={t('dashboard.quickAction.openReport')}
-                    detail={t('dashboard.quickAction.openReportDetail')}
-                    onClick={handleGoToReports}
-                    icon={FileBarChart}
-                  />
-                </div>
-              </div>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
