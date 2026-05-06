@@ -40,7 +40,7 @@ describe("TeamManagerHistoryPanel", () => {
   it("renders nothing when history is closed", () => {
     renderPanel({ historyOpen: false });
 
-    expect(screen.queryByText("Lịch sử thay đổi")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lịch sử thay đổi/i)).not.toBeInTheDocument();
   });
 
   it("renders team history, switches tabs, and refreshes", () => {
@@ -48,10 +48,10 @@ describe("TeamManagerHistoryPanel", () => {
 
     expect(screen.getByText("Lưu tổ đội")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "MST" }));
+    fireEvent.click(screen.getByRole("button", { name: /MST/i }));
     expect(props.onHistoryTabChange).toHaveBeenCalledWith("mst");
 
-    fireEvent.click(screen.getByRole("button", { name: "Làm mới" }));
+    fireEvent.click(screen.getByRole("button", { name: /Làm mới/i }));
     expect(props.onRefresh).toHaveBeenCalledTimes(1);
   });
 
@@ -60,7 +60,7 @@ describe("TeamManagerHistoryPanel", () => {
 
     expect(screen.getByText(/0312345678/)).toBeInTheDocument();
     expect(screen.getByText(/Người phụ trách Nhập/)).toBeInTheDocument();
-    expect(screen.getByText("(trống)")).toBeInTheDocument();
-    expect(screen.getByText("Nguyễn Văn A")).toBeInTheDocument();
+    expect(screen.getByText(/\(trống\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nguyễn Văn A/i)).toBeInTheDocument();
   });
 });
