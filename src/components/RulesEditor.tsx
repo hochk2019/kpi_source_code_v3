@@ -1,7 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { t } from '@/lib/i18n.js';
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.tsx";
+import { Card, CardContent } from "@/components/ui/card.tsx";
 
 import RulesApplyActionsPanel from "@/components/rules-editor/RulesApplyActionsPanel.jsx";
 import RulesConfigTabsPanel from "@/components/rules-editor/RulesConfigTabsPanel.jsx";
@@ -15,6 +15,9 @@ import useRulesConfigState from "@/components/rules-editor/hooks/useRulesConfigS
 import useRulesEditorWorkflow from "@/components/rules-editor/hooks/useRulesEditorWorkflow.js";
 import useRulesTestWorkspace from "@/components/rules-editor/hooks/useRulesTestWorkspace.js";
 import type { AuthAccountView } from '@/types';
+import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PermissionBanner } from "@/components/designSystem/primitives";
+import { FileText, History, TestTube } from "lucide-react";
 
 function formatHistoryTimestamp(value: string | null | undefined): string {
   if (!value) return "—";
@@ -79,6 +82,8 @@ export default function RulesEditor({ canEdit = true, currentUser = null }: Rule
   });
   const testWorkspace = useRulesTestWorkspace({ data, rule });
 
+  const [mainTab, setMainTab] = useState<"active" | "history" | "test">("active");
+
   const {
     groups,
     typeOptions,
@@ -96,99 +101,158 @@ export default function RulesEditor({ canEdit = true, currentUser = null }: Rule
     updateRule,
   });
 
+  const tabs = [
+    { id: "active", label: "Đang áp dụng", icon: FileText },
+    { id: "history", label: "Lịch sử phiên bản", icon: History },
+    { id: "test", label: "Kiểm thử", icon: TestTube },
+  ];
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4">
+    <div className="p-6 space-y-4">
+      {/* Page Header */}
+      <PageHeader
+        eyebrow="CẤU HÌNH"
+        title="Quy tắc KPI"
+        info="Cấu hình và quản lý quy tắc tính điểm KPI cho tờ khai"
+        meta={[
+          `${collection.sets.length} quy tắc`,
+          isDefaultRule ? "Đang dùng mặc định" : `Quy tắc: ${rule.name}`,
+        ]}
+      />
+
+      {/* Permission Banner */}
       {isReadOnly && (
-        <div className="rounded border border-ds-warning/30 bg-ds-warning/10 p-3 text-sm text-ds-warning">
-          Bạn đang xem quy tắc KPI ở chế độ chỉ xem. Các trường cấu hình bị khóa; vẫn có thể dùng khu vực test để kiểm tra điểm KPI.
-        </div>
+        <PermissionBanner
+          level="warning"
+          title={t('rules.readOnly.title') || "Chế độ chỉ đọc"}
+          description={
+            t('rules.readOnly.desc') ||
+            "Bạn không có quyền chỉnh sửa quy tắc KPI. Chỉ có thể xem và kiểm thử."
+          }
+        />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Quy tắc KPI</CardTitle>
-        </CardHeader>
+      {/* Main Tabs */}
+      <div className="border-b border-ds-border-subtle">
+        <div className="flex gap-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setMainTab(tab.id as typeof mainTab)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  mainTab === tab.id
+                    ? 'border-ds-accent text-ds-accent'
+                    : 'border-transparent text-ds-text-secondary hover:text-ds-text-primary'
+                }`}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-        <CardContent className="space-y-8">
-          <RulesGeneralInfoPanel
-            collection={collection}
-            activeTab={activeTab}
-            isReadOnly={isReadOnly}
-            isDefaultRule={isDefaultRule}
-            currentVersion={currentVersion}
-            savedVersion={savedVersion}
-            rule={rule}
-            formatTimestamp={formatHistoryTimestamp}
-            onSelectTab={handleSelectTab}
-            onAddRule={handleAddRule}
-            onSetDefault={handleSetDefault}
-            onSetDefaultButton={handleSetDefaultButton}
-            onRuleChange={updateRule}
-          />
+      {/* Tab Content */}
+      <div className="space-y-6">
+        {mainTab === "active" && (
+          <Card className="border-ds-border-subtle">
+            <CardContent className="space-y-6 p-6">
+              <RulesGeneralInfoPanel
+                collection={collection}
+                activeTab={activeTab}
+                isReadOnly={isReadOnly}
+                isDefaultRule={isDefaultRule}
+                currentVersion={currentVersion}
+                savedVersion={savedVersion}
+                rule={rule}
+                formatTimestamp={formatHistoryTimestamp}
+                onSelectTab={handleSelectTab}
+                onAddRule={handleAddRule}
+                onSetDefault={handleSetDefault}
+                onSetDefaultButton={handleSetDefaultButton}
+                onRuleChange={updateRule}
+              />
 
-          <RulesConfigTabsPanel
-            configTab={configTab}
-            onConfigTabChange={setConfigTab}
-            groups={groups}
-            typeOptions={typeOptions}
-            isReadOnly={isReadOnly}
-            onGroupCodesChange={handleCodesChange}
-            onGroupNumberChange={handleGroupNumber}
-            licenseConfig={licenseConfig}
-            onLicenseChange={handleLicenseChange}
-            licenseOptions={licenseOptions}
-            onAgencyChange={handleAgencyChange}
-            agencyOptions={agencyOptions}
-            rule={rule}
-            onRuleChange={updateRule}
-          />
+              <RulesConfigTabsPanel
+                configTab={configTab}
+                onConfigTabChange={setConfigTab}
+                groups={groups}
+                typeOptions={typeOptions}
+                isReadOnly={isReadOnly}
+                onGroupCodesChange={handleCodesChange}
+                onGroupNumberChange={handleGroupNumber}
+                licenseConfig={licenseConfig}
+                onLicenseChange={handleLicenseChange}
+                licenseOptions={licenseOptions}
+                onAgencyChange={handleAgencyChange}
+                agencyOptions={agencyOptions}
+                rule={rule}
+                onRuleChange={updateRule}
+              />
 
-          <RulesSimulationPanel
-            declarationCount={data.length}
-            simRunning={simRunning}
-            simError={simError}
-            simResult={simResult}
-            onRunSimulation={runSimulation}
-          />
+              <RulesSimulationPanel
+                declarationCount={data.length}
+                simRunning={simRunning}
+                simError={simError}
+                simResult={simResult}
+                onRunSimulation={runSimulation}
+              />
 
-          <RulesApplyActionsPanel
-            rule={rule}
-            applyNow={applyNow}
-            isReadOnly={isReadOnly}
-            canDeleteRule={collection.sets.length > 1}
-            onRuleChange={updateRule}
-            onApplyNowChange={setApplyNow}
-            onSave={handleSave}
-            onReset={handleReset}
-            onExportCurrentRule={exportCurrentRule}
-            onImportCurrentRule={importCurrentRule}
-            onExportAllRules={exportAllRules}
-            onImportAllRules={importAllRules}
-            onDeleteRule={handleDeleteRule}
-          />
+              <RulesApplyActionsPanel
+                rule={rule}
+                applyNow={applyNow}
+                isReadOnly={isReadOnly}
+                canDeleteRule={collection.sets.length > 1}
+                onRuleChange={updateRule}
+                onApplyNowChange={setApplyNow}
+                onSave={handleSave}
+                onReset={handleReset}
+                onExportCurrentRule={exportCurrentRule}
+                onImportCurrentRule={importCurrentRule}
+                onExportAllRules={exportAllRules}
+                onImportAllRules={importAllRules}
+                onDeleteRule={handleDeleteRule}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-          <RulesTestWorkspacePanel
-            workspace={testWorkspace}
-            licenseOptions={licenseOptions}
-            agencyOptions={agencyOptions}
-          />
+        {mainTab === "history" && (
+          <Card className="border-ds-border-subtle">
+            <CardContent className="p-6">
+              <RulesHistoryPanel
+                entries={historyEntries}
+                loading={historyLoading}
+                error={historyError}
+                collapsed={false}
+                expandedId={expandedHistoryId}
+                isReadOnly={isReadOnly}
+                restoringId={restoringId}
+                onToggleCollapsed={() => {}}
+                onRefresh={handleHistoryRefresh}
+                onToggleExpanded={setExpandedHistoryId}
+                onRestoreEntry={handleRestoreEntry}
+                formatTimestamp={formatHistoryTimestamp}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-          <RulesHistoryPanel
-            entries={historyEntries}
-            loading={historyLoading}
-            error={historyError}
-            collapsed={historyCollapsed}
-            expandedId={expandedHistoryId}
-            isReadOnly={isReadOnly}
-            restoringId={restoringId}
-            onToggleCollapsed={() => setHistoryCollapsed((prev: boolean) => !prev)}
-            onRefresh={handleHistoryRefresh}
-            onToggleExpanded={setExpandedHistoryId}
-            onRestoreEntry={handleRestoreEntry}
-            formatTimestamp={formatHistoryTimestamp}
-          />
-        </CardContent>
-      </Card>
+        {mainTab === "test" && (
+          <Card className="border-ds-border-subtle">
+            <CardContent className="p-6">
+              <RulesTestWorkspacePanel
+                workspace={testWorkspace}
+                licenseOptions={licenseOptions}
+                agencyOptions={agencyOptions}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
