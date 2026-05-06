@@ -7,8 +7,11 @@ import {
   MessageSquare,
   History,
   Activity,
+  Sparkles,
 } from 'lucide-react';
 import type { AuthAccountView, AccountPermissions } from '@/types';
+import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PermissionBanner } from "@/components/designSystem/primitives";
 
 import AiAssistantChatPanel from '@/components/ai-assistant/panels/AiAssistantChatPanel.jsx';
 import AiAssistantConfigPanel from '@/components/ai-assistant/panels/AiAssistantConfigPanel.jsx';
@@ -300,23 +303,28 @@ export default function AiAssistant({ currentUser }: AiAssistantProps) {
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {!canUse ? (
-        <div className="rounded-xl border border-ds-warning/30 bg-ds-warning/10 backdrop-blur-sm px-5 py-4 shadow-sm dark:border-amber-500/20 dark:bg-amber-900/10">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-lg bg-ds-warning/10 p-2 dark:bg-amber-500/20">
-              <ShieldAlert className="h-5 w-5 text-ds-accent dark:text-amber-400" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-ds-warning dark:text-amber-300">{t('ai.noAccess')}</h3>
-              <p className="mt-1 text-sm text-ds-warning dark:text-amber-400/80">
-                {t('ai.noAccessDesc', { permission: 'aiAssistUse' })}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
+    <div className="p-6 space-y-4">
+      {/* Page Header */}
+      <PageHeader
+        eyebrow="TRỢ LÝ"
+        title="AI Assistant"
+        info="Trợ lý AI thông minh giúp phân tích dữ liệu KPI và trả lời câu hỏi về tờ khai"
+        meta={[
+          canManage ? "Quản lý" : "Người dùng",
+          configState.profile?.defaultProvider ? configState.profile.defaultProvider : "Chưa cấu hình",
+        ]}
+      />
 
+      {/* Permission Banner for No Access */}
+      {!canUse && (
+        <PermissionBanner
+          level="warning"
+          title={t('ai.noAccess') || "Không có quyền truy cập"}
+          description={t('ai.noAccessDesc', { permission: 'aiAssistUse' }) || "Bạn cần quyền aiAssistUse để sử dụng tính năng này."}
+        />
+      )}
+
+      {/* Main Content */}
       {canUse ? (
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <AiAssistantChatPanel

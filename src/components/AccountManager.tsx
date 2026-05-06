@@ -56,6 +56,7 @@ import {
   AppDialogTitle,
 
 } from "@/components/designSystem/primitives.jsx";
+import { PageHeader } from "@/components/designSystem/PageHeader";
 import {
   SearchField,
   SectionHeader,
@@ -117,7 +118,7 @@ interface AccountManagerProps {
   currentUser?: AuthAccountView;
 }
 
-export default function AccountManager(_props: AccountManagerProps) {
+export default function AccountManager({ currentUser }: AccountManagerProps) {
   const { alert } = useAppDialog();
 
   const [accounts, setAccounts] = useState<AuthAccountView[]>(() => listAccounts());
@@ -1231,29 +1232,20 @@ export default function AccountManager(_props: AccountManagerProps) {
 
 
 
+  const canManage = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+
   return (
-
-    <div className="account-manager-view space-y-6">
-      {/* Master Header */}
-      <div className="group/hq-header relative mb-6">
-        <div className="relative overflow-hidden rounded-2xl border border-ds-border-subtle/10 bg-ds-surface-card/60 p-6 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-ds-border-subtle/20 hover:bg-ds-surface-card/80 dark:border-ds-border-subtle/20 dark:bg-ds-surface-base/60 dark:hover:bg-ds-surface-base/80">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-ds-surface-base/40 via-transparent to-ds-accent/5 dark:from-ds-surface-base/20 dark:to-transparent" />
-
-          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex flex-col gap-1.5 max-w-2xl">
-              <h2 className="text-xl font-bold tracking-tight text-ds-text-primary dark:text-ds-text-primary flex items-center gap-2">
-                {t('account.title')}
-              </h2>
-              <p className="text-sm leading-relaxed text-ds-text-secondary dark:text-ds-text-secondary">
-                {t('account.description')}
-              </p>
-              <div className="mt-2 flex items-center gap-3 text-[0.8rem] text-ds-text-secondary dark:text-ds-text-secondary">
-                <span className="hidden sm:inline-block">{t('account.auditNote')}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="p-6 space-y-4">
+      {/* Page Header */}
+      <PageHeader
+        eyebrow="QUẢN TRỊ"
+        title={t('account.title') || "Quản lý Tài khoản"}
+        info={t('account.description') || "Quản lý tài khoản người dùng, phân quyền và giám sát hoạt động"}
+        meta={[
+          `${accounts.length} tài khoản`,
+          `${roster?.teams?.length || 0} tổ đội`,
+        ]}
+      />
 
       {/* Account Creation Form Container */}
       <div className="relative overflow-hidden rounded-2xl border border-ds-warning/10 bg-ds-surface-card/40 p-6 shadow-sm backdrop-blur-md dark:border-ds-warning/10 dark:bg-ds-surface-base/40">

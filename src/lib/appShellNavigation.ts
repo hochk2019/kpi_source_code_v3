@@ -135,7 +135,7 @@ export const APP_TAB_DEFINITIONS = Object.freeze([
   },
   {
     id: 'health',
-    sectionId: 'observability',
+    sectionId: 'operations',
     label: 'Sức khỏe dữ liệu',
     tooltip: 'Theo dõi dữ liệu trùng, cảnh báo và trạng thái đồng bộ',
     commandLabel: 'Mở tab Sức khỏe dữ liệu',
@@ -145,7 +145,7 @@ export const APP_TAB_DEFINITIONS = Object.freeze([
   },
   {
     id: 'ai',
-    sectionId: 'observability',
+    sectionId: 'governance',
     label: 'Trợ lý AI',
     tooltip: 'Trợ lý AI nội bộ hỗ trợ KPI và tờ khai',
     commandLabel: 'Mở tab Trợ lý AI',
