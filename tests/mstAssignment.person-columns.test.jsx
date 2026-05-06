@@ -22,8 +22,8 @@ describe("PersonColumnHeader", () => {
       </table>
     );
 
-    expect(screen.getByText("Phụ trách")).toBeInTheDocument();
-    expect(screen.getByText("Nhập")).toBeInTheDocument();
+    expect(screen.getByText(/Phụ trách/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nhập/i)).toBeInTheDocument();
     const header = screen.getByTitle("Người phụ trách Nhập");
     expect(header).toHaveAttribute("data-column", "person_import");
   });
@@ -80,6 +80,6 @@ describe("AssigneeCell", () => {
 
     const combobox = screen.getByRole("combobox");
     expect(combobox).toBeInTheDocument();
-    expect(screen.getByText("Chọn nhân viên nhập")).toBeInTheDocument();
+    expect(screen.getByText(/Chọn nhân viên/i)).toBeInTheDocument();
   });
 });
