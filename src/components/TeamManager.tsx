@@ -21,6 +21,9 @@ import TeamManagerToolbar from "@/components/team-manager/TeamManagerToolbar.jsx
 import EmptyState from "@/components/shared/EmptyState.tsx";
 import { loadXlsx } from "@/lib/loadXlsx.js";
 import type { AuthAccountView, TeamRecord, TeamRoster } from '@/types';
+import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PermissionBanner } from "@/components/designSystem/primitives";
+import { Users, Building2, History } from "lucide-react";
 
 const COMPANY_PAGE_SIZE = 20;
 
@@ -83,13 +86,12 @@ function TeamManager({ canEdit = true, currentUser = null }: TeamManagerProps) {
 
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const [historyTab, setHistoryTab] = useState("team");
+  const [historyTab, setHistoryTab] = useState<"team" | "mst">("team");
+  const [teamHistory, setTeamHistory] = useState<unknown[]>([]);
+  const [mstHistory, setMstHistory] = useState<unknown[]>([]);
 
-  const [teamHistory, setTeamHistory] = useState(() =>
-    getAuditLogs(100).filter((entry: { action?: string }) => entry?.action?.startsWith("team")),
-  );
-
-  const [mstHistory, setMstHistory] = useState(() => getMSTHistoryEntries(100));
+  // Internal detail tabs: members, companies, history
+  const [activeDetailTab, setActiveDetailTab] = useState<"members" | "companies" | "history">("members");
 
   const actor = currentUser?.username || "guest";
 
@@ -576,13 +578,25 @@ function TeamManager({ canEdit = true, currentUser = null }: TeamManagerProps) {
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-4">
+      {/* Page Header */}
+      <PageHeader
+        eyebrow="CẤU HÌNH"
+        title="Quản lý Tổ đội"
+        info="Thiết lập tổ đội, phân bổ nhân sự và quản lý doanh nghiệp"
+        meta={[`${roster.teams.length} tổ đội`, `${totalMembers} thành viên`]}
+      />
+
+      {/* Permission Banner */}
       {isReadOnly && (
-        <div className="rounded border border-ds-warning/30 bg-ds-warning/10 p-3 text-sm text-ds-warning">
-          {t('team.readOnlyBanner')}
-        </div>
+        <PermissionBanner
+          level="warning"
+          title={t('team.readOnly.title') || "Chế độ chỉ đọc"}
+          description={t('team.readOnly.desc') || "Bạn không có quyền chỉnh sửa tổ đội."}
+        />
       )}
 
+      {/* Toolbar */}
       <TeamManagerToolbar
         dirty={dirty}
         isReadOnly={isReadOnly}
@@ -596,94 +610,151 @@ function TeamManager({ canEdit = true, currentUser = null }: TeamManagerProps) {
         onExportExcel={handleExportExcel}
       />
 
-      <p className="text-sm text-ds-text-secondary">
-        {t('team.description')}
-      </p>
-
-      <TeamManagerHistoryPanel
-        historyOpen={historyOpen}
-        historyTab={historyTab}
-        teamHistory={teamHistory}
-        mstHistory={mstHistory}
-        onHistoryTabChange={setHistoryTab}
-        onRefresh={refreshHistory}
-      />
-
+      {/* Empty State for 0 teams */}
       {roster.teams.length === 0 ? (
         <EmptyState
           icon="inbox"
           title={t('team.emptyTitle')}
           description={t('team.emptyDescription')}
+          action={
+            <button
+              onClick={handleReloadRoster}
+              className="px-4 py-2 bg-ds-accent text-ds-text-inverse rounded-md text-sm font-medium"
+            >
+              {t('team.createFirst') || "Tạo tổ đội đầu tiên"}
+            </button>
+          }
         />
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {roster.teams.map((team) => {
-            const isActive = team.id === selectedTeamId;
-            const memberCount = team.members.length;
-            const normalizedTeam = normalizeName(team.name);
-            const companyCount = teamCompanyCounts.get(normalizedTeam) ?? 0;
+        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+          {/* Left: Team List */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-ds-text-secondary uppercase tracking-wide">
+              {t('team.listTitle') || "Danh sách tổ đội"}
+            </h3>
+            <div className="flex flex-col gap-2">
+              {roster.teams.map((team) => {
+                const isActive = team.id === selectedTeamId;
+                const memberCount = team.members.length;
+                const normalizedTeam = normalizeName(team.name);
+                const companyCount = teamCompanyCounts.get(normalizedTeam) ?? 0;
 
-            return (
-              <button
-                key={team.id}
-                onClick={() => {
-                  setSelectedTeamId(team.id);
-                  setSelectedMemberId(null);
-                }}
-                className={`px-4 py-2 rounded border text-left ${
-                  isActive ? "bg-ds-accent text-ds-text-inverse" : "bg-ds-surface-card"
-                }`}
-              >
-                <div className="font-semibold">{team.name}</div>
-                <div className="text-xs opacity-80">
-                  {t('team.teamStats', { members: memberCount, companies: companyCount })}
+                return (
+                  <button
+                    key={team.id}
+                    onClick={() => {
+                      setSelectedTeamId(team.id);
+                      setSelectedMemberId(null);
+                      setActiveDetailTab("members");
+                    }}
+                    className={`px-4 py-3 rounded-lg border text-left transition-colors ${
+                      isActive
+                        ? "bg-ds-accent/10 border-ds-accent text-ds-accent"
+                        : "bg-ds-surface-card border-ds-border-subtle hover:border-ds-border-default"
+                    }`}
+                  >
+                    <div className="font-semibold">{team.name}</div>
+                    <div className="text-xs opacity-80">
+                      {t('team.teamStats', { members: memberCount, companies: companyCount })}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Detail Panel with Tabs */}
+          {selectedTeam ? (
+            <div className="space-y-4">
+              {/* Internal Tabs */}
+              <div className="border-b border-ds-border-subtle">
+                <div className="flex gap-1">
+                  {[
+                    { id: 'members', label: t('team.tab.members') || 'Thành viên', icon: Users },
+                    { id: 'companies', label: t('team.tab.companies') || 'Doanh nghiệp', icon: Building2 },
+                    { id: 'history', label: t('team.tab.history') || 'Lịch sử', icon: History },
+                  ].map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveDetailTab(tab.id as typeof activeDetailTab)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 ${
+                          activeDetailTab === tab.id
+                            ? 'border-ds-accent text-ds-accent'
+                            : 'border-transparent text-ds-text-secondary hover:text-ds-text-primary'
+                        }`}
+                      >
+                        <Icon size={14} />
+                        {tab.label}
+                      </button>
+                    );
+                  })}
                 </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+              </div>
 
-      {selectedTeam ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(240px,280px)_1fr]">
-          <TeamManagerMemberPanel
-            selectedTeam={selectedTeam}
-            canEdit={canEdit}
-            isReadOnly={isReadOnly}
-            newMemberName={newMemberName}
-            onNewMemberNameChange={setNewMemberName}
-            onAddMember={handleAddMember}
-            selectedMemberId={selectedMemberId}
-            onSelectMember={setSelectedMemberId}
-            memberAssignments={memberAssignments}
-            activeMember={activeMember}
-            memberNameDraft={memberNameDraft}
-            onMemberNameDraftChange={setMemberNameDraft}
-            onCommitMemberName={commitMemberName}
-            onMemberNameKey={handleMemberNameKey}
-            teams={roster.teams}
-            selectedTeamId={selectedTeamId}
-            onMoveMember={handleMoveMember}
-            onRemoveMember={handleRemoveMember}
-            memberCompanies={memberCompanies}
-          />
+              {/* Tab Content */}
+              <div className="space-y-4">
+                {activeDetailTab === 'members' && (
+                  <TeamManagerMemberPanel
+                    selectedTeam={selectedTeam}
+                    canEdit={canEdit}
+                    isReadOnly={isReadOnly}
+                    newMemberName={newMemberName}
+                    onNewMemberNameChange={setNewMemberName}
+                    onAddMember={handleAddMember}
+                    selectedMemberId={selectedMemberId}
+                    onSelectMember={setSelectedMemberId}
+                    memberAssignments={memberAssignments}
+                    activeMember={activeMember}
+                    memberNameDraft={memberNameDraft}
+                    onMemberNameDraftChange={setMemberNameDraft}
+                    onCommitMemberName={commitMemberName}
+                    onMemberNameKey={handleMemberNameKey}
+                    teams={roster.teams}
+                    selectedTeamId={selectedTeamId}
+                    onMoveMember={handleMoveMember}
+                    onRemoveMember={handleRemoveMember}
+                    memberCompanies={memberCompanies}
+                  />
+                )}
 
-          <TeamManagerCompaniesPanel
-            activeMember={activeMember}
-            selectedTeam={selectedTeam}
-            displayCompanies={displayCompanies}
-            pagedCompanies={pagedCompanies}
-            currentCompanyPage={currentCompanyPage}
-            totalCompanyPages={totalCompanyPages}
-            showPagination={displayCompanies.length > COMPANY_PAGE_SIZE}
-            onShowAllTeamCompanies={() => setSelectedMemberId(null)}
-            onPreviousPage={() => setCompanyPage((page) => Math.max(1, page - 1))}
-            onNextPage={() => setCompanyPage((page) => Math.min(totalCompanyPages, page + 1))}
-          />
-        </div>
-      ) : (
-        <div className="border rounded p-6 text-center text-ds-text-muted">
-          {t('team.noDataMessage')}
+                {activeDetailTab === 'companies' && (
+                  <TeamManagerCompaniesPanel
+                    activeMember={activeMember}
+                    selectedTeam={selectedTeam}
+                    displayCompanies={displayCompanies}
+                    pagedCompanies={pagedCompanies}
+                    currentCompanyPage={currentCompanyPage}
+                    totalCompanyPages={totalCompanyPages}
+                    showPagination={displayCompanies.length > COMPANY_PAGE_SIZE}
+                    onShowAllTeamCompanies={() => setSelectedMemberId(null)}
+                    onPreviousPage={() => setCompanyPage((page) => Math.max(1, page - 1))}
+                    onNextPage={() => setCompanyPage((page) => Math.min(totalCompanyPages, page + 1))}
+                  />
+                )}
+
+                {activeDetailTab === 'history' && (
+                  <div className="bg-ds-surface-card border border-ds-border-subtle rounded-lg p-4">
+                    <TeamManagerHistoryPanel
+                      historyOpen={true}
+                      historyTab={historyTab}
+                      teamHistory={teamHistory}
+                      mstHistory={mstHistory}
+                      onHistoryTabChange={setHistoryTab}
+                      onRefresh={refreshHistory}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-64 border rounded-lg bg-ds-surface-card">
+              <p className="text-sm text-ds-text-muted">
+                {t('team.selectTeamPrompt') || "Chọn một tổ đội để xem chi tiết"}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
