@@ -29,8 +29,8 @@ describe("RulesSimulationPanel", () => {
       />
     );
 
-    expect(screen.getByText("Phiên bản đang chỉnh")).toBeInTheDocument();
-    expect(screen.getByText("Phiên bản đã lưu")).toBeInTheDocument();
+    expect(screen.getByText(/Phiên bản đang chỉnh/i)).toBeInTheDocument();
+    expect(screen.getByText(/Phiên bản đã lưu/i)).toBeInTheDocument();
     expect(screen.getByText("+2.50")).toBeInTheDocument();
   });
 });

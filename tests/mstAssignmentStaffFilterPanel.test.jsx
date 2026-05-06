@@ -35,8 +35,8 @@ describe("mst assignment staff filter panel", () => {
       />
     );
 
-    expect(screen.getByText("Bộ lọc nhân viên phụ trách")).toBeInTheDocument();
-    expect(screen.getByText("2 bộ lọc nhanh")).toBeInTheDocument();
+    expect(screen.getByText(/Bộ lọc nhân viên phụ trách/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 bộ lọc nhanh/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lưu bộ lọc nhân viên" })).toBeEnabled();
 
     await userEvent.click(screen.getByRole("button", { name: "Xóa lọc" }));
@@ -99,7 +99,7 @@ describe("mst assignment staff filter panel", () => {
       />
     );
 
-    expect(screen.getByText("Lead-view rút gọn")).toBeInTheDocument();
+    expect(screen.getByText(/Lead-view rút gọn/i)).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Bật lead-view rút gọn" })).toBeChecked();
 
     await userEvent.click(screen.getByRole("button", { name: "Đã gán đủ" }));

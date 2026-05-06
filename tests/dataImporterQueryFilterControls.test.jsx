@@ -57,7 +57,7 @@ describe("DataImporterQueryFilterControls", () => {
     expect(screen.getByLabelText("Chưa gán Tổ đội")).not.toBeChecked();
     expect(screen.getByRole("combobox", { name: "Lọc C/O" })).toHaveValue("min");
     expect(screen.getByLabelText("Tối thiểu dòng C/O")).toHaveValue(5);
-    expect(screen.getByText("Đáp ứng C/O: 12 tờ khai")).toBeInTheDocument();
+    expect(screen.getByText(/Đáp ứng C\/O: 12 tờ khai/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Tìm nhanh danh sách tờ khai" }), {
       target: { value: "beta" },

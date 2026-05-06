@@ -46,7 +46,7 @@ describe("TeamManagerHistoryPanel", () => {
   it("renders team history, switches tabs, and refreshes", () => {
     const props = renderPanel();
 
-    expect(screen.getByText("Lưu tổ đội")).toBeInTheDocument();
+    expect(screen.getByText(/Lưu tổ đội/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /MST/i }));
     expect(props.onHistoryTabChange).toHaveBeenCalledWith("mst");

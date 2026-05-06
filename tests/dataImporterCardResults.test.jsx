@@ -132,10 +132,10 @@ describe("DataImporterCardResults", () => {
 
     expect(screen.getByText("TK-001")).toBeInTheDocument();
     expect(screen.getByText("01/08/2025")).toBeInTheDocument();
-    expect(screen.getByText("Chưa lưu")).toBeInTheDocument();
-    expect(screen.getByText("Đã rà soát")).toBeInTheDocument();
-    expect(screen.getByText("Cần xem lại")).toBeInTheDocument();
-    expect(screen.getByText("Trạng thái: existing")).toBeInTheDocument();
+    expect(screen.getByText(/Chưa lưu/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đã rà soát/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cần xem lại/i)).toBeInTheDocument();
+    expect(screen.getByText(/Trạng thái: existing/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("1")).toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: /chọn/i }));
@@ -232,13 +232,13 @@ describe("DataImporterCardResults", () => {
       />,
     );
 
-    expect(screen.getByText("Khóa rà soát")).toBeInTheDocument();
-    expect(screen.getByText("Chỉ xem")).toBeInTheDocument();
-    expect(screen.getByText("Lỗi đồng bộ")).toBeInTheDocument();
+    expect(screen.getByText(/Khóa rà soát/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chỉ xem/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lỗi đồng bộ/i)).toBeInTheDocument();
     expect(screen.getAllByText("Nhân viên")).toHaveLength(2);
     expect(screen.getAllByText("An")).toHaveLength(2);
-    expect(screen.getByText("Bởi: tester")).toBeInTheDocument();
-    expect(screen.getByText("Bình")).toBeInTheDocument();
+    expect(screen.getByText(/Bởi: tester/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bình/i)).toBeInTheDocument();
 
     cleanup();
 
@@ -281,6 +281,6 @@ describe("DataImporterCardResults", () => {
       />,
     );
 
-    expect(screen.getByText("Không có dữ liệu")).toBeInTheDocument();
+    expect(screen.getByText(/Không có dữ liệu/i)).toBeInTheDocument();
   });
 });

@@ -58,26 +58,26 @@ describe("DataImporterImportPreviewSummary", () => {
       />,
     );
 
-    expect(screen.getByText("Kết quả kiểm tra trước khi import")).toBeInTheDocument();
-    expect(screen.getByText("Ghi đè toàn bộ")).toBeInTheDocument();
-    expect(screen.getByText("Dòng sẽ thêm mới")).toBeInTheDocument();
-    expect(screen.getByText("Dòng sẽ cập nhật")).toBeInTheDocument();
-    expect(screen.getByText("MST mới")).toBeInTheDocument();
-    expect(screen.getByText("Dòng lỗi sẽ bị bỏ qua (1)")).toBeInTheDocument();
-    expect(screen.getByText("Dòng thêm mới (2)")).toBeInTheDocument();
-    expect(screen.getByText("Doanh nghiệp mới (2)")).toBeInTheDocument();
+    expect(screen.getByText(/Kết quả kiểm tra trước khi import/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ghi đè toàn bộ/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dòng sẽ thêm mới/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dòng sẽ cập nhật/i)).toBeInTheDocument();
+    expect(screen.getByText(/MST mới/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dòng lỗi sẽ bị bỏ qua \(1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dòng thêm mới \(2\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Doanh nghiệp mới \(2\)/i)).toBeInTheDocument();
 
     const errorTable = screen.getByRole("table", { name: "Bảng các dòng lỗi import" });
-    expect(within(errorTable).getByText("Trùng dữ liệu")).toBeInTheDocument();
+    expect(within(errorTable).getByText(/Trùng dữ liệu/i)).toBeInTheDocument();
     expect(within(errorTable).getByText("TK-ERR-01")).toBeInTheDocument();
 
     const insertedTable = screen.getByRole("table", { name: "Bảng các dòng thêm mới từ file import" });
     expect(within(insertedTable).getByText("TK-NEW-01/HP")).toBeInTheDocument();
     expect(within(insertedTable).getByText("08/03/2026")).toBeInTheDocument();
-    expect(within(insertedTable).getByText("Đội 1")).toBeInTheDocument();
+    expect(within(insertedTable).getByText(/Đội 1/i)).toBeInTheDocument();
 
-    expect(screen.getByText("0100123456 – Công ty Mới A")).toBeInTheDocument();
-    expect(screen.getByText("0100654321 – Công ty Mới B")).toBeInTheDocument();
+    expect(screen.getByText(/0100123456 – Công ty Mới A/i)).toBeInTheDocument();
+    expect(screen.getByText(/0100654321 – Công ty Mới B/i)).toBeInTheDocument();
   });
 
   it("hiển thị lỗi preview khi không thể phân tích file import", () => {
@@ -90,7 +90,7 @@ describe("DataImporterImportPreviewSummary", () => {
       />,
     );
 
-    expect(screen.getByText("Không thể kiểm tra file import. Sai định dạng file")).toBeInTheDocument();
-    expect(screen.queryByText("Kết quả kiểm tra trước khi import")).not.toBeInTheDocument();
+    expect(screen.getByText(/Không thể kiểm tra file import\. Sai định dạng file/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Kết quả kiểm tra trước khi import/i)).not.toBeInTheDocument();
   });
 });

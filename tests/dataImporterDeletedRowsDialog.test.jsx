@@ -53,8 +53,8 @@ describe("DataImporterDeletedRowsDialog", () => {
     );
 
     expect(screen.getByRole("dialog", { name: "Danh sách tờ khai đã xóa" })).toBeInTheDocument();
-    expect(screen.getByText("Khoảng thời gian: 02/07/2025 - 02/07/2025")).toBeInTheDocument();
-    expect(screen.getByText("Tổng số: 2")).toBeInTheDocument();
+    expect(screen.getByText(/Khoảng thời gian: 02\/07\/2025 - 02\/07\/2025/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tổng số: 2/i)).toBeInTheDocument();
     expect(screen.getByText(/Xóa tạm thời: 1/)).toBeInTheDocument();
     expect(screen.getByText(/Xóa vĩnh viễn: 1/)).toBeInTheDocument();
     expect(screen.getByTestId("deleted-list-table")).toBeInTheDocument();
@@ -74,8 +74,8 @@ describe("DataImporterDeletedRowsDialog", () => {
       />,
     );
 
-    expect(screen.getByText("Đang tải danh sách xóa vĩnh viễn...")).toBeInTheDocument();
-    expect(screen.getByText("Đang tải dữ liệu tờ khai đã xóa...")).toBeInTheDocument();
+    expect(screen.getByText(/Đang tải danh sách xóa vĩnh viễn\.\.\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Đang tải dữ liệu tờ khai đã xóa\.\.\./i)).toBeInTheDocument();
 
     rerender(
       <DataImporterDeletedRowsDialog
@@ -84,6 +84,6 @@ describe("DataImporterDeletedRowsDialog", () => {
       />,
     );
 
-    expect(screen.getByText("Không có tờ khai nào phù hợp với điều kiện lọc hiện tại.")).toBeInTheDocument();
+    expect(screen.getByText(/Không có tờ khai nào phù hợp với điều kiện lọc hiện tại\./i)).toBeInTheDocument();
   });
 });

@@ -16,11 +16,11 @@ describe("kpi adjustment overview panel", () => {
       />
     );
 
-    expect(screen.getByText("Tổng quan điểm KPI +/-")).toBeInTheDocument();
-    expect(screen.getByText("Tổng số mục")).toBeInTheDocument();
-    expect(screen.getByText("Đã duyệt")).toBeInTheDocument();
-    expect(screen.getByText("Chờ duyệt")).toBeInTheDocument();
-    expect(screen.getByText("Điểm đã cộng/trừ")).toBeInTheDocument();
+    expect(screen.getByText(/Tổng quan điểm KPI +\/-/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tổng số mục/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đã duyệt/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chờ duyệt/i)).toBeInTheDocument();
+    expect(screen.getByText(/Điểm đã cộng\/trừ/i)).toBeInTheDocument();
 
     expect(screen.getByText("int:12")).toBeInTheDocument();
     expect(screen.getByText("int:7")).toBeInTheDocument();

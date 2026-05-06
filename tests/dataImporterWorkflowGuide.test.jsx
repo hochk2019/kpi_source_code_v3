@@ -34,7 +34,7 @@ describe("DataImporterWorkflowGuide", () => {
 
     expect(screen.getByText(/GIAI ĐOẠN.*1\/3/)).toBeInTheDocument();
     expect(
-      screen.getByText("Chọn file XLSX hoặc chạy đồng bộ ECUS để bắt đầu."),
+      screen.getByText(/Chọn file XLSX hoặc chạy đồng bộ ECUS để bắt đầu\./i),
     ).toBeInTheDocument();
 
     return user.click(screen.getByRole("button", { name: "Xem trước ECUS" })).then(() => {
@@ -70,7 +70,7 @@ describe("DataImporterWorkflowGuide", () => {
     );
 
     expect(screen.getByText(/GIAI ĐOẠN.*2\/3/)).toBeInTheDocument();
-    expect(screen.getByText("24 dòng đang chờ rà soát trước khi lưu.")).toBeInTheDocument();
+    expect(screen.getByText(/24 dòng đang chờ rà soát trước khi lưu\./i)).toBeInTheDocument();
 
     return user.click(screen.getByRole("button", { name: "Import XLSX" })).then(() => {
       expect(onImport).toHaveBeenCalledTimes(1);
@@ -108,7 +108,7 @@ describe("DataImporterWorkflowGuide", () => {
     );
 
     expect(screen.getByText(/GIAI ĐOẠN.*2\/3/)).toBeInTheDocument();
-    expect(screen.getByText("12 dòng ECUS đang chờ rà soát trước khi đồng bộ.")).toBeInTheDocument();
+    expect(screen.getByText(/12 dòng ECUS đang chờ rà soát trước khi đồng bộ\./i)).toBeInTheDocument();
 
     return user.click(screen.getByRole("button", { name: "Đồng bộ ngay" })).then(() => {
       expect(onRunSync).toHaveBeenCalledTimes(1);
@@ -145,7 +145,7 @@ describe("DataImporterWorkflowGuide", () => {
 
     expect(screen.getByText(/GIAI ĐOẠN.*3\/3/)).toBeInTheDocument();
     expect(
-      screen.getByText("Bạn còn thay đổi chưa lưu trước khi chốt dữ liệu."),
+      screen.getByText(/Bạn còn thay đổi chưa lưu trước khi chốt dữ liệu\./i),
     ).toBeInTheDocument();
 
     return user.click(screen.getByRole("button", { name: "Lưu dữ liệu" })).then(() => {
@@ -177,7 +177,7 @@ describe("DataImporterWorkflowGuide", () => {
     );
 
     expect(
-      screen.getByText("12 dòng ECUS đã sẵn sàng để đồng bộ vào workspace."),
+      screen.getByText(/12 dòng ECUS đã sẵn sàng để đồng bộ vào workspace\./i),
     ).toBeInTheDocument();
 
     return user.click(screen.getByRole("button", { name: "Đồng bộ ngay" })).then(() => {

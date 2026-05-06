@@ -89,9 +89,9 @@ describe("DataImporterMonitoringPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Đối soát C/O")).toBeInTheDocument();
-    expect(screen.getByText("Chênh lệch gợi ý (1 / 4)")).toBeInTheDocument();
-    expect(screen.getByText("Cảnh báo tờ khai thiếu thông tin")).toBeInTheDocument();
+    expect(screen.getByText(/Đối soát C\/O/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chênh lệch gợi ý \(1 \/ 4\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cảnh báo tờ khai thiếu thông tin/i)).toBeInTheDocument();
     expect(screen.getByText("TK-1029384756")).toBeInTheDocument();
     expect(screen.getByText("Cong ty A")).toBeInTheDocument();
     expect(screen.getByText("DATE:2026-03-09")).toBeInTheDocument();
@@ -158,9 +158,9 @@ describe("DataImporterMonitoringPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Chưa phát hiện chênh lệch nào.")).toBeInTheDocument();
-    expect(screen.getByText("Chưa có kết quả đối soát.")).toBeInTheDocument();
-    expect(screen.getByText("Đang tải danh sách cảnh báo...")).toBeInTheDocument();
+    expect(screen.getByText(/Chưa phát hiện chênh lệch nào\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Chưa có kết quả đối soát\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Đang tải danh sách cảnh báo\.\.\./i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Chọn trên bảng" })).toBeDisabled();
   });
 
@@ -177,6 +177,6 @@ describe("DataImporterMonitoringPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Không có cảnh báo nào đang chờ xử lý.")).toBeInTheDocument();
+    expect(screen.getByText(/Không có cảnh báo nào đang chờ xử lý\./i)).toBeInTheDocument();
   });
 });

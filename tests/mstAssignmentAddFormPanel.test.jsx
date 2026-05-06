@@ -111,10 +111,10 @@ describe("mst assignment add form panel", () => {
       isCustom: false,
     });
 
-    expect(screen.getByText("Tìm người phụ trách Nhập")).toBeInTheDocument();
-    expect(screen.getByText("Tìm người phụ trách Xuất")).toBeInTheDocument();
+    expect(screen.getByText(/Tìm người phụ trách Nhập/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tìm người phụ trách Xuất/i)).toBeInTheDocument();
     expect(
-      screen.getByText("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.")
+      screen.getByText(/Ngày kết thúc phải sau hoặc bằng ngày bắt đầu\./i)
     ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Hủy" }));

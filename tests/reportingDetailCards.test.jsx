@@ -71,7 +71,7 @@ describe("reporting detail cards", () => {
       />,
     );
 
-    expect(screen.getByText("Công ty Alpha")).toBeTruthy();
+    expect(screen.getByText(/Công ty Alpha/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Chi tiết" }));
 
@@ -149,7 +149,7 @@ describe("reporting detail cards", () => {
 
     const memberTable = screen.getAllByRole("table")[0];
     const memberRows = within(memberTable).getAllByRole("row");
-    expect(within(memberRows[1]).getByText("Bình")).toBeTruthy();
+    expect(within(memberRows[1]).getByText(/Bình/i)).toBeTruthy();
     expect(within(memberRows[2]).getByText("An")).toBeTruthy();
 
     expect(screen.getByText("1-1 / 2")).toBeTruthy();

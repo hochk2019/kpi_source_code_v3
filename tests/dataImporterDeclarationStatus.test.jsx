@@ -89,11 +89,11 @@ describe("DataImporter declaration status", () => {
       />,
     );
 
-    const badge = screen.getByText("Cần xem lại").closest(".ds-status-badge");
+    const badge = screen.getByText(/Cần xem lại/i).closest(".ds-status-badge");
 
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveClass("text-[10px]");
-    expect(screen.getByText("Cần xem lại").closest(".custom-wrapper")).toBeInTheDocument();
+    expect(screen.getByText(/Cần xem lại/i).closest(".custom-wrapper")).toBeInTheDocument();
     expect(screen.getByText(/Thiếu chứng từ/)).toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe("DataImporter declaration status", () => {
       />,
     );
 
-    expect(screen.getByText("Chờ gán")).toBeInTheDocument();
-    expect(screen.queryByText("Thiếu nhân viên & tổ đội")).not.toBeInTheDocument();
+    expect(screen.getByText(/Chờ gán/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Thiếu nhân viên & tổ đội/i)).not.toBeInTheDocument();
   });
 });

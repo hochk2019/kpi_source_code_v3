@@ -33,11 +33,11 @@ describe("DataImporterCoCodeConfigPanel", () => {
 
     render(<DataImporterCoCodeConfigPanel {...props} />);
 
-    expect(screen.getByText("Cấu hình mã ưu đãi C/O")).toBeInTheDocument();
-    expect(screen.getByText("Đã lưu cấu hình mã ưu đãi.")).toBeInTheDocument();
+    expect(screen.getByText(/Cấu hình mã ưu đãi C\/O/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đã lưu cấu hình mã ưu đãi\./i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("CA3")).toBeInTheDocument();
     expect(screen.getByDisplayValue("B01")).toBeInTheDocument();
-    expect(screen.getByText("Cập nhật lúc 10/03/2026 10:30")).toBeInTheDocument();
+    expect(screen.getByText(/Cập nhật lúc 10\/03\/2026 10:30/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("CA3"), {
       target: { value: "CA3\nVK" },
@@ -75,7 +75,7 @@ describe("DataImporterCoCodeConfigPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Không tải được cấu hình.")).toBeInTheDocument();
+    expect(screen.getByText(/Không tải được cấu hình\./i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Đang tải..." })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Đang lưu..." })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Khôi phục" })).toBeDisabled();

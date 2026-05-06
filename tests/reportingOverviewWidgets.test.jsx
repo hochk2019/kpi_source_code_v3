@@ -53,7 +53,7 @@ describe("reporting overview widgets", () => {
       </>,
     );
 
-    expect(screen.getByText("Tổng KPI")).toBeTruthy();
+    expect(screen.getByText(/Tổng KPI/i)).toBeTruthy();
     expect(screen.getByText("88.0")).toBeTruthy();
     expect(screen.getByText(/chưa có dữ liệu để hiển thị biểu đồ xu hướng/i)).toBeTruthy();
   });

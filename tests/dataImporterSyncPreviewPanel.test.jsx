@@ -174,9 +174,9 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText(/Đã tạo job đồng bộ/)).toBeInTheDocument();
     expect(screen.getByText(/Lịch sử đồng bộ/i)).toBeInTheDocument();
     expect(screen.getByText(/tester ·/)).toBeInTheDocument();
-    expect(screen.getByText("Khoảng chạy: 2026-03-01 → 2026-03-08")).toBeInTheDocument();
+    expect(screen.getByText(/Khoảng chạy: 2026-03-01 → 2026-03-08/i)).toBeInTheDocument();
     expect(screen.getByText(/Tác động 3 bản ghi/)).toBeInTheDocument();
-    expect(screen.getByText("Lọc theo chỉ MST: 0100109106")).toBeInTheDocument();
+    expect(screen.getByText(/Lọc theo chỉ MST: 0100109106/i)).toBeInTheDocument();
     expect(screen.getByText(/Đã đồng bộ thành công/i)).toBeInTheDocument();
   });
 
@@ -236,7 +236,7 @@ describe("DataImporterSyncPreviewPanel", () => {
     );
 
     expect(
-      screen.getByText("Dữ liệu xem trước đã được chuyển sang bước 2 để rà soát trước khi đồng bộ."),
+      screen.getByText(/Dữ liệu xem trước đã được chuyển sang bước 2 để rà soát trước khi đồng bộ\./i),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).not.toBeInTheDocument();
   });

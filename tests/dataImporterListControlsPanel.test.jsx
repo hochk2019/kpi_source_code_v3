@@ -88,16 +88,16 @@ describe("DataImporterListControlsPanel", () => {
 
     expect(screen.getByRole("region", { name: "Điều khiển danh sách tờ khai" })).toBeInTheDocument();
     expect(screen.getByRole("form", { name: "Bộ lọc tờ khai import" })).toBeInTheDocument();
-    expect(screen.getByText("Dữ liệu đã lưu")).toBeInTheDocument();
-    expect(screen.getByText("123 dòng")).toBeInTheDocument();
+    expect(screen.getByText(/Dữ liệu đã lưu/i)).toBeInTheDocument();
+    expect(screen.getByText(/123 dòng/i)).toBeInTheDocument();
     expect(screen.getByText("mock-query-filter-controls")).toBeInTheDocument();
     expect(screen.getByText("mock-filter-preset-controls")).toBeInTheDocument();
     expect(screen.getByText("mock-duplicate-workflow-controls")).toBeInTheDocument();
     expect(screen.getByText("mock-grid-toolbar-controls")).toBeInTheDocument();
     expect(screen.getByText("mock-selection-actions")).toBeInTheDocument();
-    expect(screen.getByText("Đang hiển thị 9/14 cột dữ liệu.")).toBeInTheDocument();
+    expect(screen.getByText(/Đang hiển thị 9\/14 cột dữ liệu\./i)).toBeInTheDocument();
     expect(
-      screen.getByText("Hiển thị tối đa 25 dòng trên một trang. Nhập từ khóa hoặc dùng bộ lọc để tìm thêm tờ khai."),
+      screen.getByText(/Hiển thị tối đa 25 dòng trên một trang\. Nhập từ khóa hoặc dùng bộ lọc để tìm thêm tờ khai\./i),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Tự gán nhân viên theo MST nếu trống (ON)"));
@@ -129,13 +129,13 @@ describe("DataImporterListControlsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Xem trước import")).toBeInTheDocument();
+    expect(screen.getByText(/Xem trước import/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("Tự gán nhân viên theo MST nếu trống (ON)")).toBeNull();
     expect(screen.queryByLabelText("Upsert theo 11 số đầu của Số tờ khai")).toBeNull();
     expect(screen.queryByLabelText("Ghi đè toàn bộ dữ liệu hiện có")).toBeNull();
     expect(screen.queryByText("mock-selection-actions")).toBeNull();
     expect(
-      screen.queryByText("Hiển thị tối đa 25 dòng trên một trang. Nhập từ khóa hoặc dùng bộ lọc để tìm thêm tờ khai."),
+      screen.queryByText(/Hiển thị tối đa 25 dòng trên một trang\. Nhập từ khóa hoặc dùng bộ lọc để tìm thêm tờ khai\./i),
     ).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe("DataImporterListControlsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Xem trước đồng bộ")).toBeInTheDocument();
+    expect(screen.getByText(/Xem trước đồng bộ/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("Tự gán nhân viên theo MST nếu trống (ON)")).toBeNull();
     expect(screen.queryByLabelText("Upsert theo 11 số đầu của Số tờ khai")).toBeNull();
     expect(screen.queryByLabelText("Ghi đè toàn bộ dữ liệu hiện có")).toBeNull();

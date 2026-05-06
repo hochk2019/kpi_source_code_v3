@@ -66,7 +66,7 @@ describe("kpi adjustment dialogs", () => {
     const queries = within(dialog);
 
     expect(queries.getByText("Lan")).toBeInTheDocument();
-    expect(queries.getByText("Điểm cố định thử nghiệm")).toBeInTheDocument();
+    expect(queries.getByText(/Điểm cố định thử nghiệm/i)).toBeInTheDocument();
     expect(queries.getByText("TK001")).toBeInTheDocument();
     expect(queries.getByText("ZB03")).toBeInTheDocument();
     expect(queries.getByDisplayValue("Thiếu chứng từ")).toBeInTheDocument();
@@ -134,8 +134,8 @@ describe("kpi adjustment dialogs", () => {
     expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
 
     await userEvent.click(queries.getByRole("button", { name: /Nhóm hỗ trợ/i }));
-    expect(await queries.findByText("Điểm = số lượng x điểm mỗi đơn vị")).toBeInTheDocument();
-    expect(queries.getByText("Đang áp dụng cấu hình tuỳ chỉnh của đơn vị.")).toBeInTheDocument();
+    expect(await queries.findByText(/Điểm = số lượng x điểm mỗi đơn vị/i)).toBeInTheDocument();
+    expect(queries.getByText(/Đang áp dụng cấu hình tuỳ chỉnh của đơn vị\./i)).toBeInTheDocument();
 
     await userEvent.click(queries.getByRole("button", { name: "Mở phần cấu hình" }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);

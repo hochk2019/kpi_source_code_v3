@@ -17,8 +17,8 @@ describe("mst assignment timeline panel", () => {
       />
     );
 
-    expect(screen.getByText("Dòng thời gian giai đoạn")).toBeInTheDocument();
-    expect(screen.getByText("Xem tổng hợp theo bộ lọc hiện tại.")).toBeInTheDocument();
+    expect(screen.getByText(/Dòng thời gian giai đoạn/i)).toBeInTheDocument();
+    expect(screen.getByText(/Xem tổng hợp theo bộ lọc hiện tại\./i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mở tổng hợp (0)" })).toBeDisabled();
   });
 
@@ -71,8 +71,8 @@ describe("mst assignment timeline panel", () => {
     );
 
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("Dòng thời gian — 0100000001")).toBeInTheDocument();
-    expect(within(dialog).getByText("Công ty: Công ty Ánh Dương")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Dòng thời gian — 0100000001/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Công ty: Công ty Ánh Dương/i)).toBeInTheDocument();
     expect(within(dialog).getAllByText("0100000001").length).toBeGreaterThan(0);
     expect(
       within(dialog).getAllByText((_, element) => element?.textContent?.includes("fmt:2024-01-01")).length

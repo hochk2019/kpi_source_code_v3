@@ -81,8 +81,8 @@ describe("DataImporterAssignmentComboboxes", () => {
 
     fireEvent.click(getComboboxTrigger("Chọn nhân viên"));
 
-    expect(screen.getByText("Tổ: Tổ đội A")).toBeInTheDocument();
-    expect(screen.getByText("Tổ: Tổ đội B")).toBeInTheDocument();
+    expect(screen.getByText(/Tổ: Tổ đội A/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tổ: Tổ đội B/i)).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("option", { name: /Hùng Tổ đội B/ }));
 

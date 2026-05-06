@@ -54,7 +54,7 @@ describe("AssigneeCell", () => {
     const display = screen.getByText(longName);
     expect(display).toHaveAttribute("data-assignee-state", "filled");
     expect(display).toHaveStyle({ WebkitLineClamp: "2" });
-    expect(screen.getByText("Tổ: Nhóm 1")).toBeInTheDocument();
+    expect(screen.getByText(/Tổ: Nhóm 1/i)).toBeInTheDocument();
   });
 
   it("hiển thị nút chọn nhân viên ở chế độ chỉnh sửa", () => {

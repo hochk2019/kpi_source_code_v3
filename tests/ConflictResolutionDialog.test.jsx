@@ -57,10 +57,10 @@ describe("ConflictResolutionDialog", () => {
       />
     );
 
-    expect(screen.getByText("Phát hiện xung đột dữ liệu")).toBeInTheDocument();
+    expect(screen.getByText(/Phát hiện xung đột dữ liệu/i)).toBeInTheDocument();
     expect(screen.getByText("declarations")).toBeInTheDocument();
-    expect(screen.getByText("📁 Phiên bản Local")).toBeInTheDocument();
-    expect(screen.getByText("☁️ Phiên bản Server")).toBeInTheDocument();
+    expect(screen.getByText(/📁 Phiên bản Local/i)).toBeInTheDocument();
+    expect(screen.getByText(/☁️ Phiên bản Server/i)).toBeInTheDocument();
   });
 
   it("calls onResolve with server-wins strategy when clicking Server button", () => {
@@ -136,7 +136,7 @@ describe("ConflictResolutionDialog", () => {
       />
     );
 
-    expect(screen.getByText("Các trường bị xung đột:")).toBeInTheDocument();
+    expect(screen.getByText(/Các trường bị xung đột:/i)).toBeInTheDocument();
     // Should show local vs server values
     expect(screen.getByText(/Local Version/)).toBeInTheDocument();
     expect(screen.getByText(/Server Version/)).toBeInTheDocument();

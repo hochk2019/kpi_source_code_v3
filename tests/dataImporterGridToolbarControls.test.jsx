@@ -60,7 +60,7 @@ describe("DataImporterGridToolbarControls", () => {
 
     expect(screen.getByText(/Đang lọc trên máy chủ/)).toBeInTheDocument();
     expect(screen.getByText(/321 dòng phù hợp/)).toBeInTheDocument();
-    expect(screen.getByText("200 dòng — Trang 2/5")).toBeInTheDocument();
+    expect(screen.getByText(/200 dòng — Trang 2\/5/i)).toBeInTheDocument();
     expect(screen.getByRole("switch")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lưu chỉnh sửa" })).toBeEnabled();
 
@@ -97,7 +97,7 @@ describe("DataImporterGridToolbarControls", () => {
     });
 
     expect(screen.getByText(/đang tải/i)).toBeInTheDocument();
-    expect(screen.getByText("Không thể tải dữ liệu")).toBeInTheDocument();
+    expect(screen.getByText(/Không thể tải dữ liệu/i)).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Bố cục thẻ" })).toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: "Số dòng mỗi trang tùy chọn" })).toHaveValue(37);

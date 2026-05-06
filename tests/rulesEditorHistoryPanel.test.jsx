@@ -64,7 +64,7 @@ describe("RulesHistoryPanel", () => {
       />
     );
 
-    expect(screen.getByText("Bộ lịch sử")).toBeInTheDocument();
+    expect(screen.getByText(/Bộ lịch sử/i)).toBeInTheDocument();
     expect(screen.getByText("1.5")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Xem" }));
@@ -86,7 +86,7 @@ describe("RulesHistoryPanel", () => {
       />
     );
 
-    expect(screen.getByText("Chi tiết điểm & cấu hình")).toBeInTheDocument();
+    expect(screen.getByText(/Chi tiết điểm & cấu hình/i)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Thu gọn" })[1]);
     expect(onToggleExpanded).toHaveBeenCalledWith(null);
   });

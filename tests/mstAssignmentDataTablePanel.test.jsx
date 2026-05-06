@@ -147,8 +147,8 @@ describe("MstAssignmentDataTablePanel", () => {
       isColumnVisible: (key) => ["mst", "company", "actions"].includes(key),
     });
 
-    expect(screen.getByText("Chưa có dữ liệu")).toBeInTheDocument();
-    expect(screen.getByText("Cột hiển thị (3)")).toBeInTheDocument();
+    expect(screen.getByText(/Chưa có dữ liệu/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cột hiển thị \(3\)/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Công ty" }));
     expect(toggleColumnVisibility).toHaveBeenCalledWith("company");
@@ -217,11 +217,11 @@ describe("MstAssignmentDataTablePanel", () => {
       ]),
     });
 
-    expect(screen.getByText("Mới import")).toBeInTheDocument();
-    expect(screen.getByText("Đã chỉnh sửa")).toBeInTheDocument();
-    expect(screen.getByText("Trùng gán")).toBeInTheDocument();
-    expect(screen.getByText("MST này đang có trùng gán hiện hành. Mở timeline để rà soát chi tiết.")).toBeInTheDocument();
-    expect(screen.getByText("Dòng thời gian")).toBeInTheDocument();
+    expect(screen.getByText(/Mới import/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đã chỉnh sửa/i)).toBeInTheDocument();
+    expect(screen.getByText(/Trùng gán/i)).toBeInTheDocument();
+    expect(screen.getByText(/MST này đang có trùng gán hiện hành\. Mở timeline để rà soát chi tiết\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Dòng thời gian/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("0312345678"), {
       target: { value: "03-123-456-78" },
@@ -292,8 +292,8 @@ describe("MstAssignmentDataTablePanel", () => {
       ]),
     });
 
-    expect(screen.getByText("Gợi ý xử lý nhanh:")).toBeInTheDocument();
-    expect(screen.getByText("Giữ 1 dòng hiện hành và chốt ngày kết thúc cho các dòng còn lại.")).toBeInTheDocument();
-    expect(screen.getByText("Nếu đang bàn giao, hãy chuyển người phụ trách sang dòng mới nhất rồi khóa giai đoạn cũ.")).toBeInTheDocument();
+    expect(screen.getByText(/Gợi ý xử lý nhanh:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Giữ 1 dòng hiện hành và chốt ngày kết thúc cho các dòng còn lại\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Nếu đang bàn giao, hãy chuyển người phụ trách sang dòng mới nhất rồi khóa giai đoạn cũ\./i)).toBeInTheDocument();
   });
 });

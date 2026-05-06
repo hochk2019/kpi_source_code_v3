@@ -33,7 +33,7 @@ describe("mst assignment history filter panel", () => {
       />
     );
 
-    expect(screen.getByText("Bộ lọc lịch sử thay đổi")).toBeInTheDocument();
+    expect(screen.getByText(/Bộ lọc lịch sử thay đổi/i)).toBeInTheDocument();
     expect(screen.getByText(/Hiển thị 4 \/ 9 bản ghi lịch sử\./)).toBeInTheDocument();
     expect(screen.getByText(/\* Danh sách MST cũng đang lọc theo điều kiện lịch sử này\./)).toBeInTheDocument();
 

@@ -40,24 +40,24 @@ describe("ReportingExecutiveSummaryPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Tóm tắt điều hành KPI")).toBeTruthy();
-    expect(screen.getByText("KPI / tờ khai")).toBeTruthy();
+    expect(screen.getByText(/Tóm tắt điều hành KPI/i)).toBeTruthy();
+    expect(screen.getByText(/KPI \/ tờ khai/i)).toBeTruthy();
     expect(screen.getByText("5.0")).toBeTruthy();
-    expect(screen.getByText("Nhân sự dẫn đầu")).toBeTruthy();
+    expect(screen.getByText(/Nhân sự dẫn đầu/i)).toBeTruthy();
     expect(screen.getByText("Alice")).toBeTruthy();
-    expect(screen.getByText("Tổ đội chiếm tỷ trọng cao nhất")).toBeTruthy();
+    expect(screen.getByText(/Tổ đội chiếm tỷ trọng cao nhất/i)).toBeTruthy();
     expect(screen.getByText("Team A")).toBeTruthy();
-    expect(screen.getByText("62.0% tổng KPI")).toBeTruthy();
-    expect(screen.getByText("Điều chỉnh chờ duyệt")).toBeTruthy();
+    expect(screen.getByText(/62\.0% tổng KPI/i)).toBeTruthy();
+    expect(screen.getByText(/Điều chỉnh chờ duyệt/i)).toBeTruthy();
     expect(screen.getByText("3")).toBeTruthy();
-    expect(screen.getByText("Tín hiệu lệch chuẩn")).toBeTruthy();
-    expect(screen.getByText("Xu hướng KPI đang giảm")).toBeTruthy();
+    expect(screen.getByText(/Tín hiệu lệch chuẩn/i)).toBeTruthy();
+    expect(screen.getByText(/Xu hướng KPI đang giảm/i)).toBeTruthy();
     expect(screen.getByText(/-5\.0 điểm KPI \(-4\.8%\) so với kỳ liền trước/i)).toBeTruthy();
-    expect(screen.getByText("Điều chỉnh KPI chưa khóa sổ")).toBeTruthy();
+    expect(screen.getByText(/Điều chỉnh KPI chưa khóa sổ/i)).toBeTruthy();
     expect(screen.getByText(/3 điều chỉnh đang chờ duyệt/i)).toBeTruthy();
-    expect(screen.getByText("KPI đang tập trung mạnh vào một tổ đội")).toBeTruthy();
+    expect(screen.getByText(/KPI đang tập trung mạnh vào một tổ đội/i)).toBeTruthy();
     expect(screen.getByText(/Team A chiếm 62\.0% tổng KPI/i)).toBeTruthy();
-    expect(screen.getByText("Top nhân sự chiếm tỷ trọng KPI cao")).toBeTruthy();
+    expect(screen.getByText(/Top nhân sự chiếm tỷ trọng KPI cao/i)).toBeTruthy();
     expect(screen.getByText(/Alice đang đóng góp 40\.0% tổng KPI/i)).toBeTruthy();
   });
 

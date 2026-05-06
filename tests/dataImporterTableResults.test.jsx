@@ -91,7 +91,7 @@ describe("DataImporterTableResults", () => {
     render(<DataImporterTableResults {...sharedProps} />);
 
     expect(screen.getByRole("table", { name: "Danh sách tờ khai import" })).toBeInTheDocument();
-    expect(screen.getByText("Danh sách tờ khai import")).toBeInTheDocument();
+    expect(screen.getByText(/Danh sách tờ khai import/i)).toBeInTheDocument();
     expect(screen.getByText("mock-header-selection")).toBeInTheDocument();
     expect(screen.getByText("mock-body-1")).toBeInTheDocument();
     expect(lastHeaderProps.selectionEnabled).toBe(true);

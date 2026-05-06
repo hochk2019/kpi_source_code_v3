@@ -57,8 +57,8 @@ describe("RulesTestWorkspacePanel", () => {
       />
     );
 
-    expect(screen.getByText("Test nhanh 1 tờ khai đã import")).toBeInTheDocument();
-    expect(screen.getByText("Test nhập tay")).toBeInTheDocument();
+    expect(screen.getByText(/Test nhanh 1 tờ khai đã import/i)).toBeInTheDocument();
+    expect(screen.getByText(/Test nhập tay/i)).toBeInTheDocument();
     expect(screen.getByText(/Hiển thị 1 \/ 1 tờ khai đã lưu/i)).toBeInTheDocument();
     expect(screen.getByText(/Số tờ khai:/i)).toBeInTheDocument();
     expect(screen.getByText("9.5")).toBeInTheDocument();

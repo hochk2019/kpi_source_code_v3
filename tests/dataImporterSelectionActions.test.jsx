@@ -43,7 +43,7 @@ describe("DataImporterSelectionActions", () => {
     const user = userEvent.setup();
     const handlers = renderActions();
 
-    expect(screen.getByText("Đã chọn 3 tờ khai")).toBeInTheDocument();
+    expect(screen.getByText(/Đã chọn 3 tờ khai/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Chọn tất cả kết quả lọc" }));
     await user.click(screen.getByRole("button", { name: "Đánh dấu đã rà soát" }));

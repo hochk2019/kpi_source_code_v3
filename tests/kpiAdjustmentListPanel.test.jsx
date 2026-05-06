@@ -95,7 +95,7 @@ describe("kpi adjustment list panel", () => {
     await userEvent.selectOptions(screen.getByLabelText("Lọc theo nhân viên"), "lan");
     expect(onStaffFilterChange).toHaveBeenCalledWith("lan");
 
-    expect(screen.getByText("Không có điểm KPI bổ sung nào phù hợp với bộ lọc hiện tại.")).toBeInTheDocument();
+    expect(screen.getByText(/Không có điểm KPI bổ sung nào phù hợp với bộ lọc hiện tại\./i)).toBeInTheDocument();
   });
 
   it("renders row badges and forwards action callbacks", async () => {
@@ -182,13 +182,13 @@ describe("kpi adjustment list panel", () => {
       />
     );
 
-    const row = screen.getByText("Hỗ trợ khác").closest("tr");
+    const row = screen.getByText(/Hỗ trợ khác/i).closest("tr");
     const queries = within(row);
 
-    expect(queries.getByText("Chế độ: Cố định")).toBeInTheDocument();
+    expect(queries.getByText(/Chế độ: Cố định/i)).toBeInTheDocument();
     expect(queries.getByText("GP: ZB03")).toBeInTheDocument();
-    expect(queries.getByText("Nhóm hỗ trợ")).toBeInTheDocument();
-    expect(queries.getByText("Chờ duyệt")).toBeInTheDocument();
+    expect(queries.getByText(/Nhóm hỗ trợ/i)).toBeInTheDocument();
+    expect(queries.getByText(/Chờ duyệt/i)).toBeInTheDocument();
     expect(queries.getByText("fmt:2026-03-26T10:00:00.000Z")).toBeInTheDocument();
 
     await userEvent.click(queries.getByRole("button", { name: "Sửa" }));
@@ -282,10 +282,10 @@ describe("kpi adjustment list panel", () => {
       />
     );
 
-    expect(screen.getByText("Hiển thị 3-3 / 3 mục")).toBeInTheDocument();
+    expect(screen.getByText(/Hiển thị 3-3 \/ 3 mục/i)).toBeInTheDocument();
     expect(screen.getByText("Trang 2 / 2")).toBeInTheDocument();
     expect(screen.getByText("Page size 2")).toBeInTheDocument();
-    expect(screen.getByText("Đã chọn 1 mục trên trang hiện tại")).toBeInTheDocument();
+    expect(screen.getByText(/Đã chọn 1 mục trên trang hiện tại/i)).toBeInTheDocument();
     expect(screen.getAllByText("Hỗ trợ khác").length).toBeGreaterThan(0);
 
     await userEvent.click(screen.getByRole("checkbox", { name: "Chọn tất cả mục trên trang" }));

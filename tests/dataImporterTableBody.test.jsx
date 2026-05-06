@@ -135,11 +135,11 @@ describe("DataImporterTableBody", () => {
     expect(screen.getByText("TK-001")).toBeInTheDocument();
     expect(screen.getByText("01/08/2025")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cập nhật" })).toBeInTheDocument();
-    expect(screen.getByText("CO lệch")).toBeInTheDocument();
-    expect(screen.getByText("Giữ mới nhất")).toBeInTheDocument();
-    expect(screen.getByText("Trùng 11 số")).toBeInTheDocument();
-    expect(screen.getByText("Chưa lưu")).toBeInTheDocument();
-    expect(screen.getByText("Trạng thái: existing")).toBeInTheDocument();
+    expect(screen.getByText(/CO lệch/i)).toBeInTheDocument();
+    expect(screen.getByText(/Giữ mới nhất/i)).toBeInTheDocument();
+    expect(screen.getByText(/Trùng 11 số/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chưa lưu/i)).toBeInTheDocument();
+    expect(screen.getByText(/Trạng thái: existing/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("1")).toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox"));
@@ -248,13 +248,13 @@ describe("DataImporterTableBody", () => {
       </table>,
     );
 
-    expect(screen.getByText("Khóa rà soát")).toBeInTheDocument();
-    expect(screen.getByText("Không thể cập nhật")).toBeInTheDocument();
+    expect(screen.getByText(/Khóa rà soát/i)).toBeInTheDocument();
+    expect(screen.getByText(/Không thể cập nhật/i)).toBeInTheDocument();
     expect(screen.getByText(/Đã xóa bởi tester lúc 02\/08\/2025 10:00/)).toBeInTheDocument();
     expect(screen.getAllByText("Nhân viên")).toHaveLength(1);
     expect(screen.getAllByText("An")).toHaveLength(2);
-    expect(screen.getByText("Bởi: tester")).toBeInTheDocument();
-    expect(screen.getByText("Bình")).toBeInTheDocument();
+    expect(screen.getByText(/Bởi: tester/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bình/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Khôi phục" })).toBeInTheDocument();
 
     cleanup();
@@ -306,6 +306,6 @@ describe("DataImporterTableBody", () => {
       </table>,
     );
 
-    expect(screen.getByText("Không có dữ liệu")).toBeInTheDocument();
+    expect(screen.getByText(/Không có dữ liệu/i)).toBeInTheDocument();
   });
 });

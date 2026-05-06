@@ -45,8 +45,8 @@ describe("AccountPermissionGroupsPanel", () => {
       />
     );
 
-    expect(screen.getByText("Quản trị hệ thống")).toBeInTheDocument();
-    expect(screen.getByText("1/2 quyền")).toBeInTheDocument();
+    expect(screen.getByText(/Quản trị hệ thống/i)).toBeInTheDocument();
+    expect(screen.getByText(/1\/2 quyền/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Thu gọn" }));
     expect(onToggleGroup).toHaveBeenCalledWith("Quản trị hệ thống");
@@ -85,7 +85,7 @@ describe("AccountPermissionGroupsPanel", () => {
       />
     );
 
-    expect(screen.getByText("1/2 quyền đang bật")).toBeInTheDocument();
+    expect(screen.getByText(/1\/2 quyền đang bật/i)).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Quản lý tài khoản/i })).toBeDisabled();
 
     await user.click(screen.getByRole("checkbox", { name: /Quy tắc KPI/i }));

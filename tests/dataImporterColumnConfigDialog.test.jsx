@@ -42,8 +42,8 @@ describe("DataImporterColumnConfigDialog", () => {
     const handlers = renderDialog({ isAdminRole: true });
 
     expect(screen.getByRole("dialog", { name: "Cấu hình cột Import Data" })).toBeInTheDocument();
-    expect(screen.getByText("Đang giữ 7/8 mục hiển thị (bao gồm cột dữ liệu và thao tác).")).toBeInTheDocument();
-    expect(screen.getByText("Không thể ẩn tất cả cột")).toBeInTheDocument();
+    expect(screen.getByText(/Đang giữ 7\/8 mục hiển thị \(bao gồm cột dữ liệu và thao tác\)\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Không thể ẩn tất cả cột/i)).toBeInTheDocument();
 
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes).toHaveLength(2);
@@ -65,7 +65,7 @@ describe("DataImporterColumnConfigDialog", () => {
     renderDialog({ isAdminRole: false });
 
     const sensitiveCheckbox = screen.getAllByRole("checkbox")[1];
-    expect(screen.getByText("Chỉ admin có thể bật/tắt.")).toBeInTheDocument();
+    expect(screen.getByText(/Chỉ admin có thể bật\/tắt\./i)).toBeInTheDocument();
     expect(sensitiveCheckbox).toBeDisabled();
   });
 });

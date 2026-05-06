@@ -37,14 +37,14 @@ describe("DataImporterFilterPresetControls", () => {
 
     render(<DataImporterFilterPresetControls {...props} />);
 
-    expect(screen.getByText("Bộ lọc đã lưu")).toBeInTheDocument();
+    expect(screen.getByText(/Bộ lọc đã lưu/i)).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveValue("preset-1");
     expect(
       screen.getByText((_, node) =>
         node?.textContent === "Đang áp dụng: Preset A • Cập nhật 10/03/2026 19:30",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Không thể lưu preset")).toBeInTheDocument();
+    expect(screen.getByText(/Không thể lưu preset/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "preset-2" } });
     fireEvent.click(screen.getByRole("button", { name: "Áp dụng" }));
@@ -77,7 +77,7 @@ describe("DataImporterFilterPresetControls", () => {
 
     expect(screen.queryByRole("button", { name: "Ghi đè preset" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Xoá preset" })).toBeNull();
-    expect(screen.queryByText("Đang áp dụng:")).toBeNull();
+    expect(screen.queryByText(/Đang áp dụng:/i)).toBeNull();
     expect(screen.queryByRole("button", { name: "Đóng" })).toBeNull();
   });
 

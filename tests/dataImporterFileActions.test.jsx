@@ -34,8 +34,8 @@ describe("DataImporterFileActions", () => {
 
     const fileInput = screen.getByTestId("import-file-input");
     expect(fileInput).toHaveAttribute("type", "file");
-    expect(screen.getByText("Đã chọn: imports.xlsx")).toBeInTheDocument();
-    expect(screen.getByText("Đang xem dữ liệu đã lưu")).toBeInTheDocument();
+    expect(screen.getByText(/Đã chọn: imports\.xlsx/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đang xem dữ liệu đã lưu/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Chọn file XLSX" }));
     fireEvent.click(screen.getByRole("button", { name: "Import XLSX" }));

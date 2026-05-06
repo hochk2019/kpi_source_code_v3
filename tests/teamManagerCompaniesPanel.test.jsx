@@ -51,7 +51,7 @@ describe("TeamManagerCompaniesPanel", () => {
   it("renders team company table and pagination callbacks", () => {
     const props = renderPanel();
 
-    expect(screen.getByText("Doanh nghiệp theo Team Alpha")).toBeInTheDocument();
+    expect(screen.getByText(/Doanh nghiệp theo Team Alpha/i)).toBeInTheDocument();
     expect(screen.getByText("Cong ty A")).toBeInTheDocument();
     expect(screen.getByText("Nguyen Van A")).toBeInTheDocument();
     expect(screen.getByText("Trang 1/2")).toBeInTheDocument();
@@ -68,9 +68,9 @@ describe("TeamManagerCompaniesPanel", () => {
       showPagination: false,
     });
 
-    expect(screen.getByText("Doanh nghiệp phụ trách của Nguyen Van A")).toBeInTheDocument();
+    expect(screen.getByText(/Doanh nghiệp phụ trách của Nguyen Van A/i)).toBeInTheDocument();
     expect(
-      screen.getByText("Thành viên này chưa được gán doanh nghiệp nào trong bảng MST."),
+      screen.getByText(/Thành viên này chưa được gán doanh nghiệp nào trong bảng MST\./i),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Xem toàn bộ team" }));

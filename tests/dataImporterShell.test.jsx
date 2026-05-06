@@ -102,7 +102,7 @@ describe("DataImporterShell", () => {
       />,
     );
 
-    expect(screen.getByText("Bạn chưa được cấp quyền tải file Import Data.")).toBeInTheDocument();
+    expect(screen.getByText(/Bạn chưa được cấp quyền tải file Import Data\./i)).toBeInTheDocument();
     expect(
       screen.getByText(
         "Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.",

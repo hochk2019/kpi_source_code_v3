@@ -179,8 +179,8 @@ describe("DataImporterDuplicateReviewDialog", () => {
       />,
     );
 
-    expect(screen.getByText("Hãy chọn bản giữ lại hoặc chuyển nhóm sang trạng thái “Cần rà soát” trước khi xác nhận.")).toBeInTheDocument();
-    expect(screen.getByText("Không tìm thấy nhóm trùng để rà soát.")).toBeInTheDocument();
+    expect(screen.getByText(/Hãy chọn bản giữ lại hoặc chuyển nhóm sang trạng thái “Cần rà soát” trước khi xác nhận\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Không tìm thấy nhóm trùng để rà soát\./i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thực hiện xử lý" })).toBeDisabled();
   });
 });

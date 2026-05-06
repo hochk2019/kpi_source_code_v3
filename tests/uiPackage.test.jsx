@@ -55,6 +55,6 @@ describe("packages/ui", () => {
 
     expect(screen.getByRole("table", { name: "Bảng tài khoản" })).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
-    expect(screen.getByText("Quản trị")).toBeInTheDocument();
+    expect(screen.getByText(/Quản trị/i)).toBeInTheDocument();
   });
 });

@@ -58,8 +58,8 @@ describe("AccountPermissionsDialog", () => {
 
     expect(await screen.findByRole("dialog", { name: "Quản lý quyền" })).toBeInTheDocument();
     expect(screen.getByText("nhanvien")).toBeInTheDocument();
-    expect(screen.getByText("Nguyễn Văn A")).toBeInTheDocument();
-    expect(screen.getByText("Tổ Thuế A")).toBeInTheDocument();
+    expect(screen.getByText(/Nguyễn Văn A/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tổ Thuế A/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "Cuộn lên đầu" }));

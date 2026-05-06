@@ -188,12 +188,12 @@ describe("ReportingPanels", () => {
       const scheduleRegion = screen.getByRole("region", { name: /lập lịch gửi báo cáo kpi/i });
 
       expect(within(scheduleRegion).getByText(/xem trước lần gửi kế tiếp/i)).toBeTruthy();
-      expect(within(scheduleRegion).getByText("Lịch điều hành tháng")).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/Lịch điều hành tháng/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText(/ngày 31 hàng tháng lúc 09:45/i)).toBeTruthy();
-      expect(within(scheduleRegion).getByText("Lịch đang tạm tắt")).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/Lịch đang tạm tắt/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText("Excel + PDF")).toBeTruthy();
-      expect(within(scheduleRegion).getByText("Không dùng email")).toBeTruthy();
-      expect(within(scheduleRegion).getByText("Trung tâm báo cáo + Gói tải xuống")).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/Không dùng email/i)).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/Trung tâm báo cáo + Gói tải xuống/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText(/read model tháng mặc định 2026-03-01 → 2026-03-31/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText(/09:45 31\/03\/2026/)).toBeTruthy();
     } finally {

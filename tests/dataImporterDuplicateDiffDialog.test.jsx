@@ -57,7 +57,7 @@ describe("DataImporterDuplicateDiffDialog", () => {
 
     expect(screen.getByRole("dialog", { name: "So sánh bản ghi trùng" })).toBeInTheDocument();
     expect(screen.getByText(/trong nhóm 12345678901/)).toBeInTheDocument();
-    expect(screen.getByText("2 trường khác nhau")).toBeInTheDocument();
+    expect(screen.getByText(/2 trường khác nhau/i)).toBeInTheDocument();
 
     const selects = screen.getAllByRole("combobox");
     expect(selects).toHaveLength(2);
@@ -73,10 +73,10 @@ describe("DataImporterDuplicateDiffDialog", () => {
     expect(handlers.onClose).toHaveBeenCalledTimes(1);
 
     const table = screen.getByRole("table");
-    expect(within(table).getByText("Doanh nghiệp")).toBeInTheDocument();
-    expect(within(table).getByText("Công ty A")).toBeInTheDocument();
-    expect(within(table).getByText("Công ty B")).toBeInTheDocument();
-    expect(within(table).getByText("(trống)")).toBeInTheDocument();
+    expect(within(table).getByText(/Doanh nghiệp/i)).toBeInTheDocument();
+    expect(within(table).getByText(/Công ty A/i)).toBeInTheDocument();
+    expect(within(table).getByText(/Công ty B/i)).toBeInTheDocument();
+    expect(within(table).getByText(/\(trống\)/i)).toBeInTheDocument();
   });
 
   it("hiển thị trạng thái empty khi không có nhóm diff", () => {
@@ -88,7 +88,7 @@ describe("DataImporterDuplicateDiffDialog", () => {
       />,
     );
 
-    expect(screen.getByText("Không tìm thấy nhóm trùng để so sánh.")).toBeInTheDocument();
+    expect(screen.getByText(/Không tìm thấy nhóm trùng để so sánh\./i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Đóng" })).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });

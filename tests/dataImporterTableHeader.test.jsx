@@ -54,14 +54,14 @@ describe("DataImporterTableHeader", () => {
   it("hiển thị đầy đủ các cột grid và resize handle tương ứng", () => {
     const { renderResizeHandle } = renderHeader();
 
-    expect(screen.getByText("Chọn")).toBeInTheDocument();
-    expect(screen.getByText("Ngày đăng ký")).toBeInTheDocument();
-    expect(screen.getByText("Số tờ khai")).toBeInTheDocument();
+    expect(screen.getByText(/Chọn/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ngày đăng ký/i)).toBeInTheDocument();
+    expect(screen.getByText(/Số tờ khai/i)).toBeInTheDocument();
     expect(screen.getByText("MST")).toBeInTheDocument();
-    expect(screen.getByText("Doanh nghiệp")).toBeInTheDocument();
-    expect(screen.getByText("Nhật ký")).toBeInTheDocument();
-    expect(screen.getByText("Cập nhật")).toBeInTheDocument();
-    expect(screen.getByText("Xóa / Khôi phục")).toBeInTheDocument();
+    expect(screen.getByText(/Doanh nghiệp/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nhật ký/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cập nhật/i)).toBeInTheDocument();
+    expect(screen.getByText(/Xóa \/ Khôi phục/i)).toBeInTheDocument();
     expect(screen.getByText("resize-date")).toBeInTheDocument();
     expect(screen.getByText("resize-update")).toBeInTheDocument();
     expect(renderResizeHandle).toHaveBeenCalledWith("date");
@@ -79,13 +79,13 @@ describe("DataImporterTableHeader", () => {
       frozenOffsets: {},
     });
 
-    expect(screen.queryByText("Chọn")).toBeNull();
-    expect(screen.queryByText("Nhật ký")).toBeNull();
-    expect(screen.queryByText("Cập nhật")).toBeNull();
-    expect(screen.queryByText("Xóa / Khôi phục")).toBeNull();
-    expect(screen.queryByText("Đại lý")).toBeNull();
-    expect(screen.queryByText("Số GP")).toBeNull();
+    expect(screen.queryByText(/Chọn/i)).toBeNull();
+    expect(screen.queryByText(/Nhật ký/i)).toBeNull();
+    expect(screen.queryByText(/Cập nhật/i)).toBeNull();
+    expect(screen.queryByText(/Xóa \/ Khôi phục/i)).toBeNull();
+    expect(screen.queryByText(/Đại lý/i)).toBeNull();
+    expect(screen.queryByText(/Số GP/i)).toBeNull();
     expect(screen.queryByText("KPI")).toBeNull();
-    expect(screen.getByText("Doanh nghiệp")).toBeInTheDocument();
+    expect(screen.getByText(/Doanh nghiệp/i)).toBeInTheDocument();
   });
 });

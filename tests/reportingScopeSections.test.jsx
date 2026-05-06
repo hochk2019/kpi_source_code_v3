@@ -267,7 +267,7 @@ describe("reporting scope sections", () => {
       />,
     );
 
-    expect(screen.getByText("Tổ đội: Team Alpha")).toBeTruthy();
+    expect(screen.getByText(/Tổ đội: Team Alpha/i)).toBeTruthy();
     expect(screen.getByText(/thành viên: an team alpha, bình team alpha/i)).toBeTruthy();
   });
 

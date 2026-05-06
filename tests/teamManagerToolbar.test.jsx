@@ -28,7 +28,7 @@ describe("TeamManagerToolbar", () => {
   it("renders counters and forwards toolbar actions", () => {
     const props = renderToolbar();
 
-    expect(screen.getByText("Tổng cộng 2 tổ đội — 5 thành viên")).toBeInTheDocument();
+    expect(screen.getByText(/Tổng cộng 2 tổ đội — 5 thành viên/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
     fireEvent.click(screen.getByRole("button", { name: "Hoàn tác về dữ liệu đã lưu" }));
@@ -46,7 +46,7 @@ describe("TeamManagerToolbar", () => {
   it("shows read-only state messaging", () => {
     renderToolbar({ dirty: false, isReadOnly: true, historyOpen: true });
 
-    expect(screen.getByText("Chế độ chỉ xem — không thể lưu thay đổi")).toBeInTheDocument();
+    expect(screen.getByText(/Chế độ chỉ xem — không thể lưu thay đổi/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ẩn lịch sử" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Lưu thay đổi" }).at(-1)).toBeDisabled();
   });

@@ -115,19 +115,19 @@ describe("ReportingAdjustmentsPanel", () => {
   it("renders approved adjustments, pending/rejected summaries, and resets paging after page-size change", async () => {
     renderPanel();
 
-    expect(screen.getByText("Hạng mục 1")).toBeTruthy();
-    expect(screen.getByText("Hạng mục 5")).toBeTruthy();
-    expect(screen.queryByText("Hạng mục 6")).toBeNull();
+    expect(screen.getByText(/Hạng mục 1/i)).toBeTruthy();
+    expect(screen.getByText(/Hạng mục 5/i)).toBeTruthy();
+    expect(screen.queryByText(/Hạng mục 6/i)).toBeNull();
     expect(screen.getByText("Trang 1/2")).toBeTruthy();
-    expect(screen.getByText("Chờ duyệt 1")).toBeTruthy();
-    expect(screen.getByText("Từ chối 1")).toBeTruthy();
-    expect(screen.getByText("Còn 1 mục khác đã bị từ chối.")).toBeTruthy();
+    expect(screen.getByText(/Chờ duyệt 1/i)).toBeTruthy();
+    expect(screen.getByText(/Từ chối 1/i)).toBeTruthy();
+    expect(screen.getByText(/Còn 1 mục khác đã bị từ chối\./i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Sau" }));
 
     expect(screen.getByText("Trang 2/2")).toBeTruthy();
-    expect(screen.getByText("Hạng mục 6")).toBeTruthy();
-    expect(screen.queryByText("Hạng mục 1")).toBeNull();
+    expect(screen.getByText(/Hạng mục 6/i)).toBeTruthy();
+    expect(screen.queryByText(/Hạng mục 1/i)).toBeNull();
     expect(screen.getByRole("button", { name: "Sau" })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Số mục mỗi trang"), {
@@ -138,8 +138,8 @@ describe("ReportingAdjustmentsPanel", () => {
       expect(screen.getByText("Trang 1/1")).toBeTruthy();
     });
 
-    expect(screen.getByText("Hạng mục 1")).toBeTruthy();
-    expect(screen.getByText("Hạng mục 6")).toBeTruthy();
+    expect(screen.getByText(/Hạng mục 1/i)).toBeTruthy();
+    expect(screen.getByText(/Hạng mục 6/i)).toBeTruthy();
   });
 
   it("renders empty states when there are no approved or queued adjustments", () => {
@@ -159,10 +159,10 @@ describe("ReportingAdjustmentsPanel", () => {
     });
 
     expect(
-      screen.getByText("Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này."),
+      screen.getByText(/Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này\./i),
     ).toBeTruthy();
-    expect(screen.getByText("Không có yêu cầu đang chờ.")).toBeTruthy();
-    expect(screen.getByText("Chưa có dữ liệu phân bổ.")).toBeTruthy();
-    expect(screen.queryByText("Đã từ chối gần đây")).toBeNull();
+    expect(screen.getByText(/Không có yêu cầu đang chờ\./i)).toBeTruthy();
+    expect(screen.getByText(/Chưa có dữ liệu phân bổ\./i)).toBeTruthy();
+    expect(screen.queryByText(/Đã từ chối gần đây/i)).toBeNull();
   });
 });

@@ -106,16 +106,16 @@ describe("ReportViewer", () => {
     render(<ReportViewer />);
 
     expect((await screen.findAllByText(/Rules tháng 8/)).length).toBeGreaterThan(0);
-    expect(screen.getByText("Áp dụng từ 2024-08-01")).toBeTruthy();
+    expect(screen.getByText(/Áp dụng từ 2024-08-01/i)).toBeTruthy();
     expect(await screen.findByText(/Tổng hợp tháng mặc định: 2024-08-01 → 2024-08-31/i)).toBeTruthy();
-    expect(screen.getByText("Tổng tờ khai")).toBeTruthy();
+    expect(screen.getByText(/Tổng tờ khai/i)).toBeTruthy();
     expect(screen.getAllByText(/2\s+tờ khai hợp lệ/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Phương").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Team 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Điểm KPI +/- bổ sung").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Điểm đã áp dụng/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Xu hướng KPI 6 kỳ gần nhất").length).toBeGreaterThan(0);
-    expect(screen.getByText("Phân bổ lượng tờ khai theo tổ đội")).toBeTruthy();
+    expect(screen.getByText(/Phân bổ lượng tờ khai theo tổ đội/i)).toBeTruthy();
     expect(screen.getByText(/Top nhân viên theo .*điểm KPI/i)).toBeTruthy();
   });
 

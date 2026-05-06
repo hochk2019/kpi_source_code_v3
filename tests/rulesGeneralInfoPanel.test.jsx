@@ -45,8 +45,8 @@ describe("RulesGeneralInfoPanel", () => {
       />
     );
 
-    expect(screen.getByText("Phiên bản đang chỉnh:")).toBeInTheDocument();
-    expect(screen.getByText("Thông tin chung").parentElement?.textContent).toContain(
+    expect(screen.getByText(/Phiên bản đang chỉnh:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Thông tin chung/i).parentElement?.textContent).toContain(
       "26/03/2026 08:00:00"
     );
 

@@ -118,17 +118,17 @@ describe("DataImporterSyncConfigPanel", () => {
 
     render(<DataImporterSyncConfigPanel {...props} />);
 
-    expect(screen.getByText("Đồng bộ tự động từ ECUS5VNACCS")).toBeInTheDocument();
-    expect(screen.getByText("Backend: Sẵn sàng")).toBeInTheDocument();
-    expect(screen.getByText("SQL Server: Cần kiểm tra")).toBeInTheDocument();
-    expect(screen.getByText("Lần kiểm tra: 10/03/2026 21:05")).toBeInTheDocument();
-    expect(screen.getByText("Tóm tắt lần đồng bộ gần nhất")).toBeInTheDocument();
+    expect(screen.getByText(/Đồng bộ tự động từ ECUS5VNACCS/i)).toBeInTheDocument();
+    expect(screen.getByText(/Backend: Sẵn sàng/i)).toBeInTheDocument();
+    expect(screen.getByText(/SQL Server: Cần kiểm tra/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lần kiểm tra: 10\/03\/2026 21:05/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tóm tắt lần đồng bộ gần nhất/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Biểu thức cron")).toHaveValue("0 * * * *");
     expect(screen.getByLabelText("Chỉ đồng bộ các MST")).toHaveValue("0100109106");
-    expect(screen.getByText("Cảnh báo overwrite trước khi đồng bộ")).toBeInTheDocument();
-    expect(screen.getByText("Gợi ý khắc phục")).toBeInTheDocument();
-    expect(screen.getByText("Kiểm tra VPN và đường vào SQL Server")).toBeInTheDocument();
-    expect(screen.getByText("Lịch sử đồng bộ gần đây")).toBeInTheDocument();
+    expect(screen.getByText(/Cảnh báo overwrite trước khi đồng bộ/i)).toBeInTheDocument();
+    expect(screen.getByText(/Gợi ý khắc phục/i)).toBeInTheDocument();
+    expect(screen.getByText(/Kiểm tra VPN và đường vào SQL Server/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lịch sử đồng bộ gần đây/i)).toBeInTheDocument();
     expect(screen.getByText(/Khoảng chạy: 2026-03-01 → 2026-03-08/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Tải lại cấu hình" }));
@@ -162,9 +162,9 @@ describe("DataImporterSyncConfigPanel", () => {
 
     render(<DataImporterSyncConfigPanel {...props} />);
 
-    expect(screen.getByText("Đồng bộ ECUS")).toBeInTheDocument();
+    expect(screen.getByText(/Đồng bộ ECUS/i)).toBeInTheDocument();
     expect(
-      screen.getByText("Lần chạy gần nhất: 10/03/2026 21:00 • Trạng thái: healthy"),
+      screen.getByText(/Lần chạy gần nhất: 10\/03\/2026 21:00 • Trạng thái: healthy/i),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Cập nhật trạng thái" }));

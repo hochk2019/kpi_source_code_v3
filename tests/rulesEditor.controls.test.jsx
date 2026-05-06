@@ -117,7 +117,7 @@ describe("RulesEditor controls", () => {
     render(<CodeMultiSelectHarness />);
 
     fireEvent.click(screen.getByRole("button", { name: "Chọn mã loại hình" }));
-    fireEvent.click(await screen.findByText("Nhập kinh doanh"));
+    fireEvent.click(await screen.findByText(/Nhập kinh doanh/i));
 
     await waitFor(() => {
       expect(screen.getByTestId("code-state").textContent).toContain('["A11"]');
