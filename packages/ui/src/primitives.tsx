@@ -36,12 +36,22 @@ export interface DataTableColumn<T = Record<string, unknown>> {
   label?: React.ReactNode;
   align?: "left" | "center" | "right";
   width?: string | number;
+  minWidth?: string | number;
+  maxWidth?: string | number;
   headerClassName?: string;
   cellClassName?: string;
   headProps?: Record<string, unknown>;
   cellProps?: Record<string, unknown>;
   renderHeader?: (column: DataTableColumn<T>) => React.ReactNode;
   cell?: (item: T, index: number) => React.ReactNode;
+  /** Enable inline editing for this column */
+  editable?: boolean;
+  /** Sortable column */
+  sortable?: boolean;
+  /** Current sort direction */
+  sortDirection?: "asc" | "desc" | null;
+  /** Callback when header clicked for sorting */
+  onSort?: () => void;
 }
 
 export interface DataTableProps<T = Record<string, unknown>> {
@@ -59,6 +69,38 @@ export interface DataTableProps<T = Record<string, unknown>> {
   caption?: string;
   ariaLabel?: string;
   ariaDescribedBy?: string;
+  /** Row selection */
+  selection?: {
+    selectedIds: string[];
+    onSelect: (id: string, selected: boolean) => void;
+    onSelectAll: (selected: boolean) => void;
+    keyExtractor?: (item: T) => string;
+  };
+  /** Error state */
+  error?: {
+    message: string;
+    onRetry?: () => void;
+  } | null;
+  /** Column resizing */
+  columnResize?: {
+    enabled: boolean;
+    onResize?: (columnKey: string, width: number) => void;
+  };
+  /** Global sort handler */
+  onSort?: (columnKey: string, direction: "asc" | "desc") => void;
+  /** Sort configuration */
+  sort?: {
+    column: string | null;
+    direction: "asc" | "desc" | null;
+  };
+  /** Inline editing */
+  editable?: {
+    enabled: boolean;
+    onCellChange?: (rowId: string, columnKey: string, value: unknown) => void;
+    editingCell?: { rowId: string; columnKey: string } | null;
+    onStartEdit?: (rowId: string, columnKey: string) => void;
+    onCancelEdit?: () => void;
+  };
 }
 
 const densityPadding: Record<string, string> = {
@@ -82,8 +124,16 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
   caption,
   ariaLabel,
   ariaDescribedBy,
+  selection,
+  error,
+  columnResize,
+  onSort,
+  sort,
+  editable,
 }: DataTableProps<T>) {
   const paddingClass = densityPadding[density] || densityPadding.comfortable;
+  const hasSelection = selection != null;
+  const colCount = columns.length + (hasSelection ? 1 : 0);
 
   const resolvedRowKey =
     typeof rowKey === "function"
@@ -93,12 +143,59 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
             ? `${rowKey}:${item[rowKey]}`
             : `row-${index}`;
 
+  const getRowId = (item: T, index: number): string => {
+    if (selection?.keyExtractor) {
+      return selection.keyExtractor(item);
+    }
+    return resolvedRowKey(item, index);
+  };
+
+  const isAllSelected = data.length > 0 && data.every((item, idx) =>
+    selection?.selectedIds.includes(getRowId(item, idx))
+  );
+
+  const isSomeSelected = data.some((item, idx) =>
+    selection?.selectedIds.includes(getRowId(item, idx))
+  ) && !isAllSelected;
+
+  const handleSelectAll = (checked: boolean) => {
+    selection?.onSelectAll(checked);
+  };
+
+  const handleSelectRow = (item: T, index: number, checked: boolean) => {
+    const id = getRowId(item, index);
+    selection?.onSelect(id, checked);
+  };
+
   const renderEmpty = () => {
     if (typeof emptyState === "function") {
       return emptyState();
     }
     return <div>{emptyState}</div>;
   };
+
+  // Error state
+  if (error) {
+    return (
+      <div className={cn("ds-table-wrapper", className)}>
+        <div className="flex flex-col items-center justify-center p-8 text-center">
+          <div className="text-ds-destructive mb-2">
+            <span className="text-2xl">⚠</span>
+          </div>
+          <p className="text-ds-text-secondary text-sm mb-4">{error.message}</p>
+          {error.onRetry ? (
+            <button
+              type="button"
+              onClick={error.onRetry}
+              className="rounded-md bg-ds-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-ds-accent/90"
+            >
+              Thử lại
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("ds-table-wrapper", className)}>
@@ -116,6 +213,21 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
           )}
         >
           <TableRow>
+            {/* Selection header */}
+            {hasSelection ? (
+              <TableHead className={cn("ds-table__head w-10", paddingClass)}>
+                <input
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isSomeSelected;
+                  }}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  aria-label="Chọn tất cả"
+                  className="h-4 w-4 rounded border-ds-border-subtle text-ds-accent focus:ring-ds-accent"
+                />
+              </TableHead>
+            ) : null}
             {columns.map((column) => {
               const headProps = column?.headProps || {};
               const alignClass =
@@ -124,6 +236,18 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
                   : column.align === "center"
                     ? "text-center"
                     : "text-left";
+              const isSorted = sort?.column === column.key;
+              const sortDirection = isSorted ? sort?.direction : null;
+              const canSort = column.sortable || onSort != null;
+
+              const handleHeaderClick = () => {
+                if (canSort && onSort) {
+                  const newDirection = sortDirection === "asc" ? "desc" : "asc";
+                  onSort(column.key, newDirection);
+                }
+                column.onSort?.();
+              };
+
               return (
                 <TableHead
                   key={column.key || column.id || column.accessor || String(column.label)}
@@ -132,11 +256,24 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
                     alignClass,
                     paddingClass,
                     column?.headerClassName,
+                    canSort && "cursor-pointer hover:bg-ds-surface-muted",
                   )}
-                  style={column?.width ? { width: column.width } : undefined}
+                  style={{
+                    width: column?.width,
+                    minWidth: column?.minWidth,
+                    maxWidth: column?.maxWidth,
+                  }}
+                  onClick={canSort ? handleHeaderClick : undefined}
                   {...headProps}
                 >
-                  {column.renderHeader ? column.renderHeader(column) : column.label}
+                  <div className="flex items-center gap-1">
+                    {column.renderHeader ? column.renderHeader(column) : column.label}
+                    {canSort && sortDirection ? (
+                      <span className="text-ds-accent text-xs">
+                        {sortDirection === "asc" ? "↑" : "↓"}
+                      </span>
+                    ) : null}
+                  </div>
                 </TableHead>
               );
             })}
@@ -145,20 +282,36 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
         <TableBody className={cn("ds-table__body", bodyClassName)}>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={columns.length} className={cn("text-center text-[color:var(--ds-text-muted)]", paddingClass)}>
+              <TableCell colSpan={colCount} className={cn("text-center text-[color:var(--ds-text-muted)]", paddingClass)}>
                 Đang tải dữ liệu…
               </TableCell>
             </TableRow>
           ) : data && data.length > 0 ? (
             data.map((item, index) => {
               const key = resolvedRowKey(item, index);
+              const rowId = getRowId(item, index);
+              const isSelected = selection?.selectedIds.includes(rowId);
               const rowClassName = cn(
                 "align-top",
                 zebra && index % 2 === 1 && "ds-table__row--zebra",
+                isSelected && "bg-ds-accent/5",
                 (item as Record<string, unknown>)?.rowClassName as string | undefined,
               );
+
               return (
                 <TableRow key={key} className={rowClassName} data-row-index={index}>
+                  {/* Selection cell */}
+                  {hasSelection ? (
+                    <TableCell className={cn("w-10", paddingClass)}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleSelectRow(item, index, e.target.checked)}
+                        aria-label={`Chọn dòng ${index + 1}`}
+                        className="h-4 w-4 rounded border-ds-border-subtle text-ds-accent focus:ring-ds-accent"
+                      />
+                    </TableCell>
+                  ) : null}
                   {columns.map((column) => {
                     const cellProps = column?.cellProps || {};
                     const alignClass =
@@ -167,10 +320,30 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
                         : column.align === "center"
                           ? "text-center"
                           : "text-left";
+
+                    const isEditing = editable?.enabled &&
+                      editable.editingCell?.rowId === rowId &&
+                      editable.editingCell?.columnKey === column.key;
+
+                    const canEdit = column.editable && editable?.enabled;
+
+                    const handleCellClick = () => {
+                      if (canEdit && editable?.onStartEdit) {
+                        editable.onStartEdit(rowId, column.key);
+                      }
+                    };
+
+                    const handleCellChange = (value: unknown) => {
+                      if (editable?.onCellChange) {
+                        editable.onCellChange(rowId, column.key, value);
+                      }
+                    };
+
                     const content =
                       typeof column.cell === "function"
                         ? column.cell(item, index)
                         : item?.[column.key as keyof T];
+
                     return (
                       <TableCell
                         key={`${key}-${column.key || column.id}`}
@@ -179,11 +352,38 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
                           alignClass,
                           paddingClass,
                           column?.cellClassName,
+                          canEdit && "cursor-pointer hover:bg-ds-surface-muted",
                         )}
-                        style={column?.width ? { width: column.width } : undefined}
+                        style={{
+                          width: column?.width,
+                          minWidth: column?.minWidth,
+                          maxWidth: column?.maxWidth,
+                        }}
+                        onClick={canEdit && !isEditing ? handleCellClick : undefined}
                         {...cellProps}
                       >
-                        {content as React.ReactNode}
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            defaultValue={String(content ?? "")}
+                            autoFocus
+                            onBlur={(e) => {
+                              handleCellChange(e.target.value);
+                              editable?.onCancelEdit?.();
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleCellChange(e.currentTarget.value);
+                                editable?.onCancelEdit?.();
+                              } else if (e.key === "Escape") {
+                                editable?.onCancelEdit?.();
+                              }
+                            }}
+                            className="w-full rounded border border-ds-border-subtle px-2 py-1 text-sm"
+                          />
+                        ) : (
+                          (content as React.ReactNode)
+                        )}
                       </TableCell>
                     );
                   })}
@@ -192,7 +392,7 @@ export function DataTable<T extends Record<string, unknown> = Record<string, unk
             })
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length} className={cn("text-center", paddingClass)}>
+              <TableCell colSpan={colCount} className={cn("text-center", paddingClass)}>
                 <div className="ds-table__empty">{renderEmpty()}</div>
               </TableCell>
             </TableRow>

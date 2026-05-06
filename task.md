@@ -33,9 +33,10 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.2` (Slice 2: Compact PageHeader); da tao PageHeader + InfoTooltip components, replace hero block trong AppShellFrame, tests pass; 6 files created, 2 files modified.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.3` (Slice 3: SectionHeader info migration); da update SectionHeader API (add info prop, InfoTooltip, console.warn cho description), migrate 11 files tu description sang info; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.4` (Slice 4: Component library batch) - PHAN 1; da tao 6 components moi: EmptyState, PermissionBanner, ExportDropdown, BulkActionBar, LoadingState, FilterBar; skeleton-presets; re-exports; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.4b` (Slice 4 PHAN 2: DataTable extension + tests); da extend DataTable voi selection, sort, editable, error props; tao tests cho 6 components; typecheck passed.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
-  - `cng-0if.4b` - UX Review Slice 4 PHAN 2: DataTable extension + tests
+  - `cng-0if.5` - UX Review Slice 5: Page restructure batch A
 
 ## Active Slice
 
