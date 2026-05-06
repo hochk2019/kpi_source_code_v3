@@ -1,14 +1,15 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState } from "react";
 import { t } from '@/lib/i18n.js';
 
 import DataImporterSummaryCards from "@/components/dataImporter/DataImporterSummaryCards.jsx";
 import DataImporterUpdatedRowsBanner from "@/components/dataImporter/DataImporterUpdatedRowsBanner.jsx";
-import DataImporterWorkflowGuide from "@/components/dataImporter/DataImporterWorkflowGuide.jsx";
 import {
   buildWorkflowGuideState,
   getWorkflowStageStatus,
 } from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
-import { Info } from "lucide-react";
+import { PageHeader } from '@/components/designSystem/PageHeader';
+import { PermissionBanner } from '@/components/designSystem/primitives';
+import { FileUp, History, RefreshCw, Table } from "lucide-react";
 
 const DataImporterCoCodeConfigPanel = lazy(
   () => import("@/components/dataImporter/DataImporterCoCodeConfigPanel.jsx"),
@@ -105,6 +106,7 @@ export default function DataImporterShell({
   listControlsPanelProps,
   resultsPanelProps,
 }) {
+  const [activeTab, setActiveTab] = useState('table');
   const workflowState = buildWorkflowGuideState(workflowGuideProps);
   const previewSource = workflowGuideProps?.previewSource || null;
   const hasRows = !!workflowGuideProps?.hasRows;
@@ -112,6 +114,35 @@ export default function DataImporterShell({
   const sourceStageStatus = getWorkflowStageStatus(1, workflowState.currentStep);
   const reviewStageStatus = getWorkflowStageStatus(2, workflowState.currentStep);
   const saveStageStatus = getWorkflowStageStatus(3, workflowState.currentStep);
+
+  // Permission banner message
+  let permissionBanner = null;
+  if (!canUploadFiles) {
+    permissionBanner = {
+      level: 'warning',
+      title: t('import.noPermission.title'),
+      description: t('import.noPermission.desc', { permission: 'Import Data – tải file' }),
+    };
+  } else if (isReadOnlyForEdits && !canManageAlerts) {
+    permissionBanner = {
+      level: 'warning',
+      title: t('import.readonly.title') || 'Chế độ xem',
+      description: t('import.readonly.view'),
+    };
+  } else if (isReadOnlyForEdits && canManageAlerts) {
+    permissionBanner = {
+      level: 'info',
+      title: t('import.readonly.alertsTitle') || 'Chế độ cảnh báo',
+      description: t('import.readonly.alerts'),
+    };
+  }
+
+  const tabs = [
+    { id: 'table', label: 'Bảng tờ khai', icon: Table },
+    { id: 'preview', label: 'Xem trước', icon: FileUp },
+    { id: 'sync', label: 'Đồng bộ ECUS', icon: RefreshCw },
+    { id: 'history', label: 'Lịch sử', icon: History },
+  ];
 
   return (
     <>
@@ -123,110 +154,115 @@ export default function DataImporterShell({
       </Suspense>
 
       <div ref={rootRef} className="import-data-view space-y-3">
-        {!canUploadFiles && (
-          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
-            <div className="font-semibold">{t('import.noPermission.title')}</div>
-            <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">
-              {t('import.noPermission.desc', { permission: 'Import Data – tải file' })}
-            </p>
-          </div>
-        )}
-        {isReadOnlyForEdits && !canManageAlerts && (
-          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
-            {t('import.readonly.view')}
-          </div>
-        )}
-        {isReadOnlyForEdits && canManageAlerts && (
-          <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-200">
-            {t('import.readonly.alerts')}
-          </div>
+        <PageHeader
+          eyebrow="VẬN HÀNH"
+          title="Import dữ liệu"
+          info="Quản lý import tờ khai, đồng bộ ECUS, và lịch sử thay đổi"
+          meta={[
+            mode === 'preview' && previewSource === 'sync' ? 'Xem trước đồng bộ' :
+            mode === 'preview' ? 'Xem trước import' : 'Dữ liệu đã lưu'
+          ].filter(Boolean)}
+        />
+
+        {permissionBanner && (
+          <PermissionBanner
+            level={permissionBanner.level}
+            title={permissionBanner.title}
+            description={permissionBanner.description}
+          />
         )}
 
-        <DataImporterWorkflowGuide {...workflowGuideProps} />
+        {/* Page Tabs */}
+        <div className="border-b border-ds-border-subtle">
+          <div className="flex gap-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 ${
+                    activeTab === tab.id
+                      ? 'border-ds-accent text-ds-accent'
+                      : 'border-transparent text-ds-text-secondary hover:text-ds-text-primary'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-        {workflowState.currentStep === 1 && (
-          <WorkflowStageSection
-            id={stageIdByNumber.get(1)}
-            ariaLabel={t('import.step.source.title')}
-            title={t('import.step.source.title')}
-            description={t('import.step.source.desc')}
-            status={sourceStageStatus}
-          >
-            <Suspense fallback={<StageLoadingState message={t('import.loading.source')} />}>
-              <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
-              {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
-              <DataImporterFileActions {...fileActionsProps} />
-            </Suspense>
-          </WorkflowStageSection>
-        )}
+        {/* Tab Content */}
+        {activeTab === 'table' && (
+          <div className="space-y-3">
+            {workflowState.currentStep === 1 && (
+              <Suspense fallback={<StageLoadingState message={t('import.loading.source')} />}>
+                <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+                {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
+                <DataImporterFileActions {...fileActionsProps} />
+              </Suspense>
+            )}
 
-        {workflowState.currentStep === 2 && (
-          <WorkflowStageSection
-            id={stageIdByNumber.get(2)}
-            ariaLabel={t('import.step.review.title')}
-            title={t('import.step.review.title')}
-            description={
-              mode === "preview"
-                ? previewSource === "sync"
-                  ? t('import.step.review.desc.sync')
-                  : t('import.step.review.desc.preview')
-                : t('import.step.review.desc.workspace')
-            }
-            status={reviewStageStatus}
-          >
-            <Suspense fallback={<StageLoadingState message={t('import.loading.review')} />}>
-              {mode === "preview" ? (
-                <>
-                  {!hasRows ? (
+            {workflowState.currentStep === 2 && mode === "preview" && (
+              <Suspense fallback={<StageLoadingState message={t('import.loading.review')} />}>
+                {!hasRows ? (
+                  <>
+                    <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+                    {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
+                    <DataImporterFileActions {...fileActionsProps} />
+                  </>
+                ) : null}
+                <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
+                <DataImporterListControlsPanel {...listControlsPanelProps} />
+                <DataImporterResultsPanel {...resultsPanelProps} />
+              </Suspense>
+            )}
+
+            {hasRows && (
+              <>
+                <DataImporterSummaryCards {...summaryCardsProps} />
+                <DataImporterUpdatedRowsBanner {...updatedRowsBannerProps} />
+                <Suspense fallback={<StageLoadingState message={t('import.loading.save')} />}>
+                  <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+                  {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
+                  <DataImporterFileActions {...fileActionsProps} />
+                  {mode !== "preview" ? (
                     <>
-                      <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
-                      {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
-                      <DataImporterFileActions {...fileActionsProps} />
+                      <DataImporterListControlsPanel {...listControlsPanelProps} />
+                      <DataImporterResultsPanel {...resultsPanelProps} />
                     </>
                   ) : null}
-                  <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
-                  <DataImporterListControlsPanel {...listControlsPanelProps} />
-                  <DataImporterResultsPanel {...resultsPanelProps} />
-                </>
-              ) : (
-                <DataImporterListControlsPanel {...listControlsPanelProps} />
-              )}
-            </Suspense>
-          </WorkflowStageSection>
+                </Suspense>
+                {mode === "preview" && (
+                  <p className="text-xs text-ds-text-muted">
+                    {t('import.afterImport.note')}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         )}
 
-        {hasRows && (
-          <WorkflowStageSection
-            id={stageIdByNumber.get(3)}
-            ariaLabel={t('import.step.save.title')}
-            title={t('import.step.save.title')}
-            description={
-              mode === "preview"
-                ? t('import.step.save.desc.preview')
-                : t('import.step.save.desc.workspace')
-            }
-            status={saveStageStatus}
-          >
-            <DataImporterSummaryCards {...summaryCardsProps} />
-            <DataImporterUpdatedRowsBanner {...updatedRowsBannerProps} />
-            <Suspense fallback={<StageLoadingState message={t('import.loading.save')} />}>
-              <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
-              {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
-              <DataImporterFileActions {...fileActionsProps} />
-              {mode !== "preview" ? (
-                <>
-                  <DataImporterListControlsPanel {...listControlsPanelProps} />
-                  <DataImporterResultsPanel {...resultsPanelProps} />
-                </>
-              ) : null}
-              {isAdminRole ? <DataImporterMonitoringPanel {...monitoringPanelProps} /> : null}
-            </Suspense>
-            {mode === "preview" ? (
-              <p className="text-xs text-[color:var(--ds-text-muted)]">
-                {t('import.afterImport.note')}
-              </p>
-            ) : null}
-          </WorkflowStageSection>
+        {activeTab === 'preview' && workflowState.currentStep >= 2 && (
+          <Suspense fallback={<StageLoadingState message={t('import.loading.review')} />}>
+            <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
+          </Suspense>
+        )}
+
+        {activeTab === 'sync' && isAdminRole && (
+          <Suspense fallback={<StageLoadingState message={t('import.loading.sync')} />}>
+            <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+            <DataImporterMonitoringPanel {...monitoringPanelProps} />
+          </Suspense>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="text-sm text-ds-text-muted">
+            {t('import.history.comingSoon', { defaultValue: 'Lịch sử import sẽ hiển thị tại đây' })}
+          </div>
         )}
       </div>
     </>

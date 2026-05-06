@@ -35,9 +35,12 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.4` (Slice 4: Component library batch) - PHAN 1; da tao 6 components moi: EmptyState, PermissionBanner, ExportDropdown, BulkActionBar, LoadingState, FilterBar; skeleton-presets; re-exports; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.4b` (Slice 4 PHAN 2: DataTable extension + tests); da extend DataTable voi selection, sort, editable, error props; tao tests cho 6 components; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.1` (Slice 5.1: Dashboard restructure); da refactor AppDashboardLanding.tsx voi PageHeader, compact quick actions, EmptyState; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.2` (Slice 5.2: Import Data restructure); da refactor DataImporterShell.jsx voi PageHeader, PermissionBanner, PageTabs (4 tabs); typecheck passed.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
-  - `cng-0if.5.2` - UX Review Slice 5.2: Import Data restructure
+  - `cng-0if.5.3` - UX Review Slice 5.3: MST + HQ merge (đang làm)
+  - `cng-0if.5.4` - UX Review Slice 5.4: Adjustments restructure
+  - `cng-0if.5.5` - UX Review Slice 5.5: Reports restructure
 
 ## Active Slice
 
