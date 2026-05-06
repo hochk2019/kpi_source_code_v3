@@ -32,7 +32,7 @@ import AppShellFrame from '@/components/appShell/AppShellFrame';
 import AppDashboardLanding from '@/components/appShell/AppDashboardLanding.tsx';
 import useKpiShellState from '@/components/appShell/useKpiShellState.js';
 import { emitCommand } from '@/lib/commandBus.js';
-const MSTWorkflowPanel = React.lazy(() => import('@/components/workflows/MSTWorkflowPanel.jsx'));
+const MstHqContainer = React.lazy(() => import('./MstHqContainer'));
 const KPIAdjustmentsWorkflowPanel = React.lazy(() =>
   import('@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx'),
 );
@@ -230,15 +230,15 @@ const KPICalculator = ({
 
         </TabsContent>
 
-        <TabsContent value="mst" className="ds-panel">
+        <TabsContent value="mst-hq" className="ds-panel">
 
-          {loadedTabs.has('mst') ? (
-            <TabPanel panelRootId={getAppTabRootId('mst')} tabLabel="Gán MST">
+          {loadedTabs.has('mst-hq') ? (
+            <TabPanel panelRootId={getAppTabRootId('mst-hq')} tabLabel="Gán MST & HQ">
 
-              <MSTWorkflowPanel
-                canEdit={canMstEdit}
+              <MstHqContainer
                 currentUser={effectiveAuth}
-                onNavigate={requestTabNavigation}
+                canManageMst={canMstEdit}
+                canManageHq={true}
               />
 
             </TabPanel>
