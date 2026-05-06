@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  RotateCcw
+  RotateCcw,
+  FileDown,
 } from 'lucide-react';
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
@@ -21,6 +22,8 @@ import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
 import { toast } from '@/shared/toast.js';
 import { formatDateTime } from '../../packages/domain/src/format.js';
 import { t } from '@/lib/i18n.js';
+import { PageHeader } from "@/components/designSystem/PageHeader";
+import { FilterBar } from "@/components/designSystem/primitives.jsx";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -269,22 +272,23 @@ export default function ExportAuditReport() {
     );
   };
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header & Filters */}
-      <section className="rounded-xl border border-ds-border-subtle bg-ds-surface-card/70 backdrop-blur-xl p-5 shadow-sm">
-        <header className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold bg-gradient-to-r from-ds-accent to-ds-accent-strong bg-clip-text text-transparent flex items-center gap-2">
-              <History className="h-6 w-6 text-ds-accent" />
-              {t('export.title')}
-            </h2>
-            <p className="mt-1 text-sm text-ds-text-muted">
-              {t('export.description')}
-            </p>
-          </div>
-        </header>
+  const summaryStats = [
+    { label: t('export.metrics.total') || "Tổng", value: formatCount(summary?.total) },
+    { label: t('export.metrics.latest') || "Mới nhất", value: summary.latestCreatedAt ? formatDateTime(summary.latestCreatedAt, { withSeconds: false }) : '—' },
+  ];
 
+  return (
+    <div className="p-6 space-y-4">
+      {/* Page Header */}
+      <PageHeader
+        eyebrow="BÁO CÁO"
+        title={t('export.title') || "Lịch sử Export"}
+        info={t('export.description') || "Xem lịch sử xuất báo cáo và tìm kiếm theo nhiều tiêu chí"}
+        meta={summaryStats.map(s => `${s.label}: ${s.value}`)}
+      />
+
+      {/* Filters */}
+      <section className="rounded-xl border border-ds-border-subtle bg-ds-surface-card/70 backdrop-blur-xl p-5 shadow-sm">
         <form onSubmit={handleSubmit} className="grid gap-5 md:grid-cols-5 items-end">
           <div className="flex flex-col gap-1.5 pt-2">
             <label className="text-xs font-semibold text-ds-text-secondary uppercase tracking-wider">{t('export.filter.fromDate')}</label>
