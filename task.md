@@ -25,10 +25,13 @@
 - Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.1` va claim `cng-sr1.2`; active slice chuyen sang wave SQLite/snapshot/persistence extraction de repoint `server-v4` va tests sang `@kpi/backend-shared/persistence`.
 - Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.2`; wave-2 direct imports vao `server/businessSnapshotSqlite.js`, `server/declarationSnapshotSearch.js`, `server/reportingProjectionSqlite.js`, `server/reportingProjectionStore.js`, `server/sqliteMigrations.js`, va `server/teamRosterSqlite.js` da ve 0, va next ready slice la `cng-sr1.3`.
 - Da reconcile tiep ngay 2026-04-08 sau khi land waves `cng-sr1.3..cng-sr1.5`; reporting/auth/runtime helpers da duoc repoint sang `@kpi/backend-shared/*`, direct-import gate `pnpm verify:server-retirement` da ve 0 runtime / 0 test / 0 mapped target, va active slice duoc chuyen sang `cng-sr1.6` de retire test harness dang quarantine qua `packages/backend-shared/src/testing/index.js` truoc khi xoa vat ly `server/`.
+- Da reconcile tiep ngay 2026-05-06 sau khi mo epic `cng-0if` cho UX Review program; comprehensive frontend audit hoan tat voi 12 review docs `reviews/ui-ux-2026-05-06/00-index.md..11-component-templates.md` tong ~245KB; plan chia 8 slices uoc luong ~10 dev days, ke them `10-legacy-class-inventory.md` (1979 occurrences across 105 files, top 20 hot files, replacement table chi tiet) va `11-component-templates.md` (sample TSX code starter cho 6 components moi: PageHeader, InfoTooltip, EmptyState, PermissionBanner, ExportDropdown, BulkActionBar, FilterBar); chua start implementation, doc tach roi khoi `cng-sr1.6` lane; agent ke tiep co the claim `cng-0if` va lam theo `07-implementation-plan.md` slice 1 (foundation cleanup) hoac dung `11-component-templates.md` lam starter cho slice 4.
 - Open epics hien tai:
   - `cng-sr1` (server retirement program; active slice la `cng-sr1.6`)
+  - `cng-0if` (UX Review 2026-05-06; documentation hoan tat, awaiting implementation)
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
+  - `cng-0if` - UX Review 2026-05-06 (8-slice plan available, agent co the claim slice 1)
 
 ## Active Slice
 
