@@ -32,16 +32,23 @@ import useReportViewerPreferences from "@/components/reporting/useReportViewerPr
 import useReportViewerReadModel from "@/components/reporting/useReportViewerReadModel.js";
 import useReportViewerTemplates from "@/components/reporting/useReportViewerTemplates.js";
 import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.tsx";
+import { PageHeader } from "@/components/designSystem/PageHeader";
+import { FilterBar, ExportDropdown } from "@/components/designSystem/primitives";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { isAdminRole } from "../../packages/domain/src/accountRoles.js";
 
 import { ReportingAdjustmentsPanel } from "@/components/reporting/ReportingAdjustmentsPanel.jsx";
 
 import type { AuthAccountView } from '@/types';
+import { LayoutDashboard, Users, Calendar, FileText, ChevronLeft } from "lucide-react";
 
 interface ReportViewerProps {
   canExport?: boolean;
   currentUser?: AuthAccountView | null;
+  backTarget?: string | null;
+  backLabel?: string;
+  onNavigate?: (target: string) => void;
 }
 
 const REPORTING_REFRESH_KEYS = [DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, KPI_ADJUSTMENTS_KEY];
@@ -52,7 +59,13 @@ const REPORT_VIEWER_SECTION_IDS = {
   notes: "report-viewer-notes",
 };
 
-export default function ReportViewer({ canExport = true, currentUser = null }: ReportViewerProps) {
+export default function ReportViewer({
+  canExport = true,
+  currentUser = null,
+  backTarget = null,
+  backLabel = "Quay lại",
+  onNavigate,
+}: ReportViewerProps) {
   const {
     storedRuleId,
     quickRange,
@@ -470,32 +483,68 @@ export default function ReportViewer({ canExport = true, currentUser = null }: R
       ? t('report.rule.activeMessage')
       : `${t('report.rule.activeLabel')} ${activeRule?.name || "—"}`;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center text-sm pt-2">
-        <button
-          onClick={() => window.location.href = "/?section=overview&tab=dashboard"}
-          className="flex items-center gap-1.5 text-ds-text-secondary hover:text-ds-accent font-medium transition-colors"
-        >
-          <ArrowLeft size={16} />
-          <span>{t('report.action.backToDashboard')}</span>
-        </button>
-      </div>
+  const reportTabs = [
+    { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+    { id: 'staff', label: 'Nhân viên', icon: Users },
+    { id: 'team', label: 'Tổ đội', icon: Users },
+    { id: 'schedule', label: 'Lịch gửi', icon: Calendar },
+    { id: 'templates', label: 'Mẫu', icon: FileText },
+  ];
 
+  const exportItems = [
+    { id: 'excel', label: 'Xuất Excel', icon: 'FileSpreadsheet' },
+    { id: 'pdf', label: 'Xuất PDF', icon: 'FileText' },
+  ];
+
+  const [activeReportTab, setActiveReportTab] = useState('overview');
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="HIỆU SUẤT"
+        title="Báo cáo KPI"
+        info="Xem và xuất báo cáo KPI tổng hợp theo nhân viên và tổ đội"
+        meta={[
+          backTarget && (
+            <button
+              key="back"
+              type="button"
+              onClick={() => onNavigate?.(backTarget)}
+              className="inline-flex items-center gap-1 text-sm text-ds-text-secondary hover:text-ds-accent transition-colors"
+            >
+              <ChevronLeft size={14} />
+              {backLabel}
+            </button>
+          )
+        ].filter(Boolean)}
+        actions={
+          <div className="flex items-center gap-2">
+            <ExportDropdown
+              items={[
+                { id: 'excel', label: 'Xuất Excel', format: 'xlsx' as const },
+                { id: 'pdf', label: 'Xuất PDF', format: 'pdf' as const },
+                { id: 'csv', label: 'Xuất CSV', format: 'csv' as const },
+              ]}
+              onExport={(id) => console.log('Export:', id)}
+              triggerLabel="Xuất báo cáo"
+            />
+          </div>
+        }
+      />
+
+      {/* Reporting Controls */}
       <ReportingControlsPanel
-        summaryDeclsText={`${formatInt(summary.decls)} ${t('report.unit.declarations')}`}
-        selectedRuleName={selectedRuleMeta?.name || ""}
         reloading={reloading}
         onReloadData={handleReloadData}
         quickRange={quickRange}
         onQuickRangeChange={handleQuickRangeChange}
         from={from}
         to={to}
-        onFromChange={(value) => {
+        onFromChange={(value: string) => {
           setFrom(value);
           setQuickRange("custom");
         }}
-        onToChange={(value) => {
+        onToChange={(value: string) => {
           setTo(value);
           setQuickRange("custom");
         }}
@@ -523,6 +572,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }: R
         onOverwriteSelectedTemplate={handleOverwriteSelectedTemplate}
         onDeleteSelectedTemplate={handleDeleteSelectedTemplate}
         onRefreshTemplates={handleRefreshTemplates}
+        summaryDeclsText={`${report.summary?.decls || 0} tờ khai`}
       />
 
 

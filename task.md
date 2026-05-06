@@ -38,9 +38,10 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.2` (Slice 5.2: Import Data restructure); da refactor DataImporterShell.jsx voi PageHeader, PermissionBanner, PageTabs (4 tabs); typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.3` (Slice 5.3: MST + HQ merge); da tao MstHqContainer.tsx, gop 2 tabs thanh 1, update appShellNavigation.ts va KPICalculator.tsx; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.4` (Slice 5.4: Adjustments restructure); da refactor KPIAdjustments.tsx voi PageHeader, PermissionBanner, FilterBar trong tab Danh sach, chuyen Settings thanh dialog; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.5` (Slice 5.5: Reports restructure); da refactor ReportViewer.tsx voi PageHeader compact, FilterBar, ExportDropdown; typecheck passed.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
-  - `cng-0if.5.5` - UX Review Slice 5.5: Reports restructure (dang lam)
+  - `cng-0if.6` - UX Review Slice 6: Page restructure batch B
 
 ## Active Slice
 
