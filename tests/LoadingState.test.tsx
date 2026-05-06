@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
 import { LoadingState } from '@/components/designSystem/primitives';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('LoadingState', () => {
   it('renders default message', () => {

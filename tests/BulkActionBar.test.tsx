@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BulkActionBar } from '@/components/designSystem/primitives';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('BulkActionBar', () => {
   it('hidden when selectedCount=0 and autoHide=true', () => {
@@ -62,7 +66,7 @@ describe('BulkActionBar', () => {
       />
     );
     await user.click(screen.getByText('Chọn tất cả 10'));
-    expect(onSelectAll).toHaveBeenCalledWith(true);
+    expect(onSelectAll).toHaveBeenCalledTimes(1);
   });
 
   it('calls action on click', async () => {

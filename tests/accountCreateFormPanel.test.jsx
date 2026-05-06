@@ -60,7 +60,7 @@ describe("AccountCreateFormPanel", () => {
 
     render(<AccountCreateFormPanel {...props} />);
 
-    expect(screen.getByText((content) => content.includes('Chưa có dữ liệu tổ đội'))).toBeInTheDocument();
+    expect(screen.getByText(/Chưa có nhân viên nào/i)).toBeInTheDocument();
     expect(
       screen.getByRole("combobox", { name: "Nhân viên KPI cho tài khoản mới" })
     ).toBeDisabled();

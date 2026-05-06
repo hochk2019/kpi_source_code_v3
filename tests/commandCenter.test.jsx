@@ -123,12 +123,12 @@ describe('CommandCenter navigation coverage', () => {
     });
     await user.type(searchInput, 'đại lý');
 
-    const agencyCommand = within(dialog).getByText(/Đại Lý HQ/i).closest('[role="button"]');
+    const agencyCommand = within(dialog).getByText(/Gán MST\s*&\s*HQ/i).closest('[role="button"]');
     expect(agencyCommand).toBeTruthy();
     await user.click(agencyCommand);
 
     await waitFor(() => {
-      expect(emitCommand).toHaveBeenCalledWith('navigate:tab', { tab: 'hq' });
+      expect(emitCommand).toHaveBeenCalledWith('navigate:tab', { tab: 'mst-hq' });
     });
 
     await user.click(screen.getByRole('textbox', { name: /tìm kiếm lệnh/i }));
@@ -169,7 +169,12 @@ describe('CommandCenter navigation coverage', () => {
     });
 
     await user.type(searchInput, 'phát hành');
-    await user.click(within(dialog).getByText(/phát hành/i).closest('[role="button"]'));
+    const publishCommand = within(dialog)
+      .getAllByText(/phát hành/i)
+      .map((node) => node.closest('[role="button"]'))
+      .find(Boolean);
+    expect(publishCommand).toBeTruthy();
+    await user.click(publishCommand);
 
     await waitFor(() => {
       expect(emitCommand).toHaveBeenCalledWith('navigate:tab', { tab: 'reports', focus: 'export' });
@@ -222,7 +227,7 @@ describe('CommandCenter navigation coverage', () => {
       },
     };
     getSharedItem.mockImplementation((key) =>
-      key === 'kpi_command_center_pins_v1' ? JSON.stringify(['navigate:hq']) : null,
+      key === 'kpi_command_center_pins_v1' ? JSON.stringify(['navigate:mst-hq']) : null,
     );
 
     render(<CommandCenter currentUser={currentUser} />);

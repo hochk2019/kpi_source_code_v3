@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EmptyState } from '@/components/designSystem/primitives';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('EmptyState', () => {
   it('renders title', () => {
@@ -53,7 +57,7 @@ describe('EmptyState', () => {
   });
 
   it('renders with different sizes', () => {
-    const { rerender } = render(<EmptyState title="Test" size="sm" />);
+    const { rerender } = render(<EmptyState title="Test" size="compact" />);
     rerender(<EmptyState title="Test" size="md" />);
     rerender(<EmptyState title="Test" size="lg" />);
     expect(screen.getByText('Test')).toBeInTheDocument();

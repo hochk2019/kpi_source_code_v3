@@ -8,6 +8,17 @@ vi.mock('@/auth/localAuth.js', () => ({
 
 }));
 
+vi.mock('@/lib/storageClient.js', async () => {
+  const actual = await vi.importActual('@/lib/storageClient.js');
+  return {
+    ...actual,
+    setItem: vi.fn(async (key, value) => {
+      actual.updateCachedItem(key, value);
+      return value;
+    }),
+  };
+});
+
 
 
 import { fetchWithAuth } from '@/auth/localAuth.js';

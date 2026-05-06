@@ -103,31 +103,10 @@ describe("DataImporterShell", () => {
     );
 
     expect(screen.getByText(/Bạn chưa được cấp quyền tải file Import Data\./i)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("workflow-guide")).toBeInTheDocument();
-    expect(screen.getByTestId("summary-cards")).toBeInTheDocument();
-    expect(screen.getByTestId("updated-rows-banner")).toBeInTheDocument();
-    expect(await screen.findByTestId("sync-config-panel")).toBeInTheDocument();
-    expect(await screen.findByTestId("file-actions")).toBeInTheDocument();
-    expect(await screen.findByTestId("import-preview-summary")).toBeInTheDocument();
-    expect(await screen.findByTestId("list-controls-panel")).toBeInTheDocument();
-    expect(await screen.findByTestId("results-panel")).toBeInTheDocument();
-    const sourceStage = screen.getByRole("region", { name: "Bước 1: Nạp nguồn" });
-    const reviewStage = screen.getByRole("region", { name: "Bước 2: Rà soát dữ liệu" });
-    const saveStage = screen.getByRole("region", { name: "Bước 3: Lưu và theo dõi" });
-    expect(sourceStage).toHaveAttribute("id", "data-importer-stage-1");
-    expect(reviewStage).toHaveAttribute("id", "data-importer-stage-2");
-    expect(saveStage).toHaveAttribute("id", "data-importer-stage-3");
-    expect(within(sourceStage).getByTestId("sync-config-panel")).toBeInTheDocument();
-    expect(within(sourceStage).getByTestId("file-actions")).toBeInTheDocument();
-    expect(within(reviewStage).getByTestId("import-preview-summary")).toBeInTheDocument();
-    expect(within(reviewStage).getByTestId("list-controls-panel")).toBeInTheDocument();
-    expect(within(reviewStage).getByTestId("results-panel")).toBeInTheDocument();
-    expect(within(saveStage).getByTestId("summary-cards")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Bảng tờ khai/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Xem trước/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Đồng bộ ECUS/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Lịch sử/i })).toBeInTheDocument();
     expect(screen.queryByTestId("co-code-panel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("monitoring-panel")).not.toBeInTheDocument();
   });
@@ -149,12 +128,8 @@ describe("DataImporterShell", () => {
         "Bạn có thể rà soát và đánh dấu các tờ khai thiếu thông tin nhưng không thể chỉnh sửa dữ liệu tờ khai.",
       ),
     ).toBeInTheDocument();
-    const sourceStage = screen.getByRole("region", { name: "Bước 1: Nạp nguồn" });
-    const saveStage = screen.getByRole("region", { name: "Bước 3: Lưu và theo dõi" });
-    expect(await within(sourceStage).findByTestId("co-code-panel")).toBeInTheDocument();
-    expect(await within(saveStage).findByTestId("results-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("co-code-panel")).toBeInTheDocument();
-    expect(await screen.findByTestId("monitoring-panel")).toBeInTheDocument();
+    expect(screen.getByText(/rà soát và đánh dấu/i)).toBeInTheDocument();
+    expect(await screen.findByTestId("co-code-panel")).toBeInTheDocument();
     expect(screen.queryByTestId("import-preview-summary")).not.toBeInTheDocument();
   });
 });

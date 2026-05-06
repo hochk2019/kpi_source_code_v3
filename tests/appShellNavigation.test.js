@@ -16,7 +16,7 @@ describe('appShellNavigation', () => {
   it('giữ bộ tab nền cho tài khoản khách', () => {
     const tabs = getVisibleAppTabs({ username: 'guest', role: 'viewer', permissions: {} }).map((tab) => tab.id);
 
-    expect(tabs).toEqual(['dashboard', 'mst', 'import', 'hq', 'teams', 'rules', 'adjustments', 'reports']);
+    expect(tabs).toEqual(['dashboard', 'mst-hq', 'import', 'teams', 'rules', 'adjustments', 'reports']);
   });
 
   it('mở rộng tab theo quyền điều hướng nâng cao', () => {
@@ -41,9 +41,8 @@ describe('appShellNavigation', () => {
     });
     expect(tabs).toEqual([
       'dashboard',
-      'mst',
+      'mst-hq',
       'import',
-      'hq',
       'teams',
       'rules',
       'adjustments',
@@ -73,9 +72,8 @@ describe('appShellNavigation', () => {
 
     expect(sections).toEqual([
       { id: 'overview', tabs: ['dashboard'] },
-      { id: 'operations', tabs: ['mst', 'import', 'hq'] },
+      { id: 'operations', tabs: ['mst-hq', 'import', 'health'] },
       { id: 'performance', tabs: ['teams', 'rules', 'adjustments', 'reports'] },
-      { id: 'observability', tabs: ['health'] },
       { id: 'governance', tabs: ['accounts', 'audit', 'export-audit'] },
     ]);
   });
@@ -90,7 +88,7 @@ describe('appShellNavigation', () => {
   it('fallback theo section khi chỉ còn section hợp lệ trong URL', () => {
     const currentUser = { username: 'guest', role: 'viewer', permissions: {} };
 
-    expect(resolveVisibleAppTab('health', currentUser, APP_SHELL_FALLBACK_TAB, 'operations')).toBe('mst');
+    expect(resolveVisibleAppTab('health', currentUser, APP_SHELL_FALLBACK_TAB, 'operations')).toBe('mst-hq');
   });
 
   it('parse shell location về tab nhìn thấy được và giữ section tương ứng', () => {

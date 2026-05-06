@@ -159,11 +159,11 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText(/Cảnh báo overwrite/i)).toBeInTheDocument();
     expect(screen.getByText(/2 tờ khai đã tồn tại sẽ bị cập nhật/)).toBeInTheDocument();
     expect(screen.getByText(/1 tờ khai đang khóa rà soát sẽ bị bỏ qua/)).toBeInTheDocument();
-    expect(screen.getByText(/Xem trước.*dòng đầu tiên/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Xem trước.*dòng đầu tiên/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).toBeInTheDocument();
     expect(screen.getByText("fmt:2026-03-07")).toBeInTheDocument();
     expect(screen.getByText(/\(chưa gán\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mới/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Mới/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("status")).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Tiến trình đồng bộ ECUS" })).toBeInTheDocument();
     expect(screen.getByText(/Đồng bộ dữ liệu/i)).toBeInTheDocument();

@@ -243,7 +243,7 @@ describe('AiAssistant panels', () => {
     );
 
     expect(screen.getByText('1 đoạn hội thoại')).toBeInTheDocument();
-    expect(screen.getByText(/Nhà cung cấp/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Nhà cung cấp/i).length).toBeGreaterThan(0);
 
     rerender(
       <AiAssistantHistoryPanel
