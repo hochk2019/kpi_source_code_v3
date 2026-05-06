@@ -31,9 +31,10 @@
   - `cng-0if` (UX Review 2026-05-06; documentation hoan tat, awaiting implementation)
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.1` (Slice 1: Foundation cleanup); da them design tokens, sidebar diet, xoa AppShellWorkflowGuide, fix StatusBadge tokens; typecheck passed; test appShellFrame.test.jsx updated; 5 files changed, 3 files deleted.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.2` (Slice 2: Compact PageHeader); da tao PageHeader + InfoTooltip components, replace hero block trong AppShellFrame, tests pass; 6 files created, 2 files modified.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.3` (Slice 3: SectionHeader info migration); da update SectionHeader API (add info prop, InfoTooltip, console.warn cho description), migrate 11 files tu description sang info; typecheck passed.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
-  - `cng-0if.3` - UX Review Slice 3: SectionHeader info tooltip migration
+  - `cng-0if.4` - UX Review Slice 4: Component library batch
 
 ## Active Slice
 

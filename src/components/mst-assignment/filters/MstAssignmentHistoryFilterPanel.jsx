@@ -31,7 +31,7 @@ export default function MstAssignmentHistoryFilterPanel({
     <SectionSurface className="mb-4 border-sky-200 bg-sky-50">
       <SectionHeader
         title="Bộ lọc lịch sử thay đổi"
-        description="Thu hẹp timeline theo khoảng ngày, loại thao tác hoặc mốc chuyển trạng thái trước khi rà soát chi tiết từng MST."
+        info="Thu hẹp timeline theo khoảng ngày, loại thao tác hoặc mốc chuyển trạng thái trước khi rà soát chi tiết từng MST."
         meta={
           <div className="text-right text-xs text-sky-900">
             <div>

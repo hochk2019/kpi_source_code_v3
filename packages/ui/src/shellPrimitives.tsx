@@ -1,6 +1,7 @@
 import React from "react";
 import { CircleX, Search } from "lucide-react";
 import { cn } from "../../../src/lib/utils.js";
+import { InfoTooltip } from "./InfoTooltip";
 
 interface SectionSurfaceProps extends React.HTMLAttributes<HTMLElement> {
   as?: React.ElementType;
@@ -14,7 +15,10 @@ export function SectionSurface({ as: Component = "section", className, children,
 
 interface SectionHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   title: React.ReactNode;
+  /** @deprecated Use `info` prop instead for tooltip content */
   description?: React.ReactNode;
+  /** Tooltip content displayed next to title */
+  info?: string;
   meta?: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;
@@ -26,6 +30,7 @@ interface SectionHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
 export function SectionHeader({
   title,
   description,
+  info,
   meta,
   actions,
   className,
@@ -34,10 +39,19 @@ export function SectionHeader({
   titleAs: TitleComponent = "h2",
   ...props
 }: SectionHeaderProps) {
+  // Warn about deprecated description prop in dev mode
+  const isDev = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'development';
+  if (description && isDev) {
+    console.warn('[SectionHeader] `description` prop is deprecated. Use `info` for tooltip or `meta` for status info instead.');
+  }
+
   return (
     <div className={cn("ds-section__header", className)} {...props}>
       <div className="ds-section__intro">
-        <TitleComponent className={cn("ds-section__title", titleClassName)}>{title}</TitleComponent>
+        <div className="flex items-center gap-2">
+          <TitleComponent className={cn("ds-section__title", titleClassName)}>{title}</TitleComponent>
+          {info ? <InfoTooltip content={info} size="sm" variant="subtle" /> : null}
+        </div>
         {description ? (
           <p className={cn("ds-section__description", descriptionClassName)}>{description}</p>
         ) : null}

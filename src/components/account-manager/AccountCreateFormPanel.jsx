@@ -40,7 +40,7 @@ export default function AccountCreateFormPanel({
     <>
       <SectionHeader
         title={t('account.createNew')}
-        description={t('account.createDescription')}
+        info={t('account.createDescription')}
       />
 
       <form className="grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>

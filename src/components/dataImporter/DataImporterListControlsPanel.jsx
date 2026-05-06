@@ -43,7 +43,7 @@ export default function DataImporterListControlsPanel({
     >
       <SectionHeader
         title="Điều khiển danh sách tờ khai"
-        description="Tìm kiếm, lọc và điều chỉnh cách hiển thị dữ liệu import trước khi rà soát hoặc lưu."
+        info="Tìm kiếm, lọc và điều chỉnh cách hiển thị dữ liệu import trước khi rà soát hoặc lưu."
         meta={
           <>
             <span className="rounded-full border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-secondary)]">

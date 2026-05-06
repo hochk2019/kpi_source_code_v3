@@ -346,7 +346,7 @@ const KPICalculator = ({
                 <SectionSurface id="app-workflow-health-sync" tabIndex={-1}>
                   <SectionHeader
                     title="Health & sync triage"
-                    description="Kiểm tra đồng bộ, cảnh báo dữ liệu và backlog trước khi chuyển sang module xử lý tương ứng."
+                    info="Kiểm tra đồng bộ, cảnh báo dữ liệu và backlog trước khi chuyển sang module xử lý tương ứng."
                   />
                   <DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
                 </SectionSurface>

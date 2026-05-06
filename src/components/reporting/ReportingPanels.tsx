@@ -417,7 +417,7 @@ export const ReportingWorkspaceGuidePanel = React.memo(function ReportingWorkspa
       <SectionHeader
         title="Sơ đồ report center"
         titleAs="h3"
-        description="Đi theo thứ tự đọc insight trước, drill-down sau, rồi mới chạm tới lịch gửi hoặc ghi chú phát hành để giảm cognitive load trên mobile."
+        info="Đi theo thứ tự đọc insight trước, drill-down sau, rồi mới chạm tới lịch gửi hoặc ghi chú phát hành để giảm cognitive load trên mobile."
       />
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -484,7 +484,7 @@ export const ReportingControlsPanel = React.memo(function ReportingControlsPanel
       <SectionHeader
         title="Điều khiển báo cáo KPI"
         titleAs="h3"
-        description="Chọn khoảng thời gian, bộ quy tắc và trạng thái read model trước khi xem dashboard KPI."
+        info="Chọn khoảng thời gian, bộ quy tắc và trạng thái read model trước khi xem dashboard KPI."
         meta={<ReportControlsMeta summaryDeclsText={summaryDeclsText} selectedRuleName={selectedRuleName} />}
         actions={
           <button
@@ -654,7 +654,7 @@ export const ReportingSchedulePanel = React.memo(function ReportingSchedulePanel
       <SectionHeader
         title="Lập lịch gửi báo cáo KPI"
         titleAs="h3"
-        description="Thiết lập lịch phát hành Excel/PDF theo tuần hoặc tháng qua email, report center hoặc gói tải xuống cho vận hành."
+        info="Thiết lập lịch phát hành Excel/PDF theo tuần hoặc tháng qua email, report center hoặc gói tải xuống cho vận hành."
         meta={<ScheduleShellMeta nextScheduleRun={nextScheduleRun} scheduleAggregateStatus={scheduleAggregateStatus} />}
         actions={
           <button

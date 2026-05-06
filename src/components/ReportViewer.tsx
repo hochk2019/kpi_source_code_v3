@@ -532,7 +532,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }: R
         <SectionHeader
           title={t('report.section.explorerTitle')}
           titleAs="h3"
-          description={t('report.section.explorerDesc')}
+          info={t('report.section.explorerDesc')}
         />
         <ReportingScopeExplorerPanel
           scope={scope}
@@ -619,7 +619,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }: R
         <SectionHeader
           title={t('report.section.notesTitle')}
           titleAs="h3"
-          description={t('report.section.notesDesc')}
+          info={t('report.section.notesDesc')}
         />
 
         <div className="space-y-2 text-sm text-ds-text-secondary">

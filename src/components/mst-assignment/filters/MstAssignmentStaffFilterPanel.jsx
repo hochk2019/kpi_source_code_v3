@@ -47,7 +47,7 @@ export default function MstAssignmentStaffFilterPanel({
     <SectionSurface className="mb-4">
       <SectionHeader
         title="Bộ lọc nhân viên phụ trách"
-        description="Cô lập working set theo nhân viên và lưu lại các bộ lọc thường dùng cho thao tác quản trị hằng ngày."
+        info="Cô lập working set theo nhân viên và lưu lại các bộ lọc thường dùng cho thao tác quản trị hằng ngày."
         meta={
           staffFavorites.length ? (
             <span className="ds-pill">{staffFavorites.length} bộ lọc nhanh</span>
