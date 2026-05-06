@@ -260,7 +260,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
     expect(await screen.findByRole('searchbox', { name: /tìm tài khoản/i })).toBeInTheDocument();
     expect(await screen.findByRole('table', { name: /danh sách tài khoản kpi/i })).toBeInTheDocument();
-    expect(screen.getByText(/\d+\/\d+ tài khoản/i)).toBeInTheDocument();
+    expect(screen.getByText((content) => /\d+\/\d+/.test(content) && content.includes('tài khoản'))).toBeInTheDocument();
   });
 
 

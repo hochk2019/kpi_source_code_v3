@@ -1289,6 +1289,9 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
 
           <div className="w-full sm:max-w-xs relative">
             <input
+              type="search"
+              role="searchbox"
+              aria-label={t('account.searchAriaLabel')}
               className="w-full rounded-xl border border-ds-border-subtle/60 bg-ds-surface-card/40 px-3 py-2 pl-9 text-sm text-ds-text-primary placeholder-ds-text-muted focus:border-ds-accent/50 focus:bg-ds-surface-card focus:outline-none focus:ring-2 focus:ring-ds-accent/20 dark:border-ds-border-subtle/60 dark:bg-ds-surface-base/40 dark:text-ds-text-primary dark:focus:bg-ds-surface-base transition-all"
               placeholder={t('account.searchPlaceholder')}
               value={searchTerm}

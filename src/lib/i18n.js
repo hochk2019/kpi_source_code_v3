@@ -51,6 +51,7 @@ const translations = {
     'account.deleteSuccess': 'Đã xóa tài khoản',
     'account.deleteError': 'Không thể xóa tài khoản',
     'account.searchPlaceholder': 'Tìm theo tài khoản, vai trò, tên nhân viên...',
+    'account.searchAriaLabel': 'Tìm tài khoản',
     'account.total': 'Tổng {count} tài khoản',
     'account.createDescription': 'Điền thông tin đăng nhập, gắn nhân viên KPI (nếu có) và xác định quyền tương ứng trước khi tạo tài khoản.',
     'account.createTooltip': 'Tạo tài khoản mới với thông tin và quyền đã chọn',
