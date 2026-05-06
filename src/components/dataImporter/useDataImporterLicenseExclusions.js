@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 function arraysEqual(left, right) {
   if (left === right) return true;
@@ -83,8 +84,10 @@ export default function useDataImporterLicenseExclusions({
   computeLicenseSnapshot,
   computeKPI,
 }) {
+  const { alert } = useAppDialog();
+
   const applyLicenseExclusionForKeys = useCallback(
-    (targetKeys, { alreadyFiltered = false } = {}) => {
+    async (targetKeys, { alreadyFiltered = false } = {}) => {
       if (mode !== "saved") {
         return { ok: false, reason: "mode", blocked: 0 };
       }
@@ -104,7 +107,7 @@ export default function useDataImporterLicenseExclusions({
 
         blockedCount = blocked;
         if (blocked > 0 && editingRestrictionMessage) {
-          alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi đối chiếu giấy phép.`);
+          await alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi đối chiếu giấy phép.`);
         }
 
         workingKeys = allowed;
@@ -322,76 +325,76 @@ export default function useDataImporterLicenseExclusions({
     ]
   );
 
-  const handleApplyLicenseExclusion = useCallback(() => {
+  const handleApplyLicenseExclusion = useCallback(async () => {
     if (selectedKeys.length === 0) {
-      alert("Hay chon it nhat mot to khai de doi chieu giay phep.");
+      await alert("Hay chon it nhat mot to khai de doi chieu giay phep.");
       return;
     }
 
-    const allowedKeys = ensureEditableKeys(selectedKeys, "doi chieu giay phep");
+    const allowedKeys = await ensureEditableKeys(selectedKeys, "doi chieu giay phep");
     if (!allowedKeys) {
       return;
     }
 
-    const result = applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
+    const result = await applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
     if (!result?.ok) {
       if (result?.reason === "mode") {
-        alert("Chi co the dieu chinh giay phep khi dang xem du lieu da luu.");
+        await alert("Chi co the dieu chinh giay phep khi dang xem du lieu da luu.");
         return;
       }
       if (result?.reason === "unchanged") {
-        alert("Cac to khai duoc chon da khong con ma giay phep nam trong danh sach loai tru.");
+        await alert("Cac to khai duoc chon da khong con ma giay phep nam trong danh sach loai tru.");
         return;
       }
       if (result?.reason === "missing" || result?.reason === "empty") {
-        alert("Khong tim thay to khai phu hop de doi chieu.");
+        await alert("Khong tim thay to khai phu hop de doi chieu.");
         return;
       }
-      alert("Khong the doi chieu giay phep cho lua chon hien tai.");
+      await alert("Khong the doi chieu giay phep cho lua chon hien tai.");
       return;
     }
 
-    alert(formatLicenseExclusionAlert(result));
+    await alert(formatLicenseExclusionAlert(result));
   }, [applyLicenseExclusionForKeys, ensureEditableKeys, selectedKeys]);
 
-  const handleAutoApplyLicenseExclusion = useCallback(() => {
+  const handleAutoApplyLicenseExclusion = useCallback(async () => {
     if (!canEdit) {
-      alert("Bạn không có quyền chỉnh sửa dữ liệu tờ khai.");
+      await alert("Bạn không có quyền chỉnh sửa dữ liệu tờ khai.");
       return;
     }
     if (!canAutoReconcile) {
-      alert("Chỉ Quản lý hoặc Quản trị viên mới được phép đối chiếu KPI tự động.");
+      await alert("Chỉ Quản lý hoặc Quản trị viên mới được phép đối chiếu KPI tự động.");
       return;
     }
     if (mode !== "saved") {
-      alert("Hãy chuyển sang chế độ dữ liệu đã lưu để đối chiếu tự động.");
+      await alert("Hãy chuyển sang chế độ dữ liệu đã lưu để đối chiếu tự động.");
       return;
     }
     if (!filteredKeys.length) {
-      alert("Không có tờ khai nào khớp với bộ lọc hiện tại để đối chiếu.");
+      await alert("Không có tờ khai nào khớp với bộ lọc hiện tại để đối chiếu.");
       return;
     }
 
-    const allowedKeys = ensureEditableKeys(filteredKeys, "đối chiếu giấy phép tự động");
+    const allowedKeys = await ensureEditableKeys(filteredKeys, "đối chiếu giấy phép tự động");
     if (!allowedKeys) {
       return;
     }
 
-    const result = applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
+    const result = await applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
     if (!result?.ok) {
       if (result?.reason === "unchanged") {
-        alert("Tất cả tờ khai trong bộ lọc hiện tại đã loại trừ giấy phép đầy đủ.");
+        await alert("Tất cả tờ khai trong bộ lọc hiện tại đã loại trừ giấy phép đầy đủ.");
         return;
       }
       if (result?.reason === "missing" || result?.reason === "empty") {
-        alert("Không có tờ khai hợp lệ để tự động đối chiếu.");
+        await alert("Không có tờ khai hợp lệ để tự động đối chiếu.");
         return;
       }
-      alert("Không thể tự động đối chiếu loại trừ KPI. Vui lòng thử lại.");
+      await alert("Không thể tự động đối chiếu loại trừ KPI. Vui lòng thử lại.");
       return;
     }
 
-    alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
+    await alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
   }, [
     applyLicenseExclusionForKeys,
     canAutoReconcile,

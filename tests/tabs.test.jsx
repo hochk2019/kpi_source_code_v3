@@ -2,7 +2,7 @@ import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
 
 describe('tabs primitives', () => {
   afterEach(() => {

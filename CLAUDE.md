@@ -163,3 +163,39 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+## Subagent Strategy
+
+**Auto-activate subagents when:**
+- 3+ independent tasks can run in parallel (use Agent tool in single message)
+- Code review needed (spawn code-reviewer agent)
+- Broad codebase exploration required (spawn Explore agent)
+- Complex multi-file changes spanning 3+ modules
+
+**Subagents inherit everything:** MCP servers (GitNexus), RTK hooks, permissions, plugins, skills. No extra config needed.
+
+**Token efficiency in subagents:**
+- RTK hooks auto-rewrite Bash commands (git, vitest, etc.) — works in subagents too
+- Use `model: "haiku"` for read-only analysis, `"sonnet"` for implementation, `"opus"` for complex reasoning
+- Keep subagent prompts concise — they don't have full conversation context
+
+**Do NOT spawn subagents for:**
+- Single straightforward tasks
+- Tasks requiring user interaction
+- Sequential dependencies (task B needs task A's output)
+
+---
+
+## Active Plan: TypeScript Migration + UI Redesign
+
+**Plan file:** `TS-UI-REDESIGN-PLAN.md` (in project root)
+**Design direction:** "Industrial Clarity" (DFII=13)
+**Strategy:** Strangler Fig — JS/TSX coexist during migration
+
+When starting a new session on this project:
+1. Read `TS-UI-REDESIGN-PLAN.md` to see current phase and unchecked tasks
+2. Check `memory/ts-ui-redesign-progress.md` for last session's context
+3. Continue from the next unchecked task
+4. Update progress log in both files after completing work

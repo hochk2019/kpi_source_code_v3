@@ -76,9 +76,8 @@ describe('gitnexus-refresh', () => {
 
     expect(exitCode).toBe(0);
     expect(runner).toHaveBeenLastCalledWith(
-      'npx',
-      ['-y', 'gitnexus@latest', 'analyze'],
-      expect.objectContaining({ cwd: 'repo', stdio: 'inherit' }),
+      ['analyze'],
+      expect.objectContaining({ cwd: 'repo' }),
     );
     expect(write).toHaveBeenCalledTimes(2);
   });

@@ -2,7 +2,7 @@ import {
   SectionHeader,
   SectionSurface,
   SectionToolbar,
-} from "@/components/designSystem/shellPrimitives.jsx";
+} from "@/components/designSystem/shellPrimitives.tsx";
 
 const HISTORY_TYPE_OPTIONS = [
   { value: "all", label: "Tất cả" },

@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 import {
   AgencyCombobox,
   StaffCombobox,

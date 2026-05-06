@@ -48,7 +48,18 @@ export default defineConfig({
 
   },
 
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'strip-shebang',
+      transform(code, id) {
+        if (code.startsWith('#!')) {
+          return { code: code.replace(/^#!.*/, ''), map: null };
+        }
+      },
+    },
+  ],
 
   resolve: {
 

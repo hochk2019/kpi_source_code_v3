@@ -1,5 +1,5 @@
 import { t } from '@/lib/i18n.js';
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog.jsx";
-import { Textarea } from "@/components/ui/textarea.jsx";
+} from "@/components/ui/dialog.tsx";
+import { Textarea } from "@/components/ui/textarea.tsx";
 import { emitCommand } from "@/lib/commandBus.js";
 import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "../../../../shared/kpiAdjustments.js";
 

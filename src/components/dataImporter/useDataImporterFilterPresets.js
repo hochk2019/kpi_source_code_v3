@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import {
   LAST_FILTER_PRESET_KEY,
@@ -149,6 +150,7 @@ export default function useDataImporterFilterPresets({
   getCurrentColumnConfig = getImportColumnConfig,
   applyColumnConfig = saveImportColumnConfig,
 }) {
+  const { alert, confirm } = useAppDialog();
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [appliedPresetId, setAppliedPresetId] = useState("");
   const [presetSaving, setPresetSaving] = useState(false);
@@ -224,9 +226,9 @@ export default function useDataImporterFilterPresets({
   ]);
 
   const applyPresetFilters = useCallback(
-    (preset, { notify = true } = {}) => {
+    async (preset, { notify = true } = {}) => {
       if (!preset || typeof preset !== "object") {
-        window.alert("Không tìm thấy bộ lọc đã lưu.");
+        await alert("Không tìm thấy bộ lọc đã lưu.");
         return;
       }
 
@@ -292,7 +294,7 @@ export default function useDataImporterFilterPresets({
       presetAutoAppliedRef.current = true;
 
       if (notify) {
-        window.alert(`Đã áp dụng bộ lọc "${preset.name}".`);
+        await alert(`Đã áp dụng bộ lọc "${preset.name}".`);
       }
     },
     [
@@ -445,10 +447,10 @@ export default function useDataImporterFilterPresets({
     [resetPresetError]
   );
 
-  const handleApplySelectedPreset = useCallback(() => {
+  const handleApplySelectedPreset = useCallback(async () => {
     const preset = savedPresets.find((item) => item.id === selectedPresetId);
     if (!preset) {
-      window.alert("Vui lòng chọn bộ lọc cần áp dụng.");
+      await alert("Vui lòng chọn bộ lọc cần áp dụng.");
       return;
     }
 
@@ -466,7 +468,7 @@ export default function useDataImporterFilterPresets({
 
       presetName = input.trim();
       if (!presetName) {
-        window.alert("Tên bộ lọc không được bỏ trống.");
+        await alert("Tên bộ lọc không được bỏ trống.");
         return;
       }
     }
@@ -485,10 +487,10 @@ export default function useDataImporterFilterPresets({
       }
       if (preset) {
         applyPresetFilters(preset, { notify: false });
-        window.alert(`Đã lưu bộ lọc "${preset.name}".`);
+        await alert(`Đã lưu bộ lọc "${preset.name}".`);
       }
     } catch (error) {
-      window.alert(error?.message || "Không thể lưu bộ lọc đã lưu.");
+      await alert(error?.message || "Không thể lưu bộ lọc đã lưu.");
     } finally {
       setPresetSaving(false);
     }
@@ -502,13 +504,13 @@ export default function useDataImporterFilterPresets({
 
   const handleOverwriteSelectedPreset = useCallback(async () => {
     if (!selectedPreset) {
-      window.alert("Vui lòng chọn bộ lọc cần ghi đè.");
+      await alert("Vui lòng chọn bộ lọc cần ghi đè.");
       return;
     }
 
     if (
       typeof window !== "undefined" &&
-      !window.confirm(`Ghi đè bộ lọc "${selectedPreset.name}" bằng điều kiện hiện tại?`)
+      !await confirm(`Ghi đè bộ lọc "${selectedPreset.name}" bằng điều kiện hiện tại?`)
     ) {
       return;
     }
@@ -524,10 +526,10 @@ export default function useDataImporterFilterPresets({
 
       if (preset) {
         applyPresetFilters(preset, { notify: false });
-        window.alert(`Đã cập nhật bộ lọc "${preset.name}".`);
+        await alert(`Đã cập nhật bộ lọc "${preset.name}".`);
       }
     } catch (error) {
-      window.alert(error?.message || "Không thể cập nhật bộ lọc đã lưu.");
+      await alert(error?.message || "Không thể cập nhật bộ lọc đã lưu.");
     } finally {
       setPresetSaving(false);
     }
@@ -541,11 +543,11 @@ export default function useDataImporterFilterPresets({
 
   const handleDeleteSelectedPreset = useCallback(async () => {
     if (!selectedPreset) {
-      window.alert("Vui lòng chọn bộ lọc cần xoá.");
+      await alert("Vui lòng chọn bộ lọc cần xoá.");
       return;
     }
 
-    if (typeof window !== "undefined" && !window.confirm(`Xoá bộ lọc "${selectedPreset.name}"?`)) {
+    if (typeof window !== "undefined" && !await confirm(`Xoá bộ lọc "${selectedPreset.name}"?`, { variant: "destructive", confirmLabel: "Xóa" })) {
       return;
     }
 
@@ -570,9 +572,9 @@ export default function useDataImporterFilterPresets({
         setAppliedPresetId("");
       }
       setSelectedPresetId("");
-      window.alert(`Đã xoá bộ lọc "${selectedPreset.name}".`);
+      await alert(`Đã xoá bộ lọc "${selectedPreset.name}".`);
     } catch (error) {
-      window.alert(error?.message || "Không thể xoá bộ lọc đã lưu.");
+      await alert(error?.message || "Không thể xoá bộ lọc đã lưu.");
     } finally {
       setPresetSaving(false);
     }

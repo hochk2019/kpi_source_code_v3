@@ -3,11 +3,11 @@ import { Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 
 import { t } from '@/lib/i18n.js';
 
-import { Button } from "@/components/ui/button.jsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
-import { Input } from "@/components/ui/input.jsx";
-import { Textarea } from "@/components/ui/textarea.jsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
+import { Button } from "@/components/ui/button.tsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import { Textarea } from "@/components/ui/textarea.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils.js";
 
 export default function KpiAdjustmentFormPanel({

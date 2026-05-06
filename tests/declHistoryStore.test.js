@@ -19,6 +19,7 @@ function createHarness(options = {}) {
   const getItem = (key) => (storage.has(key) ? storage.get(key) : null);
   const setItem = (key, value) => {
     storage.set(key, String(value));
+    return Promise.resolve();
   };
 
   return {

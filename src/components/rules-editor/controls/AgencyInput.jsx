@@ -1,6 +1,6 @@
 import React, { useId, useMemo } from "react";
 
-import { Input } from "@/components/ui/input.jsx";
+import { Input } from "@/components/ui/input.tsx";
 
 export default function AgencyInput({
   value,

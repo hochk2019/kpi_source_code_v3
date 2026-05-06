@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 
-import { Button } from "@/components/ui/button.jsx";
-import { Input } from "@/components/ui/input.jsx";
+import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
 import RuleNumberInput from "@/components/rules-editor/controls/RuleNumberInput.jsx";
 
 export default function RulesTestWorkspacePanel({

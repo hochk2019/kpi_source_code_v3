@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 
 export default function RulesSimulationPanel({
   declarationCount = 0,

@@ -6,6 +6,7 @@ import useRulesEditorWorkflow from "@/components/rules-editor/hooks/useRulesEdit
 import * as rulesModule from "@/lib/rules.js";
 import { clearStorageCache } from "@/lib/storageClient.js";
 import { toast } from "@/shared/toast";
+import { AppDialogProvider } from "@/hooks/useAppDialog.tsx";
 
 vi.mock("@/shared/toast", () => ({
   toast: {
@@ -14,6 +15,19 @@ vi.mock("@/shared/toast", () => ({
     info: vi.fn(),
     warning: vi.fn(),
   },
+}));
+
+const { appDialogAlertMock, appDialogConfirmMock } = vi.hoisted(() => ({
+  appDialogAlertMock: vi.fn().mockResolvedValue(undefined),
+  appDialogConfirmMock: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => ({
+    alert: appDialogAlertMock,
+    confirm: appDialogConfirmMock,
+  }),
+  AppDialogProvider: ({ children }) => children,
 }));
 
 function createHistoryEntry() {
@@ -84,8 +98,8 @@ describe("useRulesEditorWorkflow", () => {
     window.localStorage.clear();
     clearStorageCache();
 
-    vi.spyOn(window, "alert").mockImplementation(() => {});
-    vi.spyOn(window, "confirm").mockImplementation(() => true);
+    appDialogAlertMock.mockReset().mockResolvedValue(undefined);
+    appDialogConfirmMock.mockReset().mockResolvedValue(true);
 
     const historyEntry = createHistoryEntry();
     vi.spyOn(rulesModule, "fetchRulesHistoryFromServer").mockResolvedValue([historyEntry]);
@@ -105,15 +119,17 @@ describe("useRulesEditorWorkflow", () => {
 
   it("mo phong KPI tu preview va saved snapshot", async () => {
     render(
-      <UseRulesEditorWorkflowHarness
-        data={[
-          {
-            loai_hinh: "A11",
-            num_items: 3,
-            licenseCodes: [],
-          },
-        ]}
-      />
+      <AppDialogProvider>
+        <UseRulesEditorWorkflowHarness
+          data={[
+            {
+              loai_hinh: "A11",
+              num_items: 3,
+              licenseCodes: [],
+            },
+          ]}
+        />
+      </AppDialogProvider>
     );
 
     fireEvent.click(screen.getByRole("button", { name: "run-simulation" }));
@@ -131,10 +147,12 @@ describe("useRulesEditorWorkflow", () => {
     const historyEntry = createHistoryEntry();
 
     render(
-      <UseRulesEditorWorkflowHarness
-        data={[{ loai_hinh: "A11", num_items: 2, licenseCodes: [] }]}
-        restoreEntry={historyEntry}
-      />
+      <AppDialogProvider>
+        <UseRulesEditorWorkflowHarness
+          data={[{ loai_hinh: "A11", num_items: 2, licenseCodes: [] }]}
+          restoreEntry={historyEntry}
+        />
+      </AppDialogProvider>
     );
 
     await waitFor(() => {
@@ -150,7 +168,7 @@ describe("useRulesEditorWorkflow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "restore-history" }));
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Khôi phục phiên bản 3"));
+    expect(appDialogConfirmMock).toHaveBeenCalledWith(expect.stringContaining("Khôi phục phiên bản 3"));
     await waitFor(() => {
       expect(rulesModule.restoreRuleVersion).toHaveBeenCalledWith(
         expect.objectContaining({ version: 3, name: "Bộ lịch sử test" }),

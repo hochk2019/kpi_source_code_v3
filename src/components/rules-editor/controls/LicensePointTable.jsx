@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 import LicenseCodeInput from "@/components/rules-editor/controls/LicenseCodeInput.jsx";
 import RuleNumberInput from "@/components/rules-editor/controls/RuleNumberInput.jsx";
 

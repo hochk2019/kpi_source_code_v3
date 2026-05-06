@@ -7,8 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog.jsx";
-import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+} from "@/components/ui/dialog.tsx";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 
 function formatCount(value) {
   return Number.isFinite(value) ? value.toLocaleString("vi-VN") : "0";

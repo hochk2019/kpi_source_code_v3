@@ -24,7 +24,7 @@ vi.mock('@/components/data-health-dashboard/DataHealthRolloutStatusPanel.jsx', (
   },
 }));
 
-import DataHealthDashboard from '@/components/DataHealthDashboard.jsx';
+import DataHealthDashboard from '@/components/DataHealthDashboard.tsx';
 import * as auth from '@/auth/localAuth.js';
 
 function createJsonResponse(payload) {

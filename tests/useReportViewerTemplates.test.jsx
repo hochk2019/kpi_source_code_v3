@@ -1,14 +1,28 @@
+import React from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import useReportViewerTemplates from "@/components/reporting/useReportViewerTemplates.js";
 
+const { appDialogAlertMock, appDialogConfirmMock } = vi.hoisted(() => ({
+  appDialogAlertMock: vi.fn().mockResolvedValue(undefined),
+  appDialogConfirmMock: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => ({
+    alert: appDialogAlertMock,
+    confirm: appDialogConfirmMock,
+  }),
+  AppDialogProvider: ({ children }) => children,
+}));
+
 describe("useReportViewerTemplates", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    vi.spyOn(window, "alert").mockImplementation(() => {});
+    appDialogAlertMock.mockClear().mockResolvedValue(undefined);
+    appDialogConfirmMock.mockClear().mockResolvedValue(true);
     vi.spyOn(window, "prompt").mockImplementation(() => "Mẫu tuần này");
-    vi.spyOn(window, "confirm").mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -16,7 +30,7 @@ describe("useReportViewerTemplates", () => {
     window.localStorage.clear();
   });
 
-  it("saves, applies, overwrites, and deletes local report templates", () => {
+  it("saves, applies, overwrites, and deletes local report templates", async () => {
     const applyTemplateSpy = vi.fn();
     const initialPayload = {
       quickRange: "custom",
@@ -41,19 +55,21 @@ describe("useReportViewerTemplates", () => {
           templatePayload,
           onApplyTemplateFilters: applyTemplateSpy,
         }),
-      { initialProps: { templatePayload: initialPayload } },
+      {
+        initialProps: { templatePayload: initialPayload },
+      },
     );
 
-    act(() => {
-      result.current.handleSaveTemplateAsNew();
+    await act(async () => {
+      await result.current.handleSaveTemplateAsNew();
     });
 
     expect(result.current.templates).toHaveLength(1);
     expect(result.current.selectedTemplateId).toBe(result.current.templates[0].id);
     expect(result.current.appliedTemplate?.name).toBe("Mẫu tuần này");
 
-    act(() => {
-      result.current.handleApplySelectedTemplate();
+    await act(async () => {
+      await result.current.handleApplySelectedTemplate();
     });
 
     expect(applyTemplateSpy).toHaveBeenCalledWith(
@@ -72,8 +88,8 @@ describe("useReportViewerTemplates", () => {
       },
     });
 
-    act(() => {
-      result.current.handleOverwriteSelectedTemplate();
+    await act(async () => {
+      await result.current.handleOverwriteSelectedTemplate();
     });
 
     expect(result.current.templates[0].filters).toMatchObject({
@@ -81,8 +97,8 @@ describe("useReportViewerTemplates", () => {
       ruleId: "rule-10",
     });
 
-    act(() => {
-      result.current.handleDeleteSelectedTemplate();
+    await act(async () => {
+      await result.current.handleDeleteSelectedTemplate();
     });
 
     expect(result.current.templates).toHaveLength(0);

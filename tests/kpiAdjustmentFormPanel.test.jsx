@@ -121,6 +121,10 @@ describe("kpi adjustment form panel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Làm mới tham chiếu" }));
     await userEvent.click(screen.getByRole("button", { name: "Hướng dẫn" }));
     await userEvent.click(screen.getByRole("button", { name: "Cấu hình mặc định" }));
+
+    // Form starts collapsed; expand it to access declaration suggestions
+    await userEvent.click(screen.getByRole("button", { name: /Mở form thêm điểm/i }));
+
     await userEvent.click(screen.getByRole("button", { name: "102030" }));
 
     const resultCard = screen.getByText("102031").closest("div[class*='rounded-lg']");

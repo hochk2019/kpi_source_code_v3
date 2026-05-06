@@ -6,7 +6,7 @@ import {
   getVisibleAppTabIds,
   getVisibleAppTabs,
   resolveVisibleAppTab,
-} from '@/lib/appShellNavigation.js';
+} from '@/lib/appShellNavigation';
 import {
   APP_SHELL_WORKFLOW_TARGETS,
   getAppTabRootId,

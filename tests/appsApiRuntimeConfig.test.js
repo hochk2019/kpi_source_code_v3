@@ -15,7 +15,7 @@ describe("apps/api runtime config", () => {
     expect(config.projectRoot).toBe(projectRoot);
     expect(config.host).toBe("127.0.0.1");
     expect(config.port).toBe(0);
-    expect(config.dbFile).toBe(path.resolve(projectRoot, "server", "data", "storage.sqlite"));
+    expect(config.dbFile).toBe(path.resolve(projectRoot, "data", "storage.sqlite"));
     expect(config.importerCompatGuardMode).toBe("off");
     expect(config.persistenceMode).toBe("sqlite-dual-write");
     expect(config.postgresUrl).toBeNull();

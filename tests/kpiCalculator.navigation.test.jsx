@@ -22,7 +22,7 @@ async function renderCalculatorWithReportCenterStub(
     default: factory,
   }));
 
-  const { default: KPICalculator } = await import('@/components/KPICalculator.jsx');
+  const { default: KPICalculator } = await import('@/components/KPICalculator.tsx');
 
   return render(
     <KPICalculator

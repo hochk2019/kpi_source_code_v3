@@ -6,8 +6,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog.jsx";
-import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+} from "@/components/ui/dialog.tsx";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 import { StatusBadge } from "@/components/designSystem/primitives.jsx";
 
 export default function DataImporterDeletedRowsDialog({

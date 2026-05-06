@@ -32,7 +32,7 @@ vi.mock("@/lib/store.js", () => {
   };
 });
 
-import MSTAssignment from "@/components/MSTAssignment.jsx";
+import MSTAssignment from "@/components/MSTAssignment.tsx";
 import {
   COLUMN_MAX_WIDTH,
   COLUMN_MIN_WIDTH,

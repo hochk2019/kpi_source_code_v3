@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { sortMSTRows } from "@/components/mst-assignment/model/displaySelectors.js";
 
@@ -45,9 +46,11 @@ export default function useMSTAssignmentAddFormWorkspace({
   scrollToTopFn,
   setRows,
   tidyMST,
-  alertFn = (message) => window.alert(message),
+  alertFn,
   scheduleScrollFn = (callback, delay) => window.setTimeout(callback, delay),
 }) {
+  const { alert: appAlert } = useAppDialog();
+  const notify = alertFn || appAlert;
   const [showAddForm, setShowAddForm] = useState(false);
   const [draft, setDraft] = useState(() => createEmptyDraft(applyFrom || ""));
   const [addError, setAddError] = useState("");
@@ -101,9 +104,9 @@ export default function useMSTAssignmentAddFormWorkspace({
     setAddError("");
   }, []);
 
-  const toggleAddForm = useCallback(() => {
+  const toggleAddForm = useCallback(async () => {
     if (isReadOnly) {
-      alertFn(
+      await notify(
         "Bạn không có quyền thêm mới thủ công. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục."
       );
       return;
@@ -118,12 +121,12 @@ export default function useMSTAssignmentAddFormWorkspace({
     setDraft(createEmptyDraft(applyFrom || ""));
     setAddError("");
     setShowAddForm(true);
-  }, [alertFn, applyFrom, isReadOnly, showAddForm]);
+  }, [notify, applyFrom, isReadOnly, showAddForm]);
 
   const startNewStageFromRow = useCallback(
-    (row) => {
+    async (row) => {
       if (isReadOnly) {
-        alertFn("Bạn không có quyền thêm giai đoạn mới.");
+        await notify("Bạn không có quyền thêm giai đoạn mới.");
         return;
       }
 
@@ -144,15 +147,15 @@ export default function useMSTAssignmentAddFormWorkspace({
         scrollToTopFn?.();
       }, 60);
     },
-    [alertFn, applyFrom, isReadOnly, scheduleScrollFn, scrollToTopFn]
+    [notify, applyFrom, isReadOnly, scheduleScrollFn, scrollToTopFn]
   );
 
   const handleAddSubmit = useCallback(
-    (event) => {
+    async (event) => {
       event.preventDefault();
 
       if (isReadOnly) {
-        alertFn("Bạn không có quyền thêm mới.");
+        await notify("Bạn không có quyền thêm mới.");
         return;
       }
 
@@ -231,10 +234,10 @@ export default function useMSTAssignmentAddFormWorkspace({
       goToFirstPage?.();
       setShowAddForm(false);
       setAddError("");
-      alertFn("Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.");
+      await notify("Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.");
     },
     [
-      alertFn,
+      notify,
       computeStoredStatus,
       createRowState,
       draft,

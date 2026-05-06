@@ -1,5 +1,5 @@
 import React from "react";
-import { ReportingSchedulePanel } from "./ReportingPanels.jsx";
+import { ReportingSchedulePanel } from "./ReportingPanels.tsx";
 import { ReportingAdjustmentsPanel } from "./ReportingAdjustmentsPanel.jsx";
 
 export default function ReportExport({

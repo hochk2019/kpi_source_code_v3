@@ -1,5 +1,5 @@
 import React from "react";
-import KPIAdjustments from "@/components/KPIAdjustments.jsx";
+import KPIAdjustments from "@/components/KPIAdjustments.tsx";
 import {
   APP_SHELL_WORKFLOW_TARGETS,
   getAppTabRootId,

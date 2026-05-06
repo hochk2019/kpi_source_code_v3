@@ -1,2 +1,2 @@
-export * from "./primitives.jsx";
-export * from "./shellPrimitives.jsx";
+export * from "./primitives.tsx";
+export * from "./shellPrimitives.tsx";

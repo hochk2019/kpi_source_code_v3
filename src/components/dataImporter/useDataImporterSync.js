@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { toast } from "@/shared/toast.js";
 import {
@@ -178,6 +179,7 @@ export default function useDataImporterSync({
   loadSavedRows,
   onAfterSyncSuccess,
 }) {
+  const { confirm } = useAppDialog();
   const [syncConfig, setSyncConfig] = useState(() => ({ ...DEFAULT_SYNC_CONFIG }));
   const [syncForm, setSyncForm] = useState(() => ({
     enabled: DEFAULT_SYNC_CONFIG.enabled,
@@ -993,7 +995,7 @@ export default function useDataImporterSync({
     }
 
     if (previewConflictWarningActive) {
-      const confirmedOverwrite = window.confirm(
+      const confirmedOverwrite = await confirm(
         buildOverwriteConfirmationMessage(previewConflictSummary),
       );
       if (!confirmedOverwrite) {
@@ -1002,7 +1004,7 @@ export default function useDataImporterSync({
     }
 
     if (!manualRange.from && !manualRange.to) {
-      const confirmDefault = window.confirm(
+      const confirmDefault = await confirm(
         "Bạn chưa chọn khoảng thời gian cụ thể. Hệ thống sẽ dùng số ngày mặc định trong cấu hình (RangeDays). Bạn có muốn tiếp tục?"
       );
       if (!confirmDefault) {

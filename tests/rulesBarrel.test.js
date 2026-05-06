@@ -13,7 +13,7 @@ import {
 } from "../src/lib/rules/rulesCore.js";
 import {
   computeKPI,
-  addByTiers,
+  addByTiersExported as addByTiers,
 } from "../src/lib/rules/rulesCalculation.js";
 import {
   validateTier,

@@ -6,7 +6,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import {
   ReportingControlsPanel,
   ReportingSchedulePanel,
-} from "@/components/reporting/ReportingPanels.jsx";
+} from "@/components/reporting/ReportingPanels.tsx";
 import {
   createScheduleDraft,
   toSchedulePayload,

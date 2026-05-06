@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import {
   deleteReportingSchedule,
@@ -36,6 +37,7 @@ export function useReportViewerActions({
   reportLoading = false,
   reportError = "",
 }) {
+  const { alert, confirm } = useAppDialog();
   const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
   const [editingScheduleId, setEditingScheduleId] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -125,7 +127,7 @@ export function useReportViewerActions({
       return;
     }
 
-    const confirmed = window.confirm(`Xoa lich gui "${schedule.name || "Bao cao KPI"}"?`);
+    const confirmed = await confirm(`Xoa lich gui "${schedule.name || "Bao cao KPI"}"?`, { variant: "destructive", confirmLabel: "Xóa" });
     if (!confirmed) {
       return;
     }
@@ -176,7 +178,7 @@ export function useReportViewerActions({
       reportError,
     });
     if (message) {
-      window.alert(message);
+      await alert(message);
       return;
     }
 
@@ -197,7 +199,7 @@ export function useReportViewerActions({
       reportError,
     });
     if (message) {
-      window.alert(message);
+      await alert(message);
       return;
     }
 
@@ -219,7 +221,7 @@ export function useReportViewerActions({
       reportError,
     });
     if (message) {
-      window.alert(message);
+      await alert(message);
       return;
     }
 
@@ -240,7 +242,7 @@ export function useReportViewerActions({
       reportError,
     });
     if (message) {
-      window.alert(message);
+      await alert(message);
       return;
     }
 

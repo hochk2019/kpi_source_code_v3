@@ -1,4 +1,4 @@
-import { getAppTabDefinition } from '@/lib/appShellNavigation.js';
+import { getAppTabDefinition } from '@/lib/appShellNavigation';
 
 const GENERAL_REFERENCE = Object.freeze({
   id: 'user-guide',

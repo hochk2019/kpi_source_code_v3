@@ -10,4 +10,4 @@ export {
   DataTable,
   FilterSelect,
   StatusBadge,
-} from "../../../packages/ui/src/primitives.jsx";
+} from "../../../packages/ui/src/primitives.tsx";

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Badge } from "@/components/ui/badge.jsx";
-import { Button } from "@/components/ui/button.jsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
 import {
   Command,
   CommandEmpty,
@@ -9,8 +9,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command.jsx";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+} from "@/components/ui/command.tsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.tsx";
 import { cn } from "@/lib/utils.js";
 
 import { Check, ChevronsUpDown, Plus, X } from "lucide-react";

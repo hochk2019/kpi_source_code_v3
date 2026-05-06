@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterListPreferences({
   columnHiddenSet,
@@ -21,11 +22,8 @@ export default function useDataImporterListPreferences({
   setCardGridColumns,
   setShowDeletedRows,
   setOverwrite,
-  confirmOverwrite = (message) =>
-    typeof window !== "undefined" && typeof window.confirm === "function"
-      ? window.confirm(message)
-      : false,
 }) {
+  const { confirm } = useAppDialog();
   const handleOpenColumnConfig = useCallback(() => {
     setColumnDraftHidden(new Set(columnHiddenSet));
     setColumnDraftError("");
@@ -123,14 +121,14 @@ export default function useDataImporterListPreferences({
   }, [setShowDeletedRows]);
 
   const handleOverwriteToggle = useCallback(
-    (nextValue) => {
+    async (nextValue) => {
       if (!canOverwriteData) {
         setOverwrite(false);
         return;
       }
 
       if (nextValue) {
-        const confirmed = confirmOverwrite(
+        const confirmed = await confirm(
           "Cảnh báo: Ghi đè toàn bộ sẽ thay thế dữ liệu hiện có bằng file import. Bạn chắc chắn muốn tiếp tục?"
         );
         if (!confirmed) {
@@ -140,7 +138,7 @@ export default function useDataImporterListPreferences({
 
       setOverwrite(nextValue);
     },
-    [canOverwriteData, confirmOverwrite, setOverwrite]
+    [canOverwriteData, confirm, setOverwrite]
   );
 
   return {

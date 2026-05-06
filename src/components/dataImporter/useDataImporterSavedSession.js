@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterSavedSession({
   fileRef,
@@ -31,11 +32,13 @@ export default function useDataImporterSavedSession({
   setSelectedKeys,
   setHasUnsaved,
 }) {
-  const loadSavedRows = useCallback((opts = {}) => {
+  const { confirm } = useAppDialog();
+
+  const loadSavedRows = useCallback(async (opts = {}) => {
     const { bypassConfirm = false } = opts;
 
     if (!bypassConfirm && hasUnsaved && mode === "saved") {
-      const shouldDiscard = window.confirm(
+      const shouldDiscard = await confirm(
         "Bạn có các thay đổi chưa lưu. Tiếp tục sẽ bỏ qua các chỉnh sửa đó. Bạn có muốn tiếp tục?"
       );
 

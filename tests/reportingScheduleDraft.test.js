@@ -46,6 +46,7 @@ describe("reportingScheduleDraft", () => {
       time: "08:00",
       recipients: "ceo@company.vn",
       formats: ["excel"],
+      deliveryChannels: ["email"],
       active: true,
     });
   });

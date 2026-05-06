@@ -3,7 +3,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import SupportCenter from '@/components/SupportCenter.jsx';
+import SupportCenter from '@/components/SupportCenter.tsx';
 import { emitCommand } from '@/lib/commandBus.js';
 import * as feedbackClient from '@/lib/feedbackClient.js';
 

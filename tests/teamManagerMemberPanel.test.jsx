@@ -50,13 +50,13 @@ describe("TeamManagerMemberPanel", () => {
     expect(screen.getByText("Team Alpha")).toBeInTheDocument();
     expect(screen.getByText("1 DN")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Tran Thi B 0 DN" }));
+    fireEvent.click(screen.getByRole("button", { name: /Tran Thi B/ }));
     expect(props.onSelectMember).toHaveBeenCalledWith("member-2");
 
     fireEvent.click(screen.getByRole("button", { name: "Cập nhật tên" }));
     expect(props.onCommitMemberName).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Xóa thành viên" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xóa khỏi team" }));
     expect(props.onRemoveMember).toHaveBeenCalledWith("member-1");
   });
 
@@ -72,7 +72,7 @@ describe("TeamManagerMemberPanel", () => {
       screen.getByText("Đăng nhập bằng tài khoản được cấp quyền để thêm thành viên mới."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Chọn một thành viên để xem chi tiết và lịch sử doanh nghiệp được phân công."),
+      screen.getByText("Chọn một thành viên từ màn hình danh sách để xem chi tiết và đối chiếu."),
     ).toBeInTheDocument();
   });
 });

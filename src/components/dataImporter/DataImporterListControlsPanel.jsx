@@ -8,7 +8,7 @@ import DataImporterSelectionActions from "@/components/dataImporter/DataImporter
 import {
   SectionHeader,
   SectionSurface,
-} from "@/components/designSystem/shellPrimitives.jsx";
+} from "@/components/designSystem/shellPrimitives.tsx";
 
 export default function DataImporterListControlsPanel({
   mode = "saved",

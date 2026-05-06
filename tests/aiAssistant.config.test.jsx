@@ -6,7 +6,7 @@ import React from 'react';
 
 
 
-import AiAssistant from '@/components/AiAssistant.jsx';
+import AiAssistant from '@/components/AiAssistant.tsx';
 
 import { installMockApi } from './helpers/mockApi.js';
 

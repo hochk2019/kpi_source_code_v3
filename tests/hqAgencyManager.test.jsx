@@ -6,7 +6,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 
 import userEvent from "@testing-library/user-event";
 
-import HQAgencyManager from "@/components/HQAgencyManager.jsx";
+import HQAgencyManager from "@/components/HQAgencyManager.tsx";
+import { AppDialogProvider } from "@/hooks/useAppDialog.tsx";
 
 import { HQ_KEY, DECL_KEY } from "@/lib/store.js";
 
@@ -80,7 +81,7 @@ describe("HQAgencyManager", () => {
       { MST: "0101234567", "Công Ty": "Beta Logistics", "Đại lý": "FCL" },
     ]);
 
-    const { container } = render(<HQAgencyManager canEdit currentUser={{ username: "admin" }} />);
+    const { container } = render(<AppDialogProvider><HQAgencyManager canEdit currentUser={{ username: "admin" }} /></AppDialogProvider>);
 
     const fileInput = container.querySelector('[data-testid="hq-file-input"]');
 
@@ -140,7 +141,7 @@ describe("HQAgencyManager", () => {
 
     const user = userEvent.setup();
 
-    render(<HQAgencyManager canEdit currentUser={{ username: "admin" }} />);
+    render(<AppDialogProvider><HQAgencyManager canEdit currentUser={{ username: "admin" }} /></AppDialogProvider>);
 
     const saveButtons = screen.getAllByRole("button", { name: /Lưu cấu hình/i });
 

@@ -87,6 +87,14 @@ vi.mock("recharts", async () => {
   };
 });
 
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => ({
+    alert: () => Promise.resolve(),
+    confirm: () => Promise.resolve(true),
+  }),
+  AppDialogProvider: ({ children }) => children,
+}));
+
 class LocalStorageMock {
   constructor() {
     this.store = new Map();

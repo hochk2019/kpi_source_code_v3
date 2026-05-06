@@ -1,7 +1,7 @@
 // reportExport/core.js
 // Core utilities for report export
 
-import { fetchWithAuth } from '../auth/localAuth.js';
+import { fetchWithAuth } from '../../auth/localAuth.js';
 import { API_V4_ROUTES } from '../apiRoutes.js';
 
 export function ensureWindow() {

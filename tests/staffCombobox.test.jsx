@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import StaffCombobox from "@/components/shared/StaffCombobox.jsx";
+import StaffCombobox from "@/components/shared/StaffCombobox.tsx";
 
 afterEach(() => {
   cleanup();

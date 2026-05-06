@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 
 
-import AuditLog from '@/components/AuditLog.jsx';
+import AuditLog from '@/components/AuditLog.tsx';
 
 import { AUDIT_KEY } from '@/lib/store.js';
 

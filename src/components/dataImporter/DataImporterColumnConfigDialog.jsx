@@ -7,7 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog.jsx";
+} from "@/components/ui/dialog.tsx";
 
 export default function DataImporterColumnConfigDialog({
   open = false,

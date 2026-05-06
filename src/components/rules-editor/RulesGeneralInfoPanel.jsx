@@ -1,8 +1,8 @@
 import React from "react";
 
-import { Badge } from "@/components/ui/badge.jsx";
-import { Button } from "@/components/ui/button.jsx";
-import { Input } from "@/components/ui/input.jsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
 
 export default function RulesGeneralInfoPanel({
   collection,

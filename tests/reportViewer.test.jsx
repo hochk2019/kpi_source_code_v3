@@ -4,7 +4,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 import { render, screen, waitFor } from "@testing-library/react";
 
-import ReportViewer from "@/components/ReportViewer.jsx";
+import ReportViewer from "@/components/ReportViewer.tsx";
 
 import { DECL_KEY, RULES_KEY, KPI_ADJUSTMENTS_KEY } from "@/lib/store.js";
 

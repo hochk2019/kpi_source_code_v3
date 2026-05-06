@@ -1,7 +1,9 @@
+import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
 import useDataImporterRowMutations from "@/components/dataImporter/useDataImporterRowMutations.js";
+import { AppDialogProvider } from "@/hooks/useAppDialog.tsx";
 
 function createProps(overrides = {}) {
   return {
@@ -63,7 +65,9 @@ describe("useDataImporterRowMutations", () => {
       selectedKeys: ["row-1", "row-2"],
     });
 
-    const { result } = renderHook(() => useDataImporterRowMutations(props));
+    const { result } = renderHook(() => useDataImporterRowMutations(props), {
+      wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider>,
+    });
 
     act(() => {
       result.current.handleDeleteSelected();
@@ -86,7 +90,9 @@ describe("useDataImporterRowMutations", () => {
       selectedKeys: ["row-1", "row-2", "row-3"],
     });
 
-    const { result } = renderHook(() => useDataImporterRowMutations(props));
+    const { result } = renderHook(() => useDataImporterRowMutations(props), {
+      wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider>,
+    });
 
     act(() => {
       result.current.handleHardDeleteSelected();
@@ -111,7 +117,9 @@ describe("useDataImporterRowMutations", () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const props = createProps();
 
-    const { result } = renderHook(() => useDataImporterRowMutations(props));
+    const { result } = renderHook(() => useDataImporterRowMutations(props), {
+      wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider>,
+    });
 
     act(() => {
       result.current.handleRestoreSingle({ rowKey: "row-9" });

@@ -2,7 +2,7 @@ import React from "react";
 import { ReportingStaffSection } from "./ReportingStaffSection.jsx";
 import { ReportingTeamSection } from "./ReportingTeamSection.jsx";
 import { ReportingExecutiveSummaryPanel } from "./ReportingExecutiveSummaryPanel.jsx";
-import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.jsx";
+import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.tsx";
 
 export default function ReportInsight({
   report,

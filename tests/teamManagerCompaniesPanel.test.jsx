@@ -56,7 +56,7 @@ describe("TeamManagerCompaniesPanel", () => {
     expect(screen.getByText("Nguyen Van A")).toBeInTheDocument();
     expect(screen.getByText("Trang 1/2")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sau →" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiếp theo →" }));
     expect(props.onNextPage).toHaveBeenCalledTimes(1);
   });
 

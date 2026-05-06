@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { sanitizeReportTemplateFilters } from "@/components/reporting/useReportViewerPreferences.js";
 
@@ -114,6 +115,7 @@ export default function useReportViewerTemplates({
   templatePayload,
   onApplyTemplateFilters,
 } = {}) {
+  const { alert, confirm } = useAppDialog();
   const [templates, setTemplates] = useState(() => sortTemplates(readTemplateStore()));
   const [selectedTemplateId, setSelectedTemplateId] = useState(() => readLastTemplateId());
   const [appliedTemplateId, setAppliedTemplateId] = useState(() => readLastTemplateId());
@@ -158,9 +160,9 @@ export default function useReportViewerTemplates({
     setSelectedTemplateId(templateId);
   }, []);
 
-  const handleApplySelectedTemplate = useCallback(() => {
+  const handleApplySelectedTemplate = useCallback(async () => {
     if (!selectedTemplate) {
-      window.alert("Vui lòng chọn mẫu báo cáo cần áp dụng.");
+      await alert("Vui lòng chọn mẫu báo cáo cần áp dụng.");
       return;
     }
 
@@ -168,7 +170,7 @@ export default function useReportViewerTemplates({
     setSelectedTemplateId(selectedTemplate.id);
     setAppliedTemplateId(selectedTemplate.id);
     writeLastTemplateId(selectedTemplate.id);
-    window.alert(`Đã áp dụng mẫu báo cáo "${selectedTemplate.name}".`);
+    await alert(`Đã áp dụng mẫu báo cáo "${selectedTemplate.name}".`);
   }, [onApplyTemplateFilters, selectedTemplate]);
 
   const handleSaveTemplateAsNew = useCallback(async () => {
@@ -182,7 +184,7 @@ export default function useReportViewerTemplates({
 
       nextName = input.trim();
       if (!nextName) {
-        window.alert("Tên mẫu báo cáo không được bỏ trống.");
+        await alert("Tên mẫu báo cáo không được bỏ trống.");
         return;
       }
     }
@@ -211,9 +213,9 @@ export default function useReportViewerTemplates({
       setAppliedTemplateId(template.id);
       writeTemplateStore(nextTemplates);
       writeLastTemplateId(template.id);
-      window.alert(`Đã lưu mẫu báo cáo "${template.name}".`);
+      await alert(`Đã lưu mẫu báo cáo "${template.name}".`);
     } catch (error) {
-      window.alert(error?.message || "Không thể lưu mẫu báo cáo.");
+      await alert(error?.message || "Không thể lưu mẫu báo cáo.");
     } finally {
       setTemplateSaving(false);
     }
@@ -221,13 +223,13 @@ export default function useReportViewerTemplates({
 
   const handleOverwriteSelectedTemplate = useCallback(async () => {
     if (!selectedTemplate) {
-      window.alert("Vui lòng chọn mẫu báo cáo cần ghi đè.");
+      await alert("Vui lòng chọn mẫu báo cáo cần ghi đè.");
       return;
     }
 
     if (
       typeof window !== "undefined" &&
-      !window.confirm(`Ghi đè mẫu báo cáo "${selectedTemplate.name}" bằng cấu hình hiện tại?`)
+      !await confirm(`Ghi đè mẫu báo cáo "${selectedTemplate.name}" bằng cấu hình hiện tại?`)
     ) {
       return;
     }
@@ -254,9 +256,9 @@ export default function useReportViewerTemplates({
       setAppliedTemplateId(template.id);
       writeTemplateStore(nextTemplates);
       writeLastTemplateId(template.id);
-      window.alert(`Đã cập nhật mẫu báo cáo "${template.name}".`);
+      await alert(`Đã cập nhật mẫu báo cáo "${template.name}".`);
     } catch (error) {
-      window.alert(error?.message || "Không thể cập nhật mẫu báo cáo.");
+      await alert(error?.message || "Không thể cập nhật mẫu báo cáo.");
     } finally {
       setTemplateSaving(false);
     }
@@ -264,13 +266,13 @@ export default function useReportViewerTemplates({
 
   const handleDeleteSelectedTemplate = useCallback(async () => {
     if (!selectedTemplate) {
-      window.alert("Vui lòng chọn mẫu báo cáo cần xoá.");
+      await alert("Vui lòng chọn mẫu báo cáo cần xoá.");
       return;
     }
 
     if (
       typeof window !== "undefined" &&
-      !window.confirm(`Xoá mẫu báo cáo "${selectedTemplate.name}"?`)
+      !await confirm(`Xoá mẫu báo cáo "${selectedTemplate.name}"?`, { variant: "destructive", confirmLabel: "Xóa" })
     ) {
       return;
     }
@@ -288,9 +290,9 @@ export default function useReportViewerTemplates({
       }
 
       writeTemplateStore(nextTemplates);
-      window.alert(`Đã xoá mẫu báo cáo "${selectedTemplate.name}".`);
+      await alert(`Đã xoá mẫu báo cáo "${selectedTemplate.name}".`);
     } catch (error) {
-      window.alert(error?.message || "Không thể xoá mẫu báo cáo.");
+      await alert(error?.message || "Không thể xoá mẫu báo cáo.");
     } finally {
       setTemplateSaving(false);
     }

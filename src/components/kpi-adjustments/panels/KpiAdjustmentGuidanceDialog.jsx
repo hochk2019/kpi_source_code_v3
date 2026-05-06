@@ -1,6 +1,6 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion.jsx";
-import { Badge } from "@/components/ui/badge.jsx";
-import { Button } from "@/components/ui/button.jsx";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
 import {
   Dialog,
   DialogContent,
@@ -8,8 +8,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog.jsx";
-import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+} from "@/components/ui/dialog.tsx";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 import { cn } from "@/lib/utils.js";
 import { Calculator, Hash, Maximize2, Medal, Minimize2, NotebookPen, PlusCircle, Sparkles } from "lucide-react";
 

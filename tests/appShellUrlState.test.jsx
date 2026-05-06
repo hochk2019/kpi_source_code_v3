@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
-vi.mock('@/components/KPICalculator.jsx', () => ({
+vi.mock('@/components/KPICalculator.tsx', () => ({
   default: function KPICalculatorStub({ activeTab }) {
     return <div data-testid="active-tab">{activeTab}</div>;
   },
@@ -31,13 +31,13 @@ vi.mock('@/components/ThemeToggle.jsx', () => ({
   },
 }));
 
-vi.mock('@/components/NotificationCenter.jsx', () => ({
+vi.mock('@/components/NotificationCenter.tsx', () => ({
   default: function NotificationCenterStub() {
     return null;
   },
 }));
 
-vi.mock('@/components/CommandCenter.jsx', () => ({
+vi.mock('@/components/CommandCenter.tsx', () => ({
   default: function CommandCenterStub() {
     return null;
   },
@@ -80,7 +80,7 @@ vi.mock('@/lib/commandBus.js', () => ({
 import { loadSession } from '@/auth/localAuth.js';
 import { subscribeCommand } from '@/lib/commandBus.js';
 import { subscribeSyncStatus } from '@/lib/storageClient.js';
-import App from '@/App.jsx';
+import App from '@/App.tsx';
 
 describe('App shell URL state', () => {
   beforeEach(() => {

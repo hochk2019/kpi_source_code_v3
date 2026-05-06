@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 const ALERTS_REVIEW_ROUTE = "/api/v4/declarations/imports/alerts/review";
 const ALERTS_UNREVIEW_ROUTE = "/api/v4/declarations/imports/alerts/unreview";
@@ -19,34 +20,36 @@ export default function useDataImporterReviewActions({
   loadSavedRows,
   fetchAlerts,
 }) {
+  const { alert } = useAppDialog();
+
   const handleRefreshAlerts = useCallback(() => {
     fetchAlerts?.();
   }, [fetchAlerts]);
 
   const handleMarkReviewed = useCallback(async () => {
     if (!canReviewAlerts) {
-      alert("Bạn không có quyền đánh dấu đã rà soát các tờ khai.");
+      await alert("Bạn không có quyền đánh dấu đã rà soát các tờ khai.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ đánh dấu rà soát khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ đánh dấu rà soát khi đang xem dữ liệu đã lưu.");
       return;
     }
 
     if (selectedKeys.length === 0) {
-      alert("Chưa chọn tờ khai để đánh dấu.");
+      await alert("Chưa chọn tờ khai để đánh dấu.");
       return;
     }
 
-    const allowedKeys = ensureEditableKeys?.(selectedKeys, "đánh dấu rà soát");
+    const allowedKeys = await ensureEditableKeys?.(selectedKeys, "đánh dấu rà soát");
     if (!allowedKeys) {
       return;
     }
 
     const updated = markDeclRowsReviewed?.(allowedKeys, { actor }) ?? 0;
     if (updated === 0) {
-      alert("Các tờ khai đã được đánh dấu hoặc không tìm thấy.");
+      await alert("Các tờ khai đã được đánh dấu hoặc không tìm thấy.");
     }
 
     try {
@@ -80,21 +83,21 @@ export default function useDataImporterReviewActions({
 
   const handleUnmarkReviewed = useCallback(async () => {
     if (!canReviewAlerts) {
-      alert("Bạn không có quyền bỏ đánh dấu rà soát các tờ khai.");
+      await alert("Bạn không có quyền bỏ đánh dấu rà soát các tờ khai.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ bỏ đánh dấu rà soát khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ bỏ đánh dấu rà soát khi đang xem dữ liệu đã lưu.");
       return;
     }
 
     if (selectedKeys.length === 0) {
-      alert("Chưa chọn tờ khai để bỏ đánh dấu.");
+      await alert("Chưa chọn tờ khai để bỏ đánh dấu.");
       return;
     }
 
-    const allowedKeys = ensureEditableKeys?.(selectedKeys, "bỏ đánh dấu rà soát");
+    const allowedKeys = await ensureEditableKeys?.(selectedKeys, "bỏ đánh dấu rà soát");
     if (!allowedKeys) {
       return;
     }
@@ -105,13 +108,13 @@ export default function useDataImporterReviewActions({
       .map((row) => keyOfRow?.(row));
 
     if (reviewedKeys.length === 0) {
-      alert("Các tờ khai đã chọn chưa được đánh dấu rà soát.");
+      await alert("Các tờ khai đã chọn chưa được đánh dấu rà soát.");
       return;
     }
 
     const updated = unmarkDeclRowsReviewed?.(reviewedKeys, { actor }) ?? 0;
     if (updated === 0) {
-      alert("Không tìm thấy tờ khai nào để bỏ đánh dấu.");
+      await alert("Không tìm thấy tờ khai nào để bỏ đánh dấu.");
     }
 
     try {

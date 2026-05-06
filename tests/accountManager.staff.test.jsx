@@ -8,7 +8,7 @@ import React from 'react';
 
 
 
-import AccountManager from '@/components/AccountManager.jsx';
+import AccountManager from '@/components/AccountManager.tsx';
 
 import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
 

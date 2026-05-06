@@ -23,7 +23,7 @@ import {
 
 import { listAccounts } from '@/auth/localAuth.js';
 import { emitCommand } from '@/lib/commandBus.js';
-import { getAppShellAccess, getVisibleAppTabs } from '@/lib/appShellNavigation.js';
+import { getAppShellAccess, getVisibleAppTabs } from '@/lib/appShellNavigation';
 
 export const COMMAND_CENTER_GROUP_TITLES = Object.freeze({
   pinned: 'Đã ghim',

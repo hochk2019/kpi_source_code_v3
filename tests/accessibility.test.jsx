@@ -8,7 +8,7 @@ import { axe } from 'vitest-axe';
 
 import { toHaveNoViolations } from 'vitest-axe/matchers';
 
-import SupportCenter from '@/components/SupportCenter.jsx';
+import SupportCenter from '@/components/SupportCenter.tsx';
 
 
 

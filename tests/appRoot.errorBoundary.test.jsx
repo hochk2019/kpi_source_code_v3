@@ -2,13 +2,13 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
-vi.mock('@/App.jsx', () => ({
+vi.mock('@/App.tsx', () => ({
   default: function AppCrashStub() {
     throw new Error('app root crashed');
   },
 }));
 
-vi.mock('@/designSystem/ThemeProvider.jsx', () => ({
+vi.mock('@/designSystem/ThemeProvider.tsx', () => ({
   ThemeProvider: function ThemeProviderStub({ children }) {
     return <>{children}</>;
   },

@@ -2,11 +2,12 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import RulesEditor from "@/components/RulesEditor.jsx";
+import RulesEditor from "@/components/RulesEditor.tsx";
 import * as rulesModule from "@/lib/rules.js";
 import { DECL_KEY, HQ_KEY } from "@/lib/store.js";
 import { clearStorageCache, setItem as sharedSetItem } from "@/lib/storageClient.js";
 import { toast } from "@/shared/toast";
+import { AppDialogProvider } from "@/hooks/useAppDialog.tsx";
 
 vi.mock("@/shared/toast", () => ({
   toast: {
@@ -111,7 +112,7 @@ describe("RulesEditor", () => {
   });
 
   it("giu duoc flow mo phong, refresh lich su va khoi phuc phien ban", async () => {
-    render(<RulesEditor currentUser={{ username: "admin" }} />);
+    render(<AppDialogProvider><RulesEditor currentUser={{ username: "admin" }} /></AppDialogProvider>);
 
     await screen.findByText("Quy tắc KPI");
 

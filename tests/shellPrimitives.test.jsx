@@ -8,7 +8,7 @@ import {
   SectionHeader,
   SectionSurface,
   SectionToolbar,
-} from '@/components/designSystem/shellPrimitives.jsx';
+} from '@/components/designSystem/shellPrimitives.tsx';
 
 describe('shellPrimitives', () => {
   it('renders an accessible search field with clear action and trailing content', async () => {

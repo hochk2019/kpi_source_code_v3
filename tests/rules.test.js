@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('@/auth/localAuth.js', () => ({
+  fetchWithAuth: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+}));
 
 import {
 
@@ -140,9 +144,9 @@ describe('deleteRule', () => {
 
 
 
-  it('xóa bộ quy tắc phụ và giữ lại các bộ khác', () => {
+  it('xóa bộ quy tắc phụ và giữ lại các bộ khác', async () => {
 
-    const extra = saveRules({
+    const extra = await saveRules({
 
       ...DEFAULT_RULES,
 

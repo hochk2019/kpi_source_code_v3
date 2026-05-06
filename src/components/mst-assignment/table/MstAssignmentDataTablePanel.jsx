@@ -7,12 +7,12 @@ import {
 import ColumnResizeHandle from "@/components/mst-assignment/table/ColumnResizeHandle.jsx";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
 import StageTimelinePreview from "@/components/mst-assignment/timeline/StageTimelinePreview.jsx";
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover.jsx";
+} from "@/components/ui/popover.tsx";
 import { ChevronsUpDown } from "lucide-react";
 
 export default function MstAssignmentDataTablePanel({

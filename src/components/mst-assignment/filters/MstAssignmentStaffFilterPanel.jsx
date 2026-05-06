@@ -1,9 +1,9 @@
-import SharedStaffCombobox from "@/components/shared/StaffCombobox.jsx";
+import SharedStaffCombobox from "@/components/shared/StaffCombobox.tsx";
 import {
   SectionHeader,
   SectionSurface,
   SectionToolbar,
-} from "@/components/designSystem/shellPrimitives.jsx";
+} from "@/components/designSystem/shellPrimitives.tsx";
 import { LEAD_VIEW_STATUSES } from "@/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js";
 
 const StaffCombobox = (props) => (

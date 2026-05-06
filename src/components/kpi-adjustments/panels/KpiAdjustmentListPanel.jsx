@@ -1,11 +1,11 @@
-import { Badge } from "@/components/ui/badge.jsx";
-import { Button } from "@/components/ui/button.jsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
 
 import { t } from '@/lib/i18n.js';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
-import { Checkbox } from "@/components/ui/checkbox.jsx";
-import { Input } from "@/components/ui/input.jsx";
-import { Switch } from "@/components/ui/switch.jsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import { Switch } from "@/components/ui/switch.tsx";
 import { emitCommand } from "@/lib/commandBus.js";
 import { roundAdjustmentPoint } from "@/lib/store.js";
 import { cn } from "@/lib/utils.js";

@@ -1,11 +1,11 @@
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog.jsx";
+} from "@/components/ui/dialog.tsx";
 
 import StageTimelineGroups from "@/components/mst-assignment/timeline/StageTimelineGroups.jsx";
 

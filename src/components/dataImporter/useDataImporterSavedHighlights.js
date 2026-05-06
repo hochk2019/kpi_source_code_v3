@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterSavedHighlights({
   lastSyncSummary,
@@ -8,12 +9,8 @@ export default function useDataImporterSavedHighlights({
   setSelectedKeys,
   setPage,
   setFilterDuplicate11,
-  alertFn = (message) => {
-    if (typeof window !== "undefined" && typeof window.alert === "function") {
-      window.alert(message);
-    }
-  },
 }) {
+  const { alert } = useAppDialog();
   const lastSyncFetched = lastSyncSummary?.rowsFetched ?? 0;
   const lastSyncInserted = lastSyncSummary?.rowsInserted ?? lastSyncSummary?.rowsImported ?? 0;
   const lastSyncUpdated = lastSyncSummary?.rowsUpdated ?? 0;
@@ -34,9 +31,9 @@ export default function useDataImporterSavedHighlights({
   const updatedPreview = useMemo(() => updatedDeclarations.slice(0, 10), [updatedDeclarations]);
   const showUpdatedBanner = lastSyncUpdated > 0 || updatedDeclarations.length > 0;
 
-  const handleSelectUpdated = useCallback(() => {
+  const handleSelectUpdated = useCallback(async () => {
     if (mode !== "saved") {
-      alertFn("Chi co the chon khi dang xem du lieu da luu.");
+      await alert("Chi co the chon khi dang xem du lieu da luu.");
       return;
     }
     if (!updatedKeySet.size) {
@@ -44,11 +41,11 @@ export default function useDataImporterSavedHighlights({
     }
     setSelectedKeys(Array.from(updatedKeySet));
     setPage(1);
-  }, [alertFn, mode, setPage, setSelectedKeys, updatedKeySet]);
+  }, [alert, mode, setPage, setSelectedKeys, updatedKeySet]);
 
-  const handleSelectCoMismatches = useCallback(() => {
+  const handleSelectCoMismatches = useCallback(async () => {
     if (mode !== "saved") {
-      alertFn("Chi co the chon khi dang xem du lieu da luu.");
+      await alert("Chi co the chon khi dang xem du lieu da luu.");
       return;
     }
     if (!coMismatchKeySet.size) {
@@ -56,20 +53,20 @@ export default function useDataImporterSavedHighlights({
     }
     setSelectedKeys(Array.from(coMismatchKeySet));
     setPage(1);
-  }, [alertFn, coMismatchKeySet, mode, setPage, setSelectedKeys]);
+  }, [alert, coMismatchKeySet, mode, setPage, setSelectedKeys]);
 
-  const handleToggleDuplicateFilter = useCallback(() => {
+  const handleToggleDuplicateFilter = useCallback(async () => {
     if (mode !== "saved") {
-      alertFn("Chi co the loc khi dang xem du lieu da luu.");
+      await alert("Chi co the loc khi dang xem du lieu da luu.");
       return;
     }
     if (!hasDuplicate11Rows) {
-      alertFn("Không có tờ khai trùng 11 số đầu để lọc.");
+      await alert("Không có tờ khai trùng 11 số đầu để lọc.");
       return;
     }
     setFilterDuplicate11((prev) => !prev);
     setPage(1);
-  }, [alertFn, hasDuplicate11Rows, mode, setFilterDuplicate11, setPage]);
+  }, [alert, hasDuplicate11Rows, mode, setFilterDuplicate11, setPage]);
 
   return {
     lastSyncFetched,

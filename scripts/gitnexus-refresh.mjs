@@ -47,12 +47,12 @@ export function isGitFileClean(filePath, cwd, runner = run) {
 }
 
 export function collectSnapshots(files, cwd, deps = {}) {
-  // Use the 'run' function for git operations, not the npm runner
   const exists = deps.existsSync ?? existsSync;
   const read = deps.readFileSync ?? readFileSync;
+  const gitRunner = deps.runner ?? run;
 
   return files
-    .filter((filePath) => exists(filePath) && isGitFileClean(filePath, cwd, run))
+    .filter((filePath) => exists(filePath) && isGitFileClean(filePath, cwd, gitRunner))
     .map((filePath) => ({
       filePath,
       contents: read(filePath),

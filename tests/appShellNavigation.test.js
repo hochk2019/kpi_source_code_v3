@@ -10,13 +10,13 @@ import {
   parseAppShellLocation,
   resolveVisibleAppTab,
   serializeAppShellLocation,
-} from '@/lib/appShellNavigation.js';
+} from '@/lib/appShellNavigation';
 
 describe('appShellNavigation', () => {
   it('giữ bộ tab nền cho tài khoản khách', () => {
     const tabs = getVisibleAppTabs({ username: 'guest', role: 'viewer', permissions: {} }).map((tab) => tab.id);
 
-    expect(tabs).toEqual(['dashboard', 'mst', 'hq', 'import', 'teams', 'rules', 'adjustments', 'reports']);
+    expect(tabs).toEqual(['dashboard', 'mst', 'import', 'hq', 'teams', 'rules', 'adjustments', 'reports']);
   });
 
   it('mở rộng tab theo quyền điều hướng nâng cao', () => {
@@ -42,8 +42,8 @@ describe('appShellNavigation', () => {
     expect(tabs).toEqual([
       'dashboard',
       'mst',
-      'hq',
       'import',
+      'hq',
       'teams',
       'rules',
       'adjustments',
@@ -73,7 +73,7 @@ describe('appShellNavigation', () => {
 
     expect(sections).toEqual([
       { id: 'overview', tabs: ['dashboard'] },
-      { id: 'operations', tabs: ['mst', 'hq', 'import'] },
+      { id: 'operations', tabs: ['mst', 'import', 'hq'] },
       { id: 'performance', tabs: ['teams', 'rules', 'adjustments', 'reports'] },
       { id: 'observability', tabs: ['health'] },
       { id: 'governance', tabs: ['accounts', 'audit', 'export-audit'] },

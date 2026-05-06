@@ -7,13 +7,13 @@ import {
 } from "@/auth/localAuth.js";
 import { t } from "@/lib/i18n.js";
 import { FilterSelect, StatusBadge } from "@/components/designSystem/primitives.jsx";
-import { SectionHeader } from "@/components/designSystem/shellPrimitives.jsx";
+import { SectionHeader } from "@/components/designSystem/shellPrimitives.tsx";
 import AccountPermissionGroupsPanel from "@/components/account-manager/AccountPermissionGroupsPanel.jsx";
 import {
   CONTROL_CLASS,
   GROUP_TOGGLE_BUTTON_CLASS,
 } from "@/components/account-manager/accountManagerPermissions.js";
-import StaffCombobox from "@/components/shared/StaffCombobox.jsx";
+import StaffCombobox from "@/components/shared/StaffCombobox.tsx";
 
 export default function AccountCreateFormPanel({
   form,

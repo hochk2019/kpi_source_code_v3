@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import {
   ADMIN_ROLE,
@@ -20,6 +21,7 @@ export default function useDataImporterEditAccess({
   normalizeStr,
   normalizeName,
 }) {
+  const { alert } = useAppDialog();
   const normalizedRole = normalizeRoleKey(currentUser?.role);
   const isTeamLead = normalizedRole === TEAM_LEAD_ROLE;
   const isStaffRole = normalizedRole === DEFAULT_ROLE;
@@ -196,7 +198,7 @@ export default function useDataImporterEditAccess({
   );
 
   const sanitizeRowUpdates = useCallback(
-    (_row, updates) => {
+    async (_row, updates) => {
       if (!updates || typeof updates !== "object") return updates;
       if (!isStaffRole) return updates;
       if (!Object.prototype.hasOwnProperty.call(updates, "team")) {
@@ -210,7 +212,7 @@ export default function useDataImporterEditAccess({
       }
       if (nextTeamKey && nextTeamKey !== assignedTeamKey) {
         if (teamChangeRestrictionMessage) {
-          alert(teamChangeRestrictionMessage);
+          await alert(teamChangeRestrictionMessage);
         }
         return null;
       }

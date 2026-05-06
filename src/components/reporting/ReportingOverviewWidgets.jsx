@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart.jsx";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart.tsx";
 
 const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 const TOP_STAFF_VISIBLE_COUNT_OPTIONS = [5, 7, 8, 9, 10, 12, 15];

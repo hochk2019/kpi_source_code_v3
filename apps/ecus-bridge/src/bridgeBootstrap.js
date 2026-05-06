@@ -1,4 +1,4 @@
-import { createEcusBridgeService } from '../../../server/ecus/bridgeService.js';
+import { createEcusBridgeService } from '../../../packages/backend-shared/src/ecus/bridgeService.js';
 
 import { createEcusBridgeApiClient } from './bridgeApiClient.js';
 import { createStandaloneEcusBridgeHost } from './bridgeHost.js';

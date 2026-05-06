@@ -2,14 +2,17 @@
 // Tests for audit log components
 
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import AuditLogTable from '../src/components/auditLog/AuditLogTable.jsx';
 import AuditLogFilters from '../src/components/auditLog/AuditLogFilters.jsx';
 import AuditLogDetail from '../src/components/auditLog/AuditLogDetail.jsx';
 import BackupSection from '../src/components/auditLog/BackupSection.jsx';
 
 describe('AuditLog Components', () => {
+  afterEach(() => {
+    cleanup();
+  });
   describe('AuditLogTable', () => {
     const mockLogs = [
       {

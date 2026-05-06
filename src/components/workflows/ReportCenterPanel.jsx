@@ -8,8 +8,8 @@ import {
 } from "@/components/appShell/appShellWorkflowState.js";
 import { Info, Download } from "lucide-react";
 
-const ReportViewer = React.lazy(() => import("@/components/ReportViewer.jsx"));
-const ExportAuditReport = React.lazy(() => import("@/components/ExportAuditReport.jsx"));
+const ReportViewer = React.lazy(() => import("@/components/ReportViewer"));
+const ExportAuditReport = React.lazy(() => import("@/components/ExportAuditReport"));
 
 function ReportSurfaceFallback({ label }) {
   return (

@@ -565,6 +565,211 @@ const translations = {
     'import.loading.review': 'Đang tải khối rà soát dữ liệu...',
     'import.loading.save': 'Đang tải khối lưu và theo dõi...',
     'import.afterImport.note': 'Import xong, toàn bộ workspace đã lưu và bề mặt theo dõi cảnh báo sẽ xuất hiện ở bước này.',
+
+    // Dashboard Landing
+    'dashboard.ariaLabel': 'Dashboard tổng quan KPI',
+    'dashboard.overview': 'Tổng quan KPI',
+    'dashboard.guestMode': 'Chế độ khách',
+    'dashboard.infoTooltip': 'Điểm vào ưu tiên để kiểm tra sức khỏe vận hành.',
+    'dashboard.currentPeriod': 'Kỳ hiện tại: {from} — {to}',
+    'dashboard.refresh': 'Làm mới',
+    'dashboard.loading': 'Đang tải dữ liệu KPI...',
+    'dashboard.quickActions': 'Hành động nhanh',
+    'dashboard.summary.totalDeclarations': 'Tổng tờ khai',
+    'dashboard.summary.importExport': 'Nhập: {importCount} • Xuất: {exportCount}',
+    'dashboard.summary.totalKpiPoints': 'Tổng điểm KPI',
+    'dashboard.summary.includeTypeLicense': 'Bao gồm điểm loại hình và giấy phép',
+    'dashboard.summary.adjustmentPoints': 'Điểm KPI +/- bổ sung',
+    'dashboard.summary.approvedPending': 'Đã duyệt: {approved} • Chờ duyệt: {pending}',
+    'dashboard.summary.companyCount': 'Số công ty quản lý',
+    'dashboard.summary.currentAllocation': 'Trong phân bổ tổ đội/nhân viên hiện tại',
+    'dashboard.error.title': 'Lỗi dữ liệu KPI',
+    'dashboard.empty.teamData.title': 'Chưa có dữ liệu phân quyền / tổ đội',
+    'dashboard.empty.teamData.description': 'Không tìm thấy đủ dữ liệu tờ khai để vẽ biểu đồ phân bổ tổ đội.',
+    'dashboard.quickAction.openReport': 'Mở báo cáo KPI',
+    'dashboard.quickAction.openReportDetail': 'Xem insight chi tiết, nhân viên, tổ đội và lịch xuất báo cáo',
+
+    // App Shell Frame
+    'shell.defaultTabLabel': 'Bảng điều hành KPI',
+    'shell.defaultDescription': 'Chọn một module để bắt đầu thao tác.',
+    'shell.nav.ariaLabel': 'Điều hướng ứng dụng',
+    'shell.brand.eyebrow': 'Hệ thống Điều hành',
+    'shell.brand.infoTooltip': 'Điều hướng theo domain để giữ shell gọn, rõ ngữ cảnh và giảm thời gian tìm đúng workflow.',
+    'shell.compact.ariaLabel': 'Tổng quan compact shell',
+    'shell.compact.defaultSection': 'Điều hướng',
+    'shell.hero.contextAriaLabel': 'Ngữ cảnh hiện tại',
+    'shell.hero.userLabel': 'Người dùng {username}',
+    'shell.hero.commandCenterAriaLabel': 'Mở Command Center (Ctrl+K)',
+    'shell.hero.searchPlaceholder': 'Tìm kiếm...',
+    'shell.error.description': 'Đã xảy ra lỗi khi hiển thị nội dung. Bạn có thể thử hiển thị lại hoặc chuyển sang tab khác.',
+
+    // Login
+    'login.title': 'Đăng nhập hệ thống KPI',
+    'login.username': 'Tài khoản',
+    'login.password': 'Mật khẩu',
+    'login.submit': 'Đăng nhập',
+    'login.submitting': 'Đang đăng nhập...',
+    'login.cancel': 'Hủy',
+    'login.error': 'Không đăng nhập được',
+    'login.contactAdmin': 'Liên hệ quản trị viên để được cấp tài khoản.',
+
+    // Change Password
+    'changePassword.title': 'Đổi mật khẩu',
+    'changePassword.currentPassword': 'Mật khẩu hiện tại',
+    'changePassword.newPassword': 'Mật khẩu mới',
+    'changePassword.confirmPassword': 'Xác nhận mật khẩu mới',
+    'changePassword.cancel': 'Hủy',
+    'changePassword.update': 'Cập nhật',
+    'changePassword.updating': 'Đang xử lý...',
+    'changePassword.invalidSession': 'Phiên đăng nhập không hợp lệ',
+    'changePassword.passwordMismatch': 'Xác nhận mật khẩu không khớp',
+    'changePassword.success': 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại nếu được yêu cầu.',
+    'changePassword.error': 'Không thể đổi mật khẩu',
+
+    // Command Center
+    'command.noResults': 'Không tìm thấy kết quả phù hợp.',
+    'command.noResultsHint': 'Thử từ khóa khác hoặc quay về các thao tác được dùng nhiều bên dưới.',
+    'command.searchPlaceholder': 'Tìm lệnh... (Ctrl+K)',
+    'command.searchAria': 'Tìm kiếm lệnh',
+
+    // Theme Toggle
+    'theme.system': 'Theo hệ thống',
+    'theme.systemDesc': 'Tự điều chỉnh theo thiết lập của Windows/macOS',
+    'theme.light': 'Giao diện sáng',
+    'theme.lightDesc': 'Nền sáng, phù hợp văn phòng, dễ in ấn',
+    'theme.dark': 'Giao diện tối',
+    'theme.darkDesc': 'Giảm chói mắt khi làm việc ban đêm',
+    'theme.highContrast': 'Tương phản cao',
+    'theme.highContrastDesc': 'Độ tương phản đậm, hỗ trợ người suy giảm thị lực',
+    'theme.ariaLabel': 'Thay đổi theme giao diện',
+    'theme.chooseStyle': 'Chọn phong cách hiển thị',
+    'theme.brandPalette': 'Bảng màu thương hiệu',
+    'theme.active': 'Đang dùng',
+
+    // App Shell
+    'app.skipToContent': 'Bỏ qua tới nội dung chính',
+    'app.greeting': 'Xin chào, {name} ({role})',
+    'app.guestNotice': 'Đang xem với quyền hạn giới hạn (khách).',
+    'app.changePassword': 'Đổi mật khẩu',
+    'app.logout': 'Đăng xuất',
+    'app.adminLogin': 'Đăng nhập quản trị',
+    'app.loadingDashboard': 'Đang tải dashboard...',
+
+    // Export Audit Report
+    'export.title': 'Lịch Sử Xuất Dữ Liệu',
+    'export.description': 'Kiểm soát quy trình tải file, xuất dữ liệu và theo dõi truy cập hệ thống báo cáo.',
+    'export.filter.fromDate': 'Từ ngày',
+    'export.filter.toDate': 'Đến ngày',
+    'export.filter.reportType': 'Loại báo cáo',
+    'export.filter.allReports': 'Tất cả báo cáo',
+    'export.filter.advancedSearch': 'Tìm kiếm nâng cao',
+    'export.filter.searchPlaceholder': 'Tra cứu tài khoản, IP, hoặc mã yêu cầu...',
+    'export.filter.submit': 'Lọc Dữ Liệu',
+    'export.filter.reset': 'Mặc định',
+    'export.metrics.downloadStats': 'Thống kê tải file',
+    'export.metrics.latest': 'Mới nhất:',
+    'export.metrics.tabAccess': 'Tab truy cập',
+    'export.metrics.reportTypes': 'Loại Báo Cáo',
+    'export.metrics.noReportTypes': 'Chưa có phân loại mẫu.',
+    'export.metrics.topUsers': 'User Tích Cực',
+    'export.metrics.noTopUsers': 'Chưa có dữ liệu account.',
+    'export.table.title': 'Bản Ghi Giao Dịch',
+    'export.table.showing': 'Hiển thị {count} / {total} bản ghi mới nhất.',
+    'export.table.empty': 'Danh sách trống',
+    'export.table.header.version': 'Phiên bản / Yêu cầu',
+    'export.table.header.account': 'Tài khoản thao tác',
+    'export.table.header.report': 'Báo cáo',
+    'export.table.header.action': 'Hành động',
+    'export.table.noResults': 'Chưa tìm thấy lịch sử nào ở bộ lọc hiện tại.',
+    'export.table.unknownFile': 'Không rõ tên',
+    'export.table.viewParams': 'Xem tham số',
+    'export.table.none': 'Không có',
+    'export.pagination.page': 'Trang {page} / {total}',
+    'export.realtime.title': 'Truy cập Real-time',
+    'export.realtime.desc': 'Log xem tab gần nhất',
+    'export.realtime.noTraffic': 'Chưa có traffic.',
+    'export.realtime.justNow': 'Vừa xong',
+    'export.accessFilter.from': 'Từ {value}',
+    'export.accessFilter.to': 'Đến {value}',
+    'export.accessFilter.kind': 'Loại: {value}',
+    'export.accessFilter.keyword': 'Từ khóa: {value}',
+    'export.accessFilter.page': 'Trang {value}',
+    'export.error.loadFailed': 'Không thể tải lịch sử export.',
+    'export.error.loadFailedHttp': 'Không thể tải lịch sử export (HTTP {status}).',
+
+    // MST Assignment (extended)
+    'mst.readonlyWarning': 'Bạn đang xem bảng gán MST ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị hoặc được cấp quyền để import, chỉnh sửa và lưu thay đổi.',
+    'mst.leadViewBadge': 'Chế độ Lead-view',
+    'mst.recordCount': '{count} bản ghi',
+    'mst.fileLabel': 'File: {name}',
+    'mst.groupByMstLocked': 'Gom theo MST (khóa bởi lead-view)',
+    'mst.groupByMst': 'Gom theo MST',
+    'mst.quickSearchLabel': 'Tìm nhanh MST hoặc công ty',
+    'mst.quickSearchPlaceholder': 'Tìm nhanh (MST / Công ty)',
+    'mst.export.xlsxFiltered': 'XLSX (lọc)',
+    'mst.export.csvFiltered': 'CSV (lọc)',
+    'mst.export.xlsxAll': 'XLSX (tất cả)',
+    'mst.export.csvAll': 'CSV (tất cả)',
+    'mst.save': 'Lưu',
+    'mst.chooseFile': 'Chọn file XLSX',
+    'mst.importXlsx': 'Import XLSX',
+    'mst.closeAddForm': 'Đóng thêm mới',
+    'mst.addNew': 'Thêm mới',
+    'mst.applyFromDate': 'Áp dụng từ ngày',
+    'mst.readonlyDescription': 'Xem nhanh danh sách MST, tìm kiếm, gom theo MST và xuất dữ liệu hiện tại.',
+    'mst.applyFromHint': '* Thời gian "Áp dụng từ ngày" chỉ tác động vào tờ khai mới kể từ mốc này.',
+
+    // AccountManager.tsx — additional keys
+    'account.createSuccessAlert': 'Đã tạo tài khoản mới.',
+    'account.staffUpdateSuccess': 'Đã cập nhật nhân viên gắn với tài khoản.',
+    'account.resetPasswordPrompt': 'Nhập mật khẩu mới cho {username} (>={min} ký tự):',
+    'account.resetPasswordSuccess': 'Đã đặt lại mật khẩu cho {username}.',
+    'account.validation.confirmDeleteText': 'Vui lòng nhập chính xác tên tài khoản để xác nhận xoá.',
+    'account.noTeamData': 'Chưa có dữ liệu tổ đội',
+    'account.linkedWith': 'Đang gắn với {name}',
+    'account.staffNotInList': 'Nhân viên này không còn trong danh sách KPI',
+    'account.noStaffLinked': 'Chưa gắn nhân viên KPI',
+    'account.saving': 'Đang lưu thay đổi…',
+    'account.noPermissionConfig': 'Chưa cấu hình quyền',
+    'account.noPermissionGranted': 'Chưa cấp quyền nào',
+    'account.permissionGrantedCount': '{enabled}/{total} quyền được cấp',
+    'account.permissionList': 'Danh sách quyền',
+    'account.resetPasswordBtn': 'Đặt lại mật khẩu',
+    'account.deleteAccountBtn': 'Xóa tài khoản',
+    'account.emptyTitle': 'Chưa có tài khoản nào.',
+    'account.emptyDescription': 'Sử dụng biểu mẫu phía trên để tạo tài khoản đầu tiên.',
+    'account.noSearchResults': 'Không tìm thấy tài khoản phù hợp với từ khóa hiện tại.',
+    'account.auditNote': 'Mọi thao tác đều được ghi nhận trong màn hình Giám sát.',
+    'account.listTitle': 'Danh sách tài khoản',
+    'account.listCount': '{visible}/{total} hiển thị',
+    'account.listDescription': 'Theo dõi quyền truy cập và trạng thái gắn nhân viên.',
+    'account.listAriaLabel': 'Danh sách tài khoản KPI',
+    'account.listCaption': 'Danh sách {visible} trên {total} tài khoản sau khi lọc.',
+    'account.staffAriaLabel': 'Nhân viên KPI cho {username}',
+
+    // Table columns — additional
+    'table.column.fullName': 'Họ tên',
+
+    // Error messages — additional
+    'error.updateRole': 'Không thể cập nhật vai trò',
+
+    // TeamManager.tsx — additional keys
+    'team.exportExcelError': 'Không thể xuất file Excel lúc này.',
+    'team.memberExists': 'Team hiện đã có thành viên này.',
+    'team.removeConfirm': 'Xóa {name} khỏi {team}?',
+    'team.duplicateMemberName': 'Team đã có thành viên với tên tương tự.',
+    'team.noSavePermission': 'Bạn không có quyền lưu thay đổi tổ đội.',
+    'team.auditDetail': 'Cập nhật tổ đội từ giao diện',
+    'team.auditSyncMST': 'Đồng bộ tổ đội sang bảng MST',
+    'team.saveSyncSuccess': 'Đã lưu tổ đội và đồng bộ dữ liệu MST thành công.',
+    'team.saveSuccess': 'Đã lưu tổ đội thành công.',
+    'team.saveError': 'Không thể lưu tổ đội. Kiểm tra lại dữ liệu hoặc thử lại sau.',
+    'team.readOnlyBanner': 'Bạn đang xem quản lý tổ đội ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị hoặc được phân quyền để thêm, sửa hoặc điều chuyển thành viên.',
+    'team.description': 'Quản lý danh sách tổ đội để đồng bộ với dữ liệu gán MST và báo cáo KPI. Chọn một team để xem thành viên, doanh nghiệp phụ trách và điều chỉnh.',
+    'team.emptyTitle': 'Chưa có tổ đội nào',
+    'team.emptyDescription': 'Hãy tạo tổ đội đầu tiên để bắt đầu quản lý.',
+    'team.teamStats': '{members} thành viên · {companies} doanh nghiệp',
+    'team.noDataMessage': 'Chưa có dữ liệu tổ đội để hiển thị. Hãy thêm thành viên cho một team.',
   },
 };
 
@@ -579,8 +784,18 @@ let currentLocale = 'vi';
  * @returns {string} Translated string or key if not found
  */
 export function t(key, params = {}) {
+  const locale = translations[currentLocale];
+
+  // Fast path: flat dotted key lookup (translations stored as 'a.b.c': 'value')
+  if (locale && typeof locale === 'object' && key in locale && typeof locale[key] === 'string') {
+    return locale[key].replace(/\{(\w+)\}/g, (match, paramKey) => {
+      return params[paramKey] !== undefined ? String(params[paramKey]) : match;
+    });
+  }
+
+  // Slow path: nested key walk (translations stored as { a: { b: { c: 'value' } } })
   const keys = key.split('.');
-  let value = translations[currentLocale];
+  let value = locale;
 
   for (const k of keys) {
     if (value && typeof value === 'object' && k in value) {

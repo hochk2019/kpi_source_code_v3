@@ -6,9 +6,9 @@ import userEvent from '@testing-library/user-event';
 
 
 
-import Login from '@/components/Login.jsx';
+import Login from '@/components/Login.tsx';
 
-import KPICalculator from '@/components/KPICalculator.jsx';
+import KPICalculator from '@/components/KPICalculator.tsx';
 
 import { fetchWithAuth, getViewerAuth, login } from '@/auth/localAuth.js';
 

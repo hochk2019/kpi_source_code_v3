@@ -48,9 +48,11 @@ function createHarness() {
   const getItem = (key) => (storage.has(key) ? storage.get(key) : null);
   const setItem = (key, value) => {
     storage.set(key, String(value));
+    return Promise.resolve();
   };
   const removeItem = (key) => {
     storage.delete(key);
+    return Promise.resolve();
   };
   const pushAuditLog = (entry) => {
     auditLogs.unshift(entry);
@@ -78,7 +80,7 @@ function createHarness() {
 }
 
 describe('createMSTAssignmentStore', () => {
-  it('migrates legacy MST rows on first read and writes an audit log', () => {
+  it('migrates legacy MST rows on first read and writes an audit log', async () => {
     const harness = createHarness();
     const legacyRows = [
       {
@@ -95,6 +97,9 @@ describe('createMSTAssignmentStore', () => {
 
     expect(harness.getItem(legacyKey)).toBeNull();
     harness.setItem(legacyKey, setLegacy);
+
+    harness.store.getMSTMap(); // trigger async migration
+    await new Promise((r) => setTimeout(r, 0)); // flush microtask queue
 
     const rows = harness.store.getMSTMap();
 
@@ -113,10 +118,10 @@ describe('createMSTAssignmentStore', () => {
     });
   });
 
-  it('updates a row, records history, and rejects no-op saves', () => {
+  it('updates a row, records history, and rejects no-op saves', async () => {
     const { store } = createHarness();
 
-    store.upsertMSTRows(
+    await store.upsertMSTRows(
       [
         {
           mst: '0101234567',
@@ -131,7 +136,7 @@ describe('createMSTAssignmentStore', () => {
       { actor: 'seed' },
     );
 
-    const result = store.saveMSTRow(
+    const result = await store.saveMSTRow(
       {
         mst: '0101234567',
         company: 'ACME Logistics',
@@ -161,7 +166,7 @@ describe('createMSTAssignmentStore', () => {
     expect(history.some((entry) => entry.field === 'person_import' && entry.to === 'Nguyễn Văn A')).toBe(true);
     expect(history.some((entry) => entry.field === 'person_export' && entry.to === 'Lê B')).toBe(true);
 
-    const noChange = store.saveMSTRow(
+    const noChange = await store.saveMSTRow(
       {
         mst: '0101234567',
         company: 'ACME Logistics',
@@ -180,10 +185,10 @@ describe('createMSTAssignmentStore', () => {
     });
   });
 
-  it('resolves the effective row for a target date', () => {
+  it('resolves the effective row for a target date', async () => {
     const { store } = createHarness();
 
-    store.upsertMSTRows(
+    await store.upsertMSTRows(
       [
         {
           mst: '2301158516',

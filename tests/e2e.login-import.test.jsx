@@ -46,7 +46,9 @@ import * as XLSX from 'xlsx';
 
 
 
-import App from '@/App.jsx';
+import App from '@/App.tsx';
+import { AppDialogProvider } from '@/hooks/useAppDialog.tsx';
+import { logout } from '@/auth/localAuth.js';
 
 import { getDeclRows, saveDeclRows } from '@/lib/store.js';
 
@@ -126,8 +128,9 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
 
 
-  beforeEach(() => {
+  beforeEach(async () => {
 
+    await logout();
     clearStorageCache();
 
     fetchMock = installMockApi();
@@ -164,7 +167,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
     const user = userEvent.setup();
 
-    render(<App />);
+    render(<AppDialogProvider><App /></AppDialogProvider>);
 
 
 
@@ -208,13 +211,16 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
 
 
-    await user.click(screen.getByRole('button', { name: /Import XLSX/i }));
+    const importButtons = screen.getAllByRole('button', { name: /Import XLSX/i });
+    const enabledImportBtn = importButtons.find(btn => !btn.disabled) ?? importButtons[0];
+    await user.click(enabledImportBtn);
 
 
 
-    await waitFor(() => expect(alertMock).toHaveBeenCalledWith('Import xong!'));
-
-
+    await waitFor(() => {
+      const stored = getDeclRows();
+      expect(stored).toHaveLength(1);
+    });
 
     const stored = getDeclRows();
 
@@ -240,7 +246,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
   it('khóa tờ khai đã rà soát đối với tài khoản nhân viên', async () => {
 
-    saveDeclRows(
+    await saveDeclRows(
       [
         {
           so_tk: '00000007001',
@@ -260,7 +266,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
     const user = userEvent.setup();
 
-    render(<App />);
+    render(<AppDialogProvider><App /></AppDialogProvider>);
 
     await user.click(screen.getByRole('button', { name: /đăng nhập quản trị/i }));
     await user.type(await screen.findByPlaceholderText('admin'), 'nhanvien');
@@ -269,12 +275,15 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
     await waitFor(() => expect(screen.getByText(/Xin chào, /i)).toBeInTheDocument());
 
-    const importTab = await screen.findByRole('tab', { name: /Import Data/i }, { timeout: 5000 });
-    await user.click(importTab);
+    const importTabs = await screen.findAllByRole('tab', { name: /Import Data/i }, { timeout: 5000 });
+    await user.click(importTabs[0]);
 
-    await waitFor(() => expect(screen.getByText('TK-LOCK-001')).toBeInTheDocument());
+    const loadSavedButtons = await screen.findAllByRole('button', { name: /Hiển thị dữ liệu đã lưu/i });
+    await user.click(loadSavedButtons[0]);
 
-    const rowLabel = screen.getByText('TK-LOCK-001');
+    await waitFor(() => expect(screen.getAllByText('TK-LOCK-001').length).toBeGreaterThan(0));
+
+    const rowLabel = screen.getAllByText('TK-LOCK-001')[0];
     const rowElement = rowLabel.closest('tr');
     expect(rowElement).not.toBeNull();
 
@@ -291,7 +300,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
     await user.click(reviewButton);
 
     await waitFor(() => {
-      const lockedRow = screen.getByText('TK-LOCK-001').closest('tr');
+      const lockedRow = screen.getAllByText('TK-LOCK-001')[0].closest('tr');
       expect(lockedRow).not.toBeNull();
       const lockedScope = within(lockedRow);
       expect(lockedScope.getByText('Khóa rà soát')).toBeInTheDocument();

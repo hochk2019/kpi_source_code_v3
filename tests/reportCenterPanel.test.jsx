@@ -26,6 +26,6 @@ describe('ReportCenterPanel', () => {
     );
 
     expect(screen.getByText(/Audit trail chưa khả dụng/i)).toBeInTheDocument();
-    expect(screen.getByText(/Export và lịch gửi vẫn khả dụng/i)).toBeInTheDocument();
+    expect(screen.getByText(/Export và lịch gửi nằm trên dashboard chính/i)).toBeInTheDocument();
   });
 });

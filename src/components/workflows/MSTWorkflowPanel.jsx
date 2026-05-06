@@ -1,5 +1,5 @@
 import React from "react";
-import MSTAssignment from "@/components/MSTAssignment.jsx";
+import MSTAssignment from "@/components/MSTAssignment.tsx";
 import {
   APP_SHELL_WORKFLOW_TARGETS,
   getAppTabRootId,

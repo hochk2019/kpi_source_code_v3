@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('@/auth/localAuth.js', () => ({
+  fetchWithAuth: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+}));
 
 import { seedSampleDeclarations } from '../packages/domain/src/sampleDeclarations.js';
 
@@ -64,13 +68,13 @@ describe('seedSampleDeclarations integration', () => {
 
 
 
-  it('ghi đè dữ liệu mẫu và đảm bảo phân bố đều theo nhóm & giấy phép', () => {
+  it('ghi đè dữ liệu mẫu và đảm bảo phân bố đều theo nhóm & giấy phép', async () => {
 
     const count = 90;
 
     const rows = seedSampleDeclarations({ actor: 'integration-test', count, rules: DEFAULT_RULES });
 
-
+    await new Promise((r) => setTimeout(r, 0)); // flush async saveDeclRows
 
     expect(rows).toHaveLength(count);
 

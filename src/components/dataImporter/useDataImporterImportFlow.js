@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import resolveImportEligibility from "@/components/dataImporter/importGate.js";
 import { parseDataImporterWorkbook } from "@/components/dataImporter/dataImporterWorkbookParser.js";
@@ -64,22 +65,24 @@ export default function useDataImporterImportFlow({
   maxImportFileSizeBytes = 0,
   maxImportRows = 0,
 }) {
+  const { alert, confirm } = useAppDialog();
+
   const handleFileChange = useCallback(
-    (event) => {
+    async (event) => {
       if (!canUploadFiles) {
-        alert(
+        await alert(
           'Tài khoản của bạn chưa được cấp quyền "Import Data – tải file". Vui lòng liên hệ quản trị viên để mở quyền tải file import.',
         );
         return;
       }
 
       if (isReadOnlyForEdits) {
-        alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
+        await alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
         return;
       }
 
       if (hasUnsaved && mode === "saved") {
-        const proceed = window.confirm(
+        const proceed = await confirm(
           "Bạn có các thay đổi chưa lưu. Chọn file mới sẽ làm mất các chỉnh sửa đó. Bạn có chắc chắn muốn tiếp tục?",
         );
 
@@ -297,12 +300,12 @@ export default function useDataImporterImportFlow({
     });
 
     if (!importGate.canImport) {
-      alert(importGate.reason);
+      await alert(importGate.reason);
       return;
     }
 
     if ((importPreview?.invalid || 0) > 0) {
-      const proceed = window.confirm(
+      const proceed = await confirm(
         `Có ${importPreview.invalid.toLocaleString(
           "vi-VN",
         )} dòng lỗi sẽ bị bỏ qua khi import. Bạn vẫn muốn tiếp tục?`,
@@ -314,7 +317,7 @@ export default function useDataImporterImportFlow({
     }
 
     if ((importPreview?.inserted || 0) === 0 && (importPreview?.updated || 0) === 0) {
-      const proceed = window.confirm(
+      const proceed = await confirm(
         "File không tạo ra tờ khai mới hoặc cập nhật nào. Bạn vẫn muốn tiếp tục import?",
       );
 

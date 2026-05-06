@@ -54,7 +54,7 @@ describe('operator workflow panels', () => {
       />,
     );
 
-    expect(screen.getByText(/Chốt phạm vi báo cáo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Report Center/i)).toBeInTheDocument();
     expect(await screen.findByText('Report dashboard body')).toBeInTheDocument();
     expect(await screen.findByText('Export audit widget')).toBeInTheDocument();
   });

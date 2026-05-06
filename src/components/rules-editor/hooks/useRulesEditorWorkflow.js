@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { toast } from "@/shared/toast";
 import {
@@ -26,6 +27,7 @@ function downloadJson(filename, payload) {
 }
 
 export default function useRulesEditorWorkflow({ canEdit = true, currentUser = null, data = [] }) {
+  const { alert, confirm } = useAppDialog();
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
 
@@ -164,14 +166,14 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     }
   }, [data, rule, savedSnapshot]);
 
-  const handleRestoreEntry = useCallback((entry) => {
+  const handleRestoreEntry = useCallback(async (entry) => {
     if (isReadOnly) {
-      alert("Bạn không có quyền khôi phục phiên bản quy tắc.");
+      await alert("Bạn không có quyền khôi phục phiên bản quy tắc.");
       return;
     }
 
     if (!entry?.snapshot) {
-      alert("Phiên bản lịch sử không hợp lệ.");
+      await alert("Phiên bản lịch sử không hợp lệ.");
       return;
     }
 
@@ -179,7 +181,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     const targetVersion = entry.snapshot.version || "—";
     const confirmMessage = `Khôi phục phiên bản ${targetVersion} của ${targetName}?`;
 
-    if (!window.confirm(confirmMessage)) {
+    if (!await confirm(confirmMessage)) {
       return;
     }
 
@@ -200,17 +202,17 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
       toast.success(`Đã khôi phục phiên bản ${restored.version} của ${restored.name}.`);
     } catch (error) {
       console.error(error);
-      alert(error?.message || "Không thể khôi phục phiên bản đã chọn.");
+      await alert(error?.message || "Không thể khôi phục phiên bản đã chọn.");
     } finally {
       setRestoringId("");
     }
   }, [actor, collection.activeId, isReadOnly]);
 
-  const handleSelectTab = useCallback((ruleId) => {
+  const handleSelectTab = useCallback(async (ruleId) => {
     if (ruleId === activeTab) return;
 
     if (dirty && !isReadOnly) {
-      const proceed = window.confirm(
+      const proceed = await confirm(
         "Bạn có thay đổi chưa lưu. Chuyển sang bộ quy tắc khác sẽ bỏ các thay đổi này. Bạn có chắc chắn?"
       );
       if (!proceed) return;
@@ -230,9 +232,9 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     setDirty(true);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (isReadOnly) {
-      alert("Bạn không có quyền chỉnh sửa quy tắc KPI.");
+      await alert("Bạn không có quyền chỉnh sửa quy tắc KPI.");
       return;
     }
 
@@ -248,7 +250,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     setExpandedHistoryId(null);
     setVersion((prev) => prev + 1);
 
-    alert(
+    await alert(
       `Đã lưu bộ quy tắc ${rule.name}${recalcFrom ? ` và tính lại KPI từ ${recalcFrom}` : ""}.`
     );
   }, [actor, applyNow, collection.activeId, isReadOnly, rule]);
@@ -270,23 +272,23 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     setDirty(false);
   }, [actor]);
 
-  const handleSetDefaultButton = useCallback(() => {
+  const handleSetDefaultButton = useCallback(async () => {
     if (collection.activeId === rule.id) return;
     const updated = setDefaultRule(rule.id, { actor });
     setCollection(updated);
-    alert(`Đã đặt "${rule.name}" làm bộ quy tắc mặc định.`);
+    await alert(`Đã đặt "${rule.name}" làm bộ quy tắc mặc định.`);
   }, [actor, collection.activeId, rule.id, rule.name]);
 
-  const handleDeleteRule = useCallback(() => {
+  const handleDeleteRule = useCallback(async () => {
     if (isReadOnly || !rule?.id) return;
 
     if (collection.sets.length <= 1) {
-      alert("Không thể xóa bộ quy tắc cuối cùng.");
+      await alert("Không thể xóa bộ quy tắc cuối cùng.");
       return;
     }
 
     const confirmMessage = `Bạn chắc chắn muốn xóa bộ quy tắc "${rule.name || rule.id}"?`;
-    if (!window.confirm(confirmMessage)) {
+    if (!await confirm(confirmMessage, { variant: "destructive", confirmLabel: "Xóa" })) {
       return;
     }
 
@@ -307,10 +309,10 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
       setApplyNow(false);
       setDirty(false);
       setVersion((prev) => prev + 1);
-      alert(`Đã xóa bộ quy tắc ${removedName}.`);
+      await alert(`Đã xóa bộ quy tắc ${removedName}.`);
     } catch (error) {
       console.error(error);
-      alert(error?.message || "Không thể xóa bộ quy tắc.");
+      await alert(error?.message || "Không thể xóa bộ quy tắc.");
     }
   }, [actor, collection.sets.length, isReadOnly, rule]);
 
@@ -368,11 +370,12 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const parsed = JSON.parse(reader.result);
-        const proceed = window.confirm(
-          "Khôi phục toàn bộ bộ quy tắc từ file sẽ ghi đè dữ liệu hiện tại. Bạn có chắc chắn?"
+        const proceed = await confirm(
+          "Khôi phục toàn bộ bộ quy tắc từ file sẽ ghi đè dữ liệu hiện tại. Bạn có chắc chắn?",
+          { variant: "destructive", confirmLabel: "Khôi phục" }
         );
 
         if (!proceed) {

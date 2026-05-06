@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { formatDateRangeLabel } from "../../../packages/domain/src/format.js";
 import {
@@ -150,6 +151,7 @@ export default function useDataImporterCoMonitoring({
   fetchWithAuth,
   extractErrorMessage,
 }) {
+  const { alert } = useAppDialog();
   const [coCodeConfig, setCoCodeConfig] = useState(null);
   const [coCodeForm, setCoCodeForm] = useState({ whitelist: "", blacklist: "" });
   const [coCodeLoading, setCoCodeLoading] = useState(false);
@@ -204,7 +206,7 @@ export default function useDataImporterCoMonitoring({
 
   const handleSaveCoCodeConfig = useCallback(async () => {
     if (!canManageSync) {
-      alert("Bạn không có quyền cập nhật cấu hình mã ưu đãi C/O.");
+      await alert("Bạn không có quyền cập nhật cấu hình mã ưu đãi C/O.");
       return;
     }
 
@@ -309,7 +311,7 @@ export default function useDataImporterCoMonitoring({
 
   const handleSaveCoDiscrepancyConfig = useCallback(async () => {
     if (!canManageSync) {
-      alert("Bạn không có quyền cập nhật cấu hình đối soát C/O.");
+      await alert("Bạn không có quyền cập nhật cấu hình đối soát C/O.");
       return;
     }
 
@@ -367,7 +369,7 @@ export default function useDataImporterCoMonitoring({
 
   const handleRunCoDiscrepancy = useCallback(async () => {
     if (!canManageSync) {
-      alert("Bạn không có quyền chạy đối soát C/O.");
+      await alert("Bạn không có quyền chạy đối soát C/O.");
       return;
     }
 

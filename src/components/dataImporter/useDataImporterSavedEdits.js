@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterSavedEdits({
   isReadOnlyForEdits = false,
@@ -21,14 +22,16 @@ export default function useDataImporterSavedEdits({
   refreshRowHistory,
   toast,
 }) {
+  const { alert } = useAppDialog();
+
   const handleSaveAll = useCallback(async () => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền lưu chỉnh sửa.");
+      await alert("Bạn không có quyền lưu chỉnh sửa.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể lưu chỉnh sửa khi đang xem dữ liệu đã lưu. Hãy import file hoặc quay lại chế độ dữ liệu đã lưu.");
+      await alert("Chỉ có thể lưu chỉnh sửa khi đang xem dữ liệu đã lưu. Hãy import file hoặc quay lại chế độ dữ liệu đã lưu.");
       return;
     }
 
@@ -47,7 +50,7 @@ export default function useDataImporterSavedEdits({
     });
 
     if (pendingUpdates.length === 0) {
-      alert("Không có thay đổi nào cần lưu.");
+      await alert("Không có thay đổi nào cần lưu.");
       return;
     }
 
@@ -81,7 +84,7 @@ export default function useDataImporterSavedEdits({
         parts.push(`${result.invalid.toLocaleString("vi-VN")} bản ghi không hợp lệ.`);
       }
 
-      alert(parts.join(" "));
+      await alert(parts.join(" "));
 
       if (result.success && result.updated > 0) {
         setHasUnsaved(false);
@@ -107,12 +110,12 @@ export default function useDataImporterSavedEdits({
 
   const handleSaveRowChanges = useCallback(async (rowKey) => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền lưu chỉnh sửa.");
+      await alert("Bạn không có quyền lưu chỉnh sửa.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể cập nhật khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể cập nhật khi đang xem dữ liệu đã lưu.");
       return;
     }
 

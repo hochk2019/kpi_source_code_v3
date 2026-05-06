@@ -22,7 +22,7 @@ vi.mock('@/lib/commandBus.js', () => ({
   subscribeCommand: () => () => {},
 }));
 
-import NotificationCenter from '@/components/NotificationCenter.jsx';
+import NotificationCenter from '@/components/NotificationCenter.tsx';
 
 function getUnreadBadge() {
   return document.querySelector('button[aria-label="Thông báo hệ thống"] span.bg-red-500');

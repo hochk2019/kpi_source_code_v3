@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterRowMutations({
   actor = "system",
@@ -22,6 +23,8 @@ export default function useDataImporterRowMutations({
   loadSavedRows,
   fetchAlerts,
 }) {
+  const { alert, confirm } = useAppDialog();
+
   const deleteRowsByKeys = useCallback(async (keys, { alreadyFiltered = false } = {}) => {
     if (!Array.isArray(keys) || keys.length === 0) return;
 
@@ -31,7 +34,7 @@ export default function useDataImporterRowMutations({
 
       if (!allowed.length) {
         if (reviewLocked > 0) {
-          alert(
+          await alert(
             `Không thể đánh dấu xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
           );
           pushAuditLog?.({
@@ -41,13 +44,13 @@ export default function useDataImporterRowMutations({
             meta: { keys: reviewLockedKeys, reason: "review lock" },
           });
         } else if (blocked > 0 && editingRestrictionMessage) {
-          alert(editingRestrictionMessage);
+          await alert(editingRestrictionMessage);
         }
         return;
       }
 
       if (reviewLocked > 0) {
-        alert(
+        await alert(
           `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể đánh dấu xóa).`
         );
         pushAuditLog?.({
@@ -57,7 +60,7 @@ export default function useDataImporterRowMutations({
           meta: { keys: reviewLockedKeys, reason: "review lock" },
         });
       } else if (blocked > 0 && editingRestrictionMessage) {
-        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi đánh dấu xóa.`);
+        await alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi đánh dấu xóa.`);
       }
 
       allowedKeys = allowed;
@@ -77,7 +80,7 @@ export default function useDataImporterRowMutations({
     }
 
     if (parts.length > 0) {
-      alert(parts.join("\n"));
+      await alert(parts.join("\n"));
     }
 
     if (result.deleted > 0) {
@@ -106,7 +109,7 @@ export default function useDataImporterRowMutations({
 
       if (!allowed.length) {
         if (reviewLocked > 0) {
-          alert(
+          await alert(
             `Không thể xóa vĩnh viễn ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
           );
           pushAuditLog?.({
@@ -116,13 +119,13 @@ export default function useDataImporterRowMutations({
             meta: { keys: reviewLockedKeys, reason: "review lock" },
           });
         } else if (blocked > 0 && editingRestrictionMessage) {
-          alert(editingRestrictionMessage);
+          await alert(editingRestrictionMessage);
         }
         return;
       }
 
       if (reviewLocked > 0) {
-        alert(
+        await alert(
           `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể xóa vĩnh viễn).`
         );
         pushAuditLog?.({
@@ -132,7 +135,7 @@ export default function useDataImporterRowMutations({
           meta: { keys: reviewLockedKeys, reason: "review lock" },
         });
       } else if (blocked > 0 && editingRestrictionMessage) {
-        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi xóa vĩnh viễn.`);
+        await alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi xóa vĩnh viễn.`);
       }
 
       allowedKeys = allowed;
@@ -149,7 +152,7 @@ export default function useDataImporterRowMutations({
     }
 
     if (parts.length > 0) {
-      alert(parts.join("\n"));
+      await alert(parts.join("\n"));
     }
 
     if (result.removed > 0) {
@@ -172,28 +175,28 @@ export default function useDataImporterRowMutations({
     setSelectedKeys,
   ]);
 
-  const handleDeleteSelected = useCallback(() => {
+  const handleDeleteSelected = useCallback(async () => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền đánh dấu xóa tờ khai.");
+      await alert("Bạn không có quyền đánh dấu xóa tờ khai.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
       return;
     }
 
     if (selectedKeys.length === 0) {
-      alert("Chưa chọn tờ khai để đánh dấu xóa.");
+      await alert("Chưa chọn tờ khai để đánh dấu xóa.");
       return;
     }
 
-    const allowedKeys = ensureEditableKeys(selectedKeys, "đánh dấu xóa");
+    const allowedKeys = await ensureEditableKeys(selectedKeys, "đánh dấu xóa");
     if (!allowedKeys) {
       return;
     }
 
-    if (!window.confirm(`Bạn chắc chắn muốn đánh dấu xóa ${allowedKeys.length} tờ khai đã chọn?`)) {
+    if (!await confirm(`Bạn chắc chắn muốn đánh dấu xóa ${allowedKeys.length} tờ khai đã chọn?`, { variant: "destructive", confirmLabel: "Xóa" })) {
       return;
     }
 
@@ -206,30 +209,31 @@ export default function useDataImporterRowMutations({
     selectedKeys,
   ]);
 
-  const handleHardDeleteSelected = useCallback(() => {
+  const handleHardDeleteSelected = useCallback(async () => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền xóa vĩnh viễn tờ khai.");
+      await alert("Bạn không có quyền xóa vĩnh viễn tờ khai.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể xóa vĩnh viễn khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể xóa vĩnh viễn khi đang xem dữ liệu đã lưu.");
       return;
     }
 
     if (selectedKeys.length === 0) {
-      alert("Chưa chọn tờ khai để xóa vĩnh viễn.");
+      await alert("Chưa chọn tờ khai để xóa vĩnh viễn.");
       return;
     }
 
-    const allowedKeys = ensureHardDeleteKeys(selectedKeys, "xóa vĩnh viễn");
+    const allowedKeys = await ensureHardDeleteKeys(selectedKeys, "xóa vĩnh viễn");
     if (!allowedKeys) {
       return;
     }
 
     if (
-      !window.confirm(
-        `Bạn chắc chắn muốn xóa vĩnh viễn ${allowedKeys.length.toLocaleString("vi-VN")} tờ khai đã chọn? Hành động không thể khôi phục.`
+      !await confirm(
+        `Bạn chắc chắn muốn xóa vĩnh viễn ${allowedKeys.length.toLocaleString("vi-VN")} tờ khai đã chọn? Hành động không thể khôi phục.`,
+        { variant: "destructive", confirmLabel: "Xóa" }
       )
     ) {
       return;
@@ -244,25 +248,25 @@ export default function useDataImporterRowMutations({
     selectedKeys,
   ]);
 
-  const handleDeleteSingle = useCallback((row) => {
+  const handleDeleteSingle = useCallback(async (row) => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền đánh dấu xóa tờ khai.");
+      await alert("Bạn không có quyền đánh dấu xóa tờ khai.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
       return;
     }
 
     if (!isRowEditable(row)) {
       if (editingRestrictionMessage) {
-        alert(editingRestrictionMessage);
+        await alert(editingRestrictionMessage);
       }
       return;
     }
 
-    if (!window.confirm("Đánh dấu xóa tờ khai này?")) return;
+    if (!await confirm("Đánh dấu xóa tờ khai này?", { variant: "destructive", confirmLabel: "Xóa" })) return;
     deleteRowsByKeys([keyOfRow(row)], { alreadyFiltered: true });
   }, [
     deleteRowsByKeys,
@@ -273,14 +277,14 @@ export default function useDataImporterRowMutations({
     mode,
   ]);
 
-  const handleHardDeleteSingle = useCallback((row) => {
+  const handleHardDeleteSingle = useCallback(async (row) => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền xóa vĩnh viễn tờ khai.");
+      await alert("Bạn không có quyền xóa vĩnh viễn tờ khai.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể xóa vĩnh viễn khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể xóa vĩnh viễn khi đang xem dữ liệu đã lưu.");
       return;
     }
 
@@ -288,12 +292,12 @@ export default function useDataImporterRowMutations({
       return;
     }
 
-    const allowedKeys = ensureHardDeleteKeys([keyOfRow(row)], "xóa vĩnh viễn");
+    const allowedKeys = await ensureHardDeleteKeys([keyOfRow(row)], "xóa vĩnh viễn");
     if (!allowedKeys) {
       return;
     }
 
-    if (!window.confirm("Bạn chắc chắn muốn xóa vĩnh viễn tờ khai này? Hành động không thể khôi phục.")) {
+    if (!await confirm("Bạn chắc chắn muốn xóa vĩnh viễn tờ khai này? Hành động không thể khôi phục.", { variant: "destructive", confirmLabel: "Xóa" })) {
       return;
     }
 
@@ -308,12 +312,12 @@ export default function useDataImporterRowMutations({
 
   const handleRestoreSingle = useCallback(async (row) => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền khôi phục tờ khai.");
+      await alert("Bạn không có quyền khôi phục tờ khai.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể khôi phục khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể khôi phục khi đang xem dữ liệu đã lưu.");
       return;
     }
 
@@ -328,7 +332,7 @@ export default function useDataImporterRowMutations({
     });
 
     if (result.restored > 0) {
-      alert("Đã khôi phục 1 tờ khai.");
+      await alert("Đã khôi phục 1 tờ khai.");
       setHasUnsaved(false);
       loadSavedRows?.();
       fetchAlerts?.();
@@ -336,16 +340,16 @@ export default function useDataImporterRowMutations({
     }
 
     if (result.skipped > 0) {
-      alert("Tờ khai đã ở trạng thái hoạt động.");
+      await alert("Tờ khai đã ở trạng thái hoạt động.");
       return;
     }
 
     if (Array.isArray(result.failedKeys) && result.failedKeys.length > 0) {
       const reason = result.failedKeys[0]?.reason;
       if (reason === "review-locked") {
-        alert(`Không thể khôi phục tờ khai do đã bị khóa rà soát. ${reviewLockMessage}`);
+        await alert(`Không thể khôi phục tờ khai do đã bị khóa rà soát. ${reviewLockMessage}`);
       } else {
-        alert("Không thể khôi phục tờ khai. Vui lòng thử lại.");
+        await alert("Không thể khôi phục tờ khai. Vui lòng thử lại.");
       }
     }
   }, [

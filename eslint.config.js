@@ -81,6 +81,59 @@ export default [
   },
 
   {
+    files: ["src/**/*.{ts,tsx}"],
+
+    ignores: ["src/**/*.d.ts"],
+
+    languageOptions: {
+      parser: tsParser,
+
+      ecmaVersion: "latest",
+
+      sourceType: "module",
+
+      globals: {
+        ...globals.browser,
+      },
+
+      parserOptions: {
+        project: "./tsconfig.json",
+
+        tsconfigRootDir: rootDir,
+
+        ecmaFeatures: { jsx: true },
+      },
+    },
+
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+      "react-hooks": reactHooks,
+      "react-refresh": reactRefresh,
+    },
+
+    rules: {
+      ...js.configs.recommended.rules,
+
+      ...tsPlugin.configs.recommended.rules,
+
+      ...reactHooks.configs.recommended.rules,
+
+      "linebreak-style": "off",
+
+      "no-undef": "off",
+
+      "no-unused-vars": "off",
+
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^[A-Z_]" },
+      ],
+
+      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+    },
+  },
+
+  {
     files: ["server-v4/src/**/*.ts"],
 
     ignores: ["server-v4/src/**/*.d.ts"],

@@ -1,7 +1,7 @@
 import React from "react";
 
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import AgencyExcludeEditor from "@/components/rules-editor/controls/AgencyExcludeEditor.jsx";
 import CodeMultiSelect from "@/components/rules-editor/controls/CodeMultiSelect.jsx";
 import LicensePointTable from "@/components/rules-editor/controls/LicensePointTable.jsx";

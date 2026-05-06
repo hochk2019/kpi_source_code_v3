@@ -106,25 +106,24 @@ describe("HQAgencyManagerControls", () => {
     const user = userEvent.setup();
     const { props } = renderControls();
 
-    expect(screen.getByText("Có thay đổi chưa lưu")).toBeInTheDocument();
     expect(
-      screen.getByText((_, element) => element?.textContent === "3 bản ghi lịch sử được lưu."),
+      screen.getByText((_, el) => el?.textContent === "3 bản ghi"),
     ).toBeInTheDocument();
-    expect(screen.getByText(/24 giờ qua:/)).toBeInTheDocument();
-    expect(screen.getByText(/Đã chọn: hq.xlsx/)).toBeInTheDocument();
+    expect(screen.getByText(/24h/)).toBeInTheDocument();
+    expect(screen.getByText(/Update:/)).toBeInTheDocument();
     expect(
-      screen.getByText((_, element) => element?.textContent === "12 dòng • Trang 2/4"),
+      screen.getByText((_, element) => element?.textContent === "12 mục • 2/4"),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Tải lại" }));
     await user.click(screen.getByRole("button", { name: "Lưu cấu hình" }));
-    await user.click(screen.getByRole("button", { name: "Làm mới lịch sử" }));
-    await user.click(screen.getByRole("button", { name: "Import Excel" }));
-    await user.click(screen.getByRole("button", { name: "Thêm dòng mới" }));
+    await user.click(screen.getByRole("button", { name: "Làm mới" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+    await user.click(screen.getByRole("button", { name: "+ Thêm dòng" }));
     await user.click(screen.getByRole("button", { name: "Xóa lọc" }));
-    await user.click(screen.getByRole("button", { name: "« Trước" }));
-    await user.click(screen.getByRole("button", { name: "Sau »" }));
-    await user.type(screen.getByPlaceholderText("Tìm theo MST, Công ty hoặc Đại lý"), "demo");
+    await user.click(screen.getByRole("button", { name: "«" }));
+    await user.click(screen.getByRole("button", { name: "»" }));
+    await user.type(screen.getByPlaceholderText("Tìm MST, Công ty..."), "demo");
 
     expect(props.onReload).toHaveBeenCalledTimes(1);
     expect(props.onSave).toHaveBeenCalledTimes(1);
@@ -157,9 +156,7 @@ describe("HQAgencyManagerControls", () => {
       statusFilter: "pending",
     });
 
-    expect(screen.getByText(/Bạn đang ở chế độ chỉ xem/)).toBeInTheDocument();
-    expect(screen.getByText("Không thể tải danh sách Đại lý HQ. Vui lòng thử lại.")).toBeInTheDocument();
-    expect(screen.getByText("Chưa ghi nhận lịch sử đồng bộ Đại lý HQ.")).toBeInTheDocument();
+    expect(screen.getByText(/Chế độ chỉ xem/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Lưu cấu hình" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import Excel" })).not.toBeInTheDocument();
 

@@ -8,13 +8,14 @@ import React from 'react';
 
 
 
-import MSTAssignment from '@/components/MSTAssignment.jsx';
+import MSTAssignment from '@/components/MSTAssignment.tsx';
 
-import HQAgencyManager from '@/components/HQAgencyManager.jsx';
+import HQAgencyManager from '@/components/HQAgencyManager.tsx';
 
-import ReportViewer from '@/components/ReportViewer.jsx';
+import ReportViewer from '@/components/ReportViewer.tsx';
 
-import AccountManager from '@/components/AccountManager.jsx';
+import AccountManager from '@/components/AccountManager.tsx';
+import { AppDialogProvider } from '@/hooks/useAppDialog.tsx';
 
 import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
@@ -143,7 +144,7 @@ describe('Luồng quản trị – Gán MST', () => {
 
     const user = userEvent.setup();
 
-    render(<MSTAssignment canEdit currentUser={{ username: 'admin' }} />);
+    render(<AppDialogProvider><MSTAssignment canEdit currentUser={{ username: 'admin' }} /></AppDialogProvider>);
 
 
 
@@ -260,7 +261,7 @@ describe('Luồng quản trị – Gán MST', () => {
 
     );
 
-    render(<MSTAssignment canEdit currentUser={{ username: 'admin' }} />);
+    render(<AppDialogProvider><MSTAssignment canEdit currentUser={{ username: 'admin' }} /></AppDialogProvider>);
 
     await waitFor(() => {
 
@@ -338,7 +339,7 @@ describe('Luồng quản trị – Đại Lý HQ', () => {
 
     const user = userEvent.setup();
 
-    render(<HQAgencyManager canEdit currentUser={{ username: 'admin' }} />);
+    render(<AppDialogProvider><HQAgencyManager canEdit currentUser={{ username: 'admin' }} /></AppDialogProvider>);
 
     await user.click(screen.getByRole('button', { name: /thêm dòng mới/i }));
 
@@ -463,11 +464,11 @@ describe('Luồng quản trị – Báo Cáo KPI', () => {
 
     render(
 
-      <div role="tabpanel" style={{ minWidth: 1024, minHeight: 640 }}>
+      <AppDialogProvider><div role="tabpanel" style={{ minWidth: 1024, minHeight: 640 }}>
 
         <ReportViewer canExport />
 
-      </div>,
+      </div></AppDialogProvider>,
 
     );
 
@@ -562,7 +563,7 @@ describe('Luồng quản trị – Tài khoản', () => {
 
     const user = userEvent.setup();
 
-    render(<AccountManager currentUser={{ username: 'admin' }} />);
+    render(<AppDialogProvider><AccountManager currentUser={{ username: 'admin' }} /></AppDialogProvider>);
 
 
 

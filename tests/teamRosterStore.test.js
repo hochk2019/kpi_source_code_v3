@@ -15,10 +15,11 @@ function createTeamRosterHarness(initialValue = null) {
   const setItem = (key, value) => {
     storage.set(key, value);
     const keyListeners = listeners.get(key);
-    if (!keyListeners) return;
+    if (!keyListeners) return Promise.resolve();
     for (const listener of keyListeners) {
       listener();
     }
+    return Promise.resolve();
   };
   const subscribe = (key, listener) => {
     const keyListeners = listeners.get(key) ?? new Set();
@@ -93,10 +94,10 @@ describe('teamRosterStore', () => {
     });
   });
 
-  it('normalizes team and member ids when saving the roster', () => {
+  it('normalizes team and member ids when saving the roster', async () => {
     const { auditEntries, normalizeName, store } = createTeamRosterHarness();
 
-    const saved = store.setTeamRoster({
+    const saved = await store.setTeamRoster({
       teams: [
         {
           id: 'custom-team',
@@ -133,10 +134,10 @@ describe('teamRosterStore', () => {
     );
   });
 
-  it('maps member names accent-insensitively', () => {
+  it('maps member names accent-insensitively', async () => {
     const { normalizeName, store } = createTeamRosterHarness();
 
-    const roster = store.setTeamRoster({
+    const roster = await store.setTeamRoster({
       teams: [
         { name: 'Team 1', members: [{ name: 'H\u00f2a' }] },
       ],
@@ -149,16 +150,16 @@ describe('teamRosterStore', () => {
     });
   });
 
-  it('syncs MST rows with renamed members through previous roster ids', () => {
+  it('syncs MST rows with renamed members through previous roster ids', async () => {
     const { normalizeName, store } = createTeamRosterHarness();
 
-    const baseRoster = store.setTeamRoster({
+    const baseRoster = await store.setTeamRoster({
       teams: [
         { name: 'Team 1', members: [{ name: 'Phuong' }] },
       ],
     });
 
-    const renamedRoster = store.setTeamRoster({
+    const renamedRoster = await store.setTeamRoster({
       teams: baseRoster.teams.map((team) => ({
         ...team,
         members: team.members.map((member) =>
@@ -190,7 +191,7 @@ describe('teamRosterStore', () => {
     });
   });
 
-  it('emits an initial snapshot and subsequent updates to subscribers', () => {
+  it('emits an initial snapshot and subsequent updates to subscribers', async () => {
     const { store } = createTeamRosterHarness();
     const snapshots = [];
 
@@ -198,7 +199,7 @@ describe('teamRosterStore', () => {
       snapshots.push(snapshot);
     });
 
-    store.setTeamRoster({
+    await store.setTeamRoster({
       teams: [
         { name: 'Team QA', members: [{ name: 'Lan' }] },
       ],

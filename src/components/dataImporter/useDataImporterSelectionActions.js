@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterSelectionActions({
   selectionEnabled,
@@ -15,6 +16,8 @@ export default function useDataImporterSelectionActions({
   editingRestrictionMessage,
   toast,
 }) {
+  const { alert } = useAppDialog();
+
   const filteredSelected = useMemo(() => {
     if (!filteredKeys.length) return false;
     if (!selectedKeys.length) return false;
@@ -35,7 +38,7 @@ export default function useDataImporterSelectionActions({
   }, [selectedKeys, rawRows, keyOfRow]);
 
   const handleToggleSelect = useCallback(
-    (row) => {
+    async (row) => {
       if (isReadOnlyForEdits) {
         return;
       }
@@ -43,7 +46,7 @@ export default function useDataImporterSelectionActions({
         if (isRowReviewLocked(row)) {
           toast.warning(reviewLockMessage);
         } else if (editingRestrictionMessage) {
-          alert(editingRestrictionMessage);
+          await alert(editingRestrictionMessage);
         }
         return;
       }
@@ -72,13 +75,13 @@ export default function useDataImporterSelectionActions({
     setSelectedKeys([]);
   }, [setSelectedKeys]);
 
-  const handleSelectFiltered = useCallback(() => {
+  const handleSelectFiltered = useCallback(async () => {
     if (!selectionEnabled) {
-      alert("Chỉ có thể chọn tờ khai khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể chọn tờ khai khi đang xem dữ liệu đã lưu.");
       return;
     }
     if (!filteredKeys.length) {
-      alert("Không có tờ khai phù hợp với điều kiện lọc hiện tại.");
+      await alert("Không có tờ khai phù hợp với điều kiện lọc hiện tại.");
       return;
     }
 

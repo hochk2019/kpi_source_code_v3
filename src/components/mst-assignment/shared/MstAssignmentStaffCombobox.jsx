@@ -1,4 +1,4 @@
-import SharedStaffCombobox from "@/components/shared/StaffCombobox.jsx";
+import SharedStaffCombobox from "@/components/shared/StaffCombobox.tsx";
 
 export default function MstAssignmentStaffCombobox(props) {
   return (

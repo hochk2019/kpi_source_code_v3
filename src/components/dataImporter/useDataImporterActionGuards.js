@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterActionGuards({
   rawRows,
@@ -9,18 +10,18 @@ export default function useDataImporterActionGuards({
   reviewLockMessage,
   showAlert,
 }) {
+  const { alert: appAlert } = useAppDialog();
+
   const notify = useCallback(
-    (message) => {
+    async (message) => {
       if (!message) return;
       if (typeof showAlert === "function") {
         showAlert(message);
         return;
       }
-      if (typeof globalThis !== "undefined" && typeof globalThis.alert === "function") {
-        globalThis.alert(message);
-      }
+      await appAlert(message);
     },
-    [showAlert],
+    [showAlert, appAlert],
   );
 
   const filterEditableKeys = useCallback(
@@ -102,28 +103,28 @@ export default function useDataImporterActionGuards({
   );
 
   const ensureEditableKeys = useCallback(
-    (keys, actionLabel = "thao tac") => {
+    async (keys, actionLabel = "thao tac") => {
       const { allowed, blocked, reviewLocked } = filterEditableKeys(keys);
 
       if (!allowed.length) {
         if (reviewLocked > 0) {
-          notify(
+          await notify(
             `Khong the ${actionLabel} ${reviewLocked.toLocaleString("vi-VN")} to khai da duoc ra soat. ${reviewLockMessage}`,
           );
         } else if (blocked > 0 && editingRestrictionMessage) {
-          notify(editingRestrictionMessage);
+          await notify(editingRestrictionMessage);
         } else if (keys?.length) {
-          notify("Khong tim thay to khai phu hop de xu ly.");
+          await notify("Khong tim thay to khai phu hop de xu ly.");
         }
         return null;
       }
 
       if (reviewLocked > 0) {
-        notify(
+        await notify(
           `Da bo qua ${reviewLocked.toLocaleString("vi-VN")} to khai da duoc ra soat (khong the ${actionLabel}).`,
         );
       } else if (blocked > 0 && editingRestrictionMessage) {
-        notify(`Da bo qua ${blocked} to khai khong thuoc pham vi cua ban khi ${actionLabel}.`);
+        await notify(`Da bo qua ${blocked} to khai khong thuoc pham vi cua ban khi ${actionLabel}.`);
       }
 
       return allowed;
@@ -132,28 +133,28 @@ export default function useDataImporterActionGuards({
   );
 
   const ensureHardDeleteKeys = useCallback(
-    (keys, actionLabel = "xoa vinh vien") => {
+    async (keys, actionLabel = "xoa vinh vien") => {
       const { allowed, blocked, reviewLocked } = filterHardDeleteKeys(keys);
 
       if (!allowed.length) {
         if (reviewLocked > 0) {
-          notify(
+          await notify(
             `Khong the ${actionLabel} ${reviewLocked.toLocaleString("vi-VN")} to khai da duoc ra soat. ${reviewLockMessage}`,
           );
         } else if (blocked > 0 && editingRestrictionMessage) {
-          notify(editingRestrictionMessage);
+          await notify(editingRestrictionMessage);
         } else if (keys?.length) {
-          notify("Khong tim thay to khai phu hop de xu ly.");
+          await notify("Khong tim thay to khai phu hop de xu ly.");
         }
         return null;
       }
 
       if (reviewLocked > 0) {
-        notify(
+        await notify(
           `Da bo qua ${reviewLocked.toLocaleString("vi-VN")} to khai da duoc ra soat (khong the ${actionLabel}).`,
         );
       } else if (blocked > 0 && editingRestrictionMessage) {
-        notify(`Da bo qua ${blocked} to khai khong thuoc pham vi cua ban khi ${actionLabel}.`);
+        await notify(`Da bo qua ${blocked} to khai khong thuoc pham vi cua ban khi ${actionLabel}.`);
       }
 
       return allowed;

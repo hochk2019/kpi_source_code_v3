@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { TabsContent } from '@/components/ui/tabs.jsx';
-import AppShellFrame from '@/components/appShell/AppShellFrame.jsx';
+import { TabsContent } from '@/components/ui/tabs';
+import AppShellFrame from '@/components/appShell/AppShellFrame.tsx';
 
 const sections = [
   {

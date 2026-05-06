@@ -11,6 +11,7 @@ function createInMemoryScheduleStore() {
   const getItem = (key) => (storage.has(key) ? storage.get(key) : null);
   const setItem = (key, value) => {
     storage.set(key, value);
+    return Promise.resolve();
   };
   const refreshSharedKeys = vi.fn();
   const pushAuditLog = vi.fn();
@@ -72,10 +73,10 @@ describe('reportSchedules', () => {
     expect(runDate.getMinutes()).toBe(45);
   });
 
-  it('normalizes recipients and formats when saving schedules', () => {
+  it('normalizes recipients and formats when saving schedules', async () => {
     const { refreshSharedKeys, pushAuditLog, scheduleStore, storage } = createInMemoryScheduleStore();
 
-    const saved = scheduleStore.saveReportSchedule({
+    const saved = await scheduleStore.saveReportSchedule({
       name: 'Báo cáo tuần',
       recipients: 'boss@example.com, support@example.com ; boss@example.com ',
       frequency: 'monthly',
@@ -97,10 +98,10 @@ describe('reportSchedules', () => {
     );
   });
 
-  it('clears nextRun for inactive schedules', () => {
+  it('clears nextRun for inactive schedules', async () => {
     const { scheduleStore } = createInMemoryScheduleStore();
 
-    const saved = scheduleStore.saveReportSchedule({
+    const saved = await scheduleStore.saveReportSchedule({
       name: 'Tắt tạm thời',
       frequency: 'weekly',
       dayOfWeek: 2,
@@ -113,10 +114,10 @@ describe('reportSchedules', () => {
     expect(saved.nextRun).toBe('');
   });
 
-  it('deletes schedules by id', () => {
+  it('deletes schedules by id', async () => {
     const { pushAuditLog, scheduleStore } = createInMemoryScheduleStore();
 
-    const entry = scheduleStore.saveReportSchedule({
+    const entry = await scheduleStore.saveReportSchedule({
       name: 'Tạm thời',
       recipients: 'kpi@example.com',
       frequency: 'weekly',
@@ -126,7 +127,7 @@ describe('reportSchedules', () => {
 
     expect(scheduleStore.getReportSchedules()).toHaveLength(1);
 
-    const removed = scheduleStore.deleteReportSchedule(entry.id);
+    const removed = await scheduleStore.deleteReportSchedule(entry.id);
 
     expect(removed).toBe(true);
     expect(scheduleStore.getReportSchedules()).toHaveLength(0);

@@ -23,7 +23,7 @@ function createSettingsHarness(initialState = {}) {
 
   const store = createKpiAdjustmentSettingsStore({
     getItem: (key) => storage.get(key) ?? null,
-    setItem: (key, value) => storage.set(key, value),
+    setItem: (key, value) => { storage.set(key, value); return Promise.resolve(); },
     refreshSharedKeys,
     pushAuditLog,
     normalizeStr,
@@ -76,7 +76,7 @@ describe("kpiAdjustment settings helpers", () => {
     );
   });
 
-  it("merges settings patches and records audit side effects", () => {
+  it("merges settings patches and records audit side effects", async () => {
     const { getStoredJson, pushAuditLog, refreshSharedKeys, store } = createSettingsHarness({
       [KPI_ADJUSTMENT_SETTINGS_KEY]: JSON.stringify({
         categories: {
@@ -94,7 +94,7 @@ describe("kpiAdjustment settings helpers", () => {
       }),
     });
 
-    const result = store.saveKpiAdjustmentSettings(
+    const result = await store.saveKpiAdjustmentSettings(
       {
         categories: {
           support_misc: {

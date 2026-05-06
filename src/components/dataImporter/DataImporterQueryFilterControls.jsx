@@ -1,6 +1,6 @@
 import React from "react";
 
-import { SearchField } from "@/components/designSystem/shellPrimitives.jsx";
+import { SearchField } from "@/components/designSystem/shellPrimitives.tsx";
 
 export default function DataImporterQueryFilterControls({
   query = "",

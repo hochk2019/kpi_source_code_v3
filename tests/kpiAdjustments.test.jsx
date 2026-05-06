@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 
 import userEvent from '@testing-library/user-event';
 
-import KPIAdjustments from '@/components/KPIAdjustments.jsx';
+import KPIAdjustments from '@/components/KPIAdjustments.tsx';
+import { AppDialogProvider } from '@/hooks/useAppDialog.tsx';
 
 import {
 
@@ -141,7 +142,7 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
 
         currentUser={{
 
@@ -155,7 +156,7 @@ describe('KPIAdjustments UI', () => {
 
         }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -177,11 +178,11 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
 
         currentUser={{ username: 'manager', permissions: { adjustApprove: true, adjustSubmit: true } }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -213,11 +214,11 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
 
         currentUser={{ username: 'staff.ecus', permissions: { adjustSubmit: true } }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -256,7 +257,7 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments currentUser={{ username: 'khach', permissions: { adjustSubmit: true } }} />
+      <AppDialogProvider><KPIAdjustments currentUser={{ username: 'khach', permissions: { adjustSubmit: true } }} /></AppDialogProvider>
 
     );
 
@@ -276,7 +277,7 @@ describe('KPIAdjustments UI', () => {
 
   it('vô hiệu hóa nút gửi đề xuất khi tài khoản không có quyền', async () => {
 
-    render(<KPIAdjustments currentUser={{ username: 'guest', permissions: { adjustSubmit: false } }} />);
+    render(<AppDialogProvider><KPIAdjustments currentUser={{ username: 'guest', permissions: { adjustSubmit: false } }} /></AppDialogProvider>);
 
     await screen.findByText('Thêm điểm KPI +/-');
 
@@ -291,11 +292,11 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
 
         currentUser={{ username: 'admin', permissions: { adjustApprove: true, adjustSubmit: true } }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -355,11 +356,11 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
 
         currentUser={{ username: 'admin', permissions: { adjustApprove: true, adjustSubmit: true } }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -397,7 +398,7 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments currentUser={{ username: 'staff', permissions: { adjustSubmit: true } }} />
+      <AppDialogProvider><KPIAdjustments currentUser={{ username: 'staff', permissions: { adjustSubmit: true } }} /></AppDialogProvider>
 
     );
 
@@ -430,7 +431,7 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments currentUser={{ username: 'staff', permissions: { adjustSubmit: true } }} />
+      <AppDialogProvider><KPIAdjustments currentUser={{ username: 'staff', permissions: { adjustSubmit: true } }} /></AppDialogProvider>
 
     );
 
@@ -459,11 +460,11 @@ describe('KPIAdjustments UI', () => {
 
     render(
 
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
 
         currentUser={{ username: 'leader', permissions: { adjustApprove: true, adjustSubmit: true } }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -561,7 +562,7 @@ describe('KPIAdjustments UI', () => {
       permissions: { adjustApprove: true, adjustSubmit: true },
     };
 
-    const firstRender = render(<KPIAdjustments currentUser={approverUser} />);
+    const firstRender = render(<AppDialogProvider><KPIAdjustments currentUser={approverUser} /></AppDialogProvider>);
 
     const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
     await userEvent.click(historyTab);
@@ -576,7 +577,7 @@ describe('KPIAdjustments UI', () => {
 
     firstRender.unmount();
 
-    render(<KPIAdjustments currentUser={approverUser} />);
+    render(<AppDialogProvider><KPIAdjustments currentUser={approverUser} /></AppDialogProvider>);
 
     const historyTab2 = await screen.findByRole('tab', { name: 'Lịch sử' });
     await userEvent.click(historyTab2);
@@ -616,7 +617,7 @@ describe('KPIAdjustments UI', () => {
       permissions: { adjustApprove: true, adjustSubmit: true },
     };
 
-    const firstRender = render(<KPIAdjustments currentUser={approverUser} />);
+    const firstRender = render(<AppDialogProvider><KPIAdjustments currentUser={approverUser} /></AppDialogProvider>);
 
     const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
     await userEvent.click(historyTab);
@@ -635,7 +636,7 @@ describe('KPIAdjustments UI', () => {
 
     firstRender.unmount();
 
-    render(<KPIAdjustments currentUser={approverUser} />);
+    render(<AppDialogProvider><KPIAdjustments currentUser={approverUser} /></AppDialogProvider>);
 
     const historyTab2 = await screen.findByRole('tab', { name: 'Lịch sử' });
     await userEvent.click(historyTab2);
@@ -666,9 +667,9 @@ describe('KPIAdjustments UI', () => {
     );
 
     render(
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
         currentUser={{ username: 'manager.bulk', permissions: { adjustApprove: true, adjustSubmit: true } }}
-      />
+      /></AppDialogProvider>
     );
 
     const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });
@@ -719,9 +720,9 @@ describe('KPIAdjustments UI', () => {
     window.prompt.mockReturnValue('Thiếu chứng từ');
 
     render(
-      <KPIAdjustments
+      <AppDialogProvider><KPIAdjustments
         currentUser={{ username: 'manager.bulk', permissions: { adjustApprove: true, adjustSubmit: true } }}
-      />
+      /></AppDialogProvider>
     );
 
     const historyTab = await screen.findByRole('tab', { name: 'Lịch sử' });

@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { loadXlsx } from "@/lib/loadXlsx.js";
 
@@ -28,20 +29,22 @@ export default function useDataImporterSelectionBulkActions({
   handleApplyLicenseExclusion,
   handleClearSelection,
 }) {
+  const { alert } = useAppDialog();
+
   const canDelete = deleteEnabled && selectedKeys.length > 0;
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
   const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
 
   const handleExportSelected = useCallback(async () => {
     if (selectedKeys.length === 0) {
-      alert("Hãy chọn tờ khai trước khi xuất Excel.");
+      await alert("Hãy chọn tờ khai trước khi xuất Excel.");
       return;
     }
 
     const keySet = new Set(selectedKeys);
     const rows = rawRows.filter((row) => keySet.has(keyOfRow(row)));
     if (rows.length === 0) {
-      alert("Không tìm thấy tờ khai tương ứng để xuất.");
+      await alert("Không tìm thấy tờ khai tương ứng để xuất.");
       return;
     }
 

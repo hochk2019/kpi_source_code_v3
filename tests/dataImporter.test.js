@@ -8,7 +8,7 @@ import { normalizeName } from '@/lib/store.js';
 
 import { MST_KEY } from '@/lib/store.js';
 
-import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
+import { clearStorageCache, updateCachedItem } from '@/lib/storageClient.js';
 
 
 
@@ -274,7 +274,7 @@ describe('mapRow', () => {
 
   it('autoAssignStaff fills nhân viên và tổ đội dựa trên bảng MST hiện có', () => {
 
-    sharedSetItem(MST_KEY, JSON.stringify([
+    updateCachedItem(MST_KEY, JSON.stringify([
 
       {
 
@@ -352,7 +352,7 @@ describe('mapRow', () => {
 
   it('prefers roster team info over MST team when member map is provided', () => {
 
-    sharedSetItem(MST_KEY, JSON.stringify([
+    updateCachedItem(MST_KEY, JSON.stringify([
 
       {
 

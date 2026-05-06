@@ -35,7 +35,7 @@ vi.mock('@/components/workflows/ReportCenterPanel.jsx', () => ({
   },
 }));
 
-import KPICalculator from '@/components/KPICalculator.jsx';
+import KPICalculator from '@/components/KPICalculator.tsx';
 
 const adminAuth = {
   username: 'admin',
@@ -92,7 +92,7 @@ describe('KPICalculator lazy tab loading', () => {
     expect(panelRoot).toBeInTheDocument();
     expect(panelRoot).toHaveAttribute('tabindex', '-1');
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Đang tải nội dung Điểm KPI +/- Thêm...',
+      /Đang tải Điểm KPI \+\/- Thêm/,
     );
 
     await waitFor(() => {

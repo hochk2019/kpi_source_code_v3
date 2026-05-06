@@ -67,7 +67,7 @@ vi.mock('@/auth/localAuth.js', () => ({
   listAccounts: listAccountsMock,
 }));
 
-import CommandCenter from '@/components/CommandCenter.jsx';
+import CommandCenter from '@/components/CommandCenter.tsx';
 
 describe('CommandCenter navigation coverage', () => {
   beforeEach(() => {
@@ -91,7 +91,7 @@ describe('CommandCenter navigation coverage', () => {
 
     render(<CommandCenter currentUser={{ username: 'guest', role: 'viewer', permissions: {} }} />);
 
-    await user.click(screen.getByRole('button', { name: /command center/i }));
+    await user.click(screen.getByRole('textbox', { name: /tìm kiếm lệnh/i }));
     const dialog = screen.getByRole('dialog', { name: /command center/i });
     await user.type(
       within(dialog).getByRole('searchbox', { name: /tìm thao tác trong command center/i }),
@@ -115,7 +115,7 @@ describe('CommandCenter navigation coverage', () => {
 
     render(<CommandCenter currentUser={currentUser} />);
 
-    await user.click(screen.getByRole('button', { name: /command center/i }));
+    await user.click(screen.getByRole('textbox', { name: /tìm kiếm lệnh/i }));
     const dialog = screen.getByRole('dialog', { name: /command center/i });
 
     const searchInput = within(dialog).getByRole('searchbox', {
@@ -131,7 +131,7 @@ describe('CommandCenter navigation coverage', () => {
       expect(emitCommand).toHaveBeenCalledWith('navigate:tab', { tab: 'hq' });
     });
 
-    await user.click(screen.getByRole('button', { name: /command center/i }));
+    await user.click(screen.getByRole('textbox', { name: /tìm kiếm lệnh/i }));
     const reopenedDialog = screen.getByRole('dialog', { name: /command center/i });
 
     const auditSearchInput = within(reopenedDialog).getByRole('searchbox', {
@@ -162,7 +162,7 @@ describe('CommandCenter navigation coverage', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /command center/i }));
+    await user.click(screen.getByRole('textbox', { name: /tìm kiếm lệnh/i }));
     const dialog = screen.getByRole('dialog', { name: /command center/i });
     const searchInput = within(dialog).getByRole('searchbox', {
       name: /tìm thao tác trong command center/i,
@@ -194,7 +194,7 @@ describe('CommandCenter navigation coverage', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /command center/i }));
+    await user.click(screen.getByRole('textbox', { name: /tìm kiếm lệnh/i }));
     const dialog = screen.getByRole('dialog', { name: /command center/i });
     const searchInput = within(dialog).getByRole('searchbox', {
       name: /tìm thao tác trong command center/i,
@@ -227,7 +227,7 @@ describe('CommandCenter navigation coverage', () => {
 
     render(<CommandCenter currentUser={currentUser} />);
 
-    await user.click(screen.getByRole('button', { name: /command center/i }));
+    await user.click(screen.getByRole('textbox', { name: /tìm kiếm lệnh/i }));
     const dialog = screen.getByRole('dialog', { name: /command center/i });
     const searchInput = within(dialog).getByRole('searchbox', {
       name: /tìm thao tác trong command center/i,

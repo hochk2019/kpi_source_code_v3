@@ -19,7 +19,7 @@ vi.mock('@/hooks/useDashboardKpiOverview.js', () => ({
   }),
 }));
 
-import AppDashboardLanding from '@/components/appShell/AppDashboardLanding.jsx';
+import AppDashboardLanding from '@/components/appShell/AppDashboardLanding.tsx';
 
 const sections = [
   {

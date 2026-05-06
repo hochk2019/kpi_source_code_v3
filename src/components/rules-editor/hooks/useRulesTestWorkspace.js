@@ -1,8 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { computeKPI } from "@/lib/rules.js";
 
 export default function useRulesTestWorkspace({ data = [], rule = null }) {
+  const { alert } = useAppDialog();
+
   const testList = useMemo(() => {
     return data.map((row, index) => {
       const soTkRaw = row?.so_tk ?? row?.soToKhai ?? row?.soTK ?? row?.so_to_khai ?? "";
@@ -48,13 +51,13 @@ export default function useRulesTestWorkspace({ data = [], rule = null }) {
   }, [testList, testSearch]);
 
   const handleSearchSubmit = useCallback(
-    (event) => {
+    async (event) => {
       event.preventDefault();
 
       if (firstMatch) {
         setPickedKey(firstMatch.key);
       } else if (testSearch.trim()) {
-        alert("Không tìm thấy tờ khai khớp với số đã nhập.");
+        await alert("Không tìm thấy tờ khai khớp với số đã nhập.");
       }
     },
     [firstMatch, testSearch]

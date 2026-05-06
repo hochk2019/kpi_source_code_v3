@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-import SharedStaffCombobox from "@/components/shared/StaffCombobox.jsx";
+import SharedStaffCombobox from "@/components/shared/StaffCombobox.tsx";
 import { normalizeName, normalizeStr } from "@/lib/storeCoreHelpers.js";
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 import {
   Command,
   CommandEmpty,
@@ -10,8 +10,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command.jsx";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+} from "@/components/ui/command.tsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.tsx";
 import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
 
 function joinClasses(...classes) {

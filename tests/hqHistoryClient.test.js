@@ -152,7 +152,7 @@ describe('hqHistoryClient', () => {
 
     };
 
-    sharedSetItem(HQ_HISTORY_KEY, JSON.stringify([localEntry]));
+    await sharedSetItem(HQ_HISTORY_KEY, JSON.stringify([localEntry]));
 
 
 

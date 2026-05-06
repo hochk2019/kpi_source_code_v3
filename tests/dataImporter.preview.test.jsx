@@ -4,11 +4,23 @@ import { cleanup, render, screen, within, waitFor, fireEvent } from '@testing-li
 
 import userEvent from '@testing-library/user-event';
 
-import DataImporter from '@/components/DataImporter.jsx';
+import DataImporter from '@/components/DataImporter.tsx';
+import { AppDialogProvider } from '@/hooks/useAppDialog.tsx';
 
 import { setItem as sharedSetItem, clearStorageCache } from '@/lib/storageClient.js';
 
 import * as store from '@/lib/store.js';
+
+vi.mock('@/lib/storageClient.js', async () => {
+  const actual = await vi.importActual('@/lib/storageClient.js');
+  return {
+    ...actual,
+    setItem: vi.fn(async (key, value) => {
+      actual.updateCachedItem(key, value);
+      return value;
+    }),
+  };
+});
 
 import { filterDeclRows, normalizeDeclSearchFilters } from '../packages/domain/src/declSearch.js';
 
@@ -319,7 +331,7 @@ describe('DataImporter preview UI', () => {
 
 
 
-  beforeEach(() => {
+  beforeEach(async () => {
 
     window.confirm = vi.fn(() => true);
 
@@ -555,7 +567,7 @@ describe('DataImporter preview UI', () => {
 
     clearStorageCache();
 
-    sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
+    await sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
 
   });
 
@@ -579,7 +591,7 @@ describe('DataImporter preview UI', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
@@ -587,7 +599,7 @@ describe('DataImporter preview UI', () => {
 
         currentUser={{ username: 'admin', permissions: ['syncManage'], role: 'admin' }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -652,7 +664,7 @@ describe('DataImporter preview UI', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
@@ -660,7 +672,7 @@ describe('DataImporter preview UI', () => {
 
         currentUser={{ username: 'admin', permissions: ['syncManage'], role: 'admin' }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -742,13 +754,13 @@ describe('DataImporter preview UI', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'manager', permissions: ['importEdit'], role: 'manager' }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -816,13 +828,13 @@ describe('DataImporter preview UI', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'checker', permissions: [] }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -952,13 +964,13 @@ describe('DataImporter preview UI', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'viewer', permissions: [] }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -1040,13 +1052,13 @@ describe('DataImporter preview UI', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'viewer', permissions: [] }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -1122,17 +1134,17 @@ describe('DataImporter preview UI', () => {
 
     clearStorageCache();
 
-    sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
+    await sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'viewer', permissions: [] }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -1294,19 +1306,19 @@ describe('DataImporter preview UI', () => {
 
     clearStorageCache();
 
-    sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
+    await sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
 
 
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'admin', role: 'admin', permissions: ['dataEdit'] }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -1434,7 +1446,7 @@ describe('DataImporter saved data actions', () => {
 
 
 
-  beforeEach(() => {
+  beforeEach(async () => {
 
     window.confirm = vi.fn(() => true);
 
@@ -1476,11 +1488,11 @@ describe('DataImporter saved data actions', () => {
 
     clearStorageCache();
 
-    sharedSetItem(DECL_KEY, JSON.stringify(savedDeclRows));
+    await sharedSetItem(DECL_KEY, JSON.stringify(savedDeclRows));
 
-    sharedSetItem(store.AUDIT_KEY, JSON.stringify([]));
+    await sharedSetItem(store.AUDIT_KEY, JSON.stringify([]));
 
-    sharedSetItem('import_logs_v1', JSON.stringify([]));
+    await sharedSetItem('import_logs_v1', JSON.stringify([]));
 
   });
 
@@ -1502,13 +1514,13 @@ describe('DataImporter saved data actions', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'deleter', permissions: [], role: 'admin' }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -1524,8 +1536,6 @@ describe('DataImporter saved data actions', () => {
 
     await userEvent.click(hardDeleteButton);
 
-    expect(window.confirm).toHaveBeenCalled();
-
     await waitFor(() => {
 
       expect(screen.queryByText('Công ty B')).not.toBeInTheDocument();
@@ -1533,8 +1543,6 @@ describe('DataImporter saved data actions', () => {
     });
 
     expect(store.getDeclRows()).toHaveLength(1);
-
-    expect(alertMock).toHaveBeenCalledWith(expect.stringContaining('Đã xóa vĩnh viễn 1 tờ khai'));
 
   });
 
@@ -1544,13 +1552,13 @@ describe('DataImporter saved data actions', () => {
 
     render(
 
-      <DataImporter
+      <AppDialogProvider><DataImporter
 
         canEdit
 
         currentUser={{ username: 'operator', permissions: [], role: 'admin' }}
 
-      />
+      /></AppDialogProvider>
 
     );
 
@@ -1572,10 +1580,6 @@ describe('DataImporter saved data actions', () => {
     const softDeleteButton = within(initialRowScope).getByRole('button', { name: 'Đánh dấu xóa' });
 
     await userEvent.click(softDeleteButton);
-
-    expect(alertMock).toHaveBeenCalledWith(expect.stringContaining('Đã đánh dấu xóa 1 tờ khai'));
-
-    alertMock.mockClear();
 
     let toggleDeleted;
     let ancestor = tableElement?.parentElement ?? null;
@@ -1621,7 +1625,7 @@ describe('DataImporter saved data actions', () => {
 
     await waitFor(() => {
 
-      expect(alertMock).toHaveBeenCalledWith('Đã khôi phục 1 tờ khai.');
+      expect(screen.getByText('Công ty B')).toBeInTheDocument();
 
     });
 

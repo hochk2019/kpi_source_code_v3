@@ -26,6 +26,7 @@ function createHarness() {
   const getItem = (key) => (storage.has(key) ? storage.get(key) : null);
   const setItem = (key, value) => {
     storage.set(key, String(value));
+    return Promise.resolve();
   };
   const pushAuditLog = (entry) => {
     auditLogs.unshift(entry);
@@ -70,10 +71,10 @@ function createHarness() {
 }
 
 describe('createHQAgencyStore', () => {
-  it('normalizes and merges agency rows while recording history', () => {
+  it('normalizes and merges agency rows while recording history', async () => {
     const harness = createHarness();
 
-    const storedCount = harness.store.upsertHQAgencies(
+    const storedCount = await harness.store.upsertHQAgencies(
       [
         { mst: '010-123-4567', company: '  Công ty A  ', agent: 'FCL' },
         { mst: '0101234567', company: 'Công ty A cập nhật', agent: ' Air ' },
@@ -100,7 +101,7 @@ describe('createHQAgencyStore', () => {
     });
   });
 
-  it('syncs company and agency metadata into MST rows and declarations', () => {
+  it('syncs company and agency metadata into MST rows and declarations', async () => {
     const harness = createHarness();
     harness.mstRows.push({
       mst: '0101234567',
@@ -113,7 +114,7 @@ describe('createHQAgencyStore', () => {
       { so_tk: 'TK01', mst: '0101234567', cong_ty: 'Tên cũ' },
     ]);
 
-    harness.store.upsertHQAgencies(
+    await harness.store.upsertHQAgencies(
       [{ mst: '0101234567', company: 'Công ty Golden', agent: 'FCL' }],
       { actor: 'tester' },
     );
@@ -131,15 +132,15 @@ describe('createHQAgencyStore', () => {
     });
   });
 
-  it('updates then deletes a row through save/delete helpers', () => {
+  it('updates then deletes a row through save/delete helpers', async () => {
     const harness = createHarness();
 
-    harness.store.upsertHQAgencies(
+    await harness.store.upsertHQAgencies(
       [{ mst: '0101234567', company: 'Công ty A', agent: 'FCL' }],
       { actor: 'seed' },
     );
 
-    const saved = harness.store.saveHQAgencyRow(
+    const saved = await harness.store.saveHQAgencyRow(
       {
         mst: '0101234567',
         company: 'Công ty B',
@@ -155,7 +156,7 @@ describe('createHQAgencyStore', () => {
       agents: ['Sea', 'Road'],
     });
 
-    expect(harness.store.deleteHQAgencyRow('0101234567', { actor: 'editor' })).toBe(1);
+    expect(await harness.store.deleteHQAgencyRow('0101234567', { actor: 'editor' })).toBe(1);
     expect(harness.store.getHQAgencies()).toEqual([]);
 
     const history = harness.store.getHQHistoryForMST('0101234567', HQ_HISTORY_LIMIT);

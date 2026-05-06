@@ -13,7 +13,7 @@ function createAdjustmentHarness(initialState = {}) {
 
   const store = createKpiAdjustmentStore({
     getItem: (key) => storage.get(key) ?? null,
-    setItem: (key, value) => storage.set(key, value),
+    setItem: (key, value) => { storage.set(key, value); return Promise.resolve(); },
     refreshSharedKeys,
     pushAuditLog,
     normalizeStr: (value) => String(value ?? '').trim(),
@@ -47,10 +47,10 @@ describe('kpiAdjustments store factory', () => {
     );
   });
 
-  it('persists normalized settings and refreshes the shared key', () => {
+  it('persists normalized settings and refreshes the shared key', async () => {
     const { getStoredJson, pushAuditLog, refreshSharedKeys, store } = createAdjustmentHarness();
 
-    const result = store.saveKpiAdjustmentSettings(
+    const result = await store.saveKpiAdjustmentSettings(
       {
         categories: {
           support_fixed: {
@@ -104,10 +104,10 @@ describe('kpiAdjustments store factory', () => {
     );
   });
 
-  it('auto-approves new adjustments and groups only approved items by month', () => {
+  it('auto-approves new adjustments and groups only approved items by month', async () => {
     const { getStoredJson, refreshSharedKeys, store } = createAdjustmentHarness();
 
-    store.saveKpiAdjustmentSettings(
+    await store.saveKpiAdjustmentSettings(
       {
         autoApprove: {
           enabled: true,
@@ -120,7 +120,7 @@ describe('kpiAdjustments store factory', () => {
       },
     );
 
-    const entry = store.saveKpiAdjustment(
+    const entry = await store.saveKpiAdjustment(
       {
         month: '2026-03',
         category: 'support_fixed',

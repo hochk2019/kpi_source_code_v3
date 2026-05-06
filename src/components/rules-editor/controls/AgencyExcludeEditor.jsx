@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button.jsx";
+import { Button } from "@/components/ui/button.tsx";
 import AgencyInput from "@/components/rules-editor/controls/AgencyInput.jsx";
 import CodeMultiSelect from "@/components/rules-editor/controls/CodeMultiSelect.jsx";
 

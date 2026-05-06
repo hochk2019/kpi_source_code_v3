@@ -19,7 +19,7 @@ function createImportConfigHarness(initialLayout = {}) {
   const readUILayoutConfig = () => ({ ...layoutState });
   const writeUILayoutConfig = (next) => {
     layoutState = next && typeof next === 'object' ? { ...next } : {};
-    return layoutState;
+    return Promise.resolve(layoutState);
   };
   const subscribeKey = vi.fn((_key, listener) => {
     subscribers.add(listener);
@@ -82,10 +82,10 @@ describe('importColumnConfig', () => {
     expect(config.version).toBeGreaterThanOrEqual(2);
   });
 
-  it('normalizes hidden columns and widths when saving', () => {
+  it('normalizes hidden columns and widths when saving', async () => {
     const { getLayoutState, pushAuditLog, store } = createImportConfigHarness();
 
-    const result = store.saveImportColumnConfig(
+    const result = await store.saveImportColumnConfig(
       {
         hidden: [
           IMPORT_COLUMN_IDS[0],
@@ -115,10 +115,10 @@ describe('importColumnConfig', () => {
     );
   });
 
-  it('refuses to hide every base column', () => {
+  it('refuses to hide every base column', async () => {
     const { getLayoutState, store } = createImportConfigHarness();
 
-    const result = store.saveImportColumnConfig({
+    const result = await store.saveImportColumnConfig({
       hidden: [...IMPORT_COLUMN_IDS, 'history', 'update'],
     });
 
@@ -127,7 +127,7 @@ describe('importColumnConfig', () => {
     expect(getLayoutState().importData).toBeUndefined();
   });
 
-  it('subscribes to layout updates and emits normalized config', () => {
+  it('subscribes to layout updates and emits normalized config', async () => {
     const { notifySubscribers, store, subscribeKey } = createImportConfigHarness();
     const listener = vi.fn();
 
@@ -136,7 +136,7 @@ describe('importColumnConfig', () => {
     expect(subscribeKey).toHaveBeenCalledWith('ui_layout_config_v1', expect.any(Function));
     expect(listener).toHaveBeenCalledTimes(1);
 
-    store.saveImportColumnConfig({ hidden: [IMPORT_COLUMN_IDS[0]] });
+    await store.saveImportColumnConfig({ hidden: [IMPORT_COLUMN_IDS[0]] });
     notifySubscribers();
 
     expect(listener).toHaveBeenCalledTimes(2);
@@ -149,7 +149,7 @@ describe('importColumnConfig', () => {
     unsubscribe();
   });
 
-  it('exposes configured singleton wrappers for runtime callers', () => {
+  it('exposes configured singleton wrappers for runtime callers', async () => {
     const harness = createImportConfigHarness();
     const listener = vi.fn();
 
@@ -170,7 +170,7 @@ describe('importColumnConfig', () => {
     const unsubscribe = subscribeImportColumnConfig(listener);
     expect(listener).toHaveBeenCalledTimes(1);
 
-    saveImportColumnConfig({ hidden: [IMPORT_COLUMN_IDS[0]] }, { actor: 'admin' });
+    await saveImportColumnConfig({ hidden: [IMPORT_COLUMN_IDS[0]] }, { actor: 'admin' });
     harness.notifySubscribers();
 
     expect(listener).toHaveBeenCalledTimes(2);

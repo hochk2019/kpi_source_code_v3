@@ -49,7 +49,7 @@ vi.mock("@/lib/store.js", () => ({
   normalizeName: (value) => (value == null ? "" : value.toString().trim().toLowerCase()),
 }));
 
-import MSTAssignment from "@/components/MSTAssignment.jsx";
+import MSTAssignment from "@/components/MSTAssignment.tsx";
 
 describe("MSTAssignment – dòng thời gian trong bảng", () => {
   beforeEach(() => {

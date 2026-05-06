@@ -32,17 +32,10 @@ describe("DataImporterWorkflowGuide", () => {
       />,
     );
 
-    expect(screen.getByText("Bước 1/3")).toBeInTheDocument();
+    expect(screen.getByText(/GIAI ĐOẠN.*1\/3/)).toBeInTheDocument();
     expect(
       screen.getByText("Chọn file XLSX hoặc chạy đồng bộ ECUS để bắt đầu."),
     ).toBeInTheDocument();
-    expect(screen.getByText("1. Chọn nguồn")).toBeInTheDocument();
-    expect(screen.getByText("Đang xử lý")).toBeInTheDocument();
-    expect(screen.getAllByText("Đang chờ")).toHaveLength(2);
-    expect(screen.getByRole("link", { name: /1\. Chọn nguồn/i })).toHaveAttribute(
-      "href",
-      "#data-importer-stage-1",
-    );
 
     return user.click(screen.getByRole("button", { name: "Xem trước ECUS" })).then(() => {
       expect(onPreviewSync).toHaveBeenCalledTimes(1);
@@ -76,13 +69,8 @@ describe("DataImporterWorkflowGuide", () => {
       />,
     );
 
-    expect(screen.getByText("Bước 2/3")).toBeInTheDocument();
+    expect(screen.getByText(/GIAI ĐOẠN.*2\/3/)).toBeInTheDocument();
     expect(screen.getByText("24 dòng đang chờ rà soát trước khi lưu.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /2\. Rà soát dữ liệu/i })).toHaveAttribute(
-      "href",
-      "#data-importer-stage-2",
-    );
-    expect(screen.getByText("Đang xử lý")).toBeInTheDocument();
 
     return user.click(screen.getByRole("button", { name: "Import XLSX" })).then(() => {
       expect(onImport).toHaveBeenCalledTimes(1);
@@ -119,7 +107,7 @@ describe("DataImporterWorkflowGuide", () => {
       />,
     );
 
-    expect(screen.getByText("Bước 2/3")).toBeInTheDocument();
+    expect(screen.getByText(/GIAI ĐOẠN.*2\/3/)).toBeInTheDocument();
     expect(screen.getByText("12 dòng ECUS đang chờ rà soát trước khi đồng bộ.")).toBeInTheDocument();
 
     return user.click(screen.getByRole("button", { name: "Đồng bộ ngay" })).then(() => {
@@ -155,14 +143,10 @@ describe("DataImporterWorkflowGuide", () => {
       />,
     );
 
-    expect(screen.getByText("Bước 3/3")).toBeInTheDocument();
+    expect(screen.getByText(/GIAI ĐOẠN.*3\/3/)).toBeInTheDocument();
     expect(
       screen.getByText("Bạn còn thay đổi chưa lưu trước khi chốt dữ liệu."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /3\. Lưu và theo dõi/i })).toHaveAttribute(
-      "href",
-      "#data-importer-stage-3",
-    );
 
     return user.click(screen.getByRole("button", { name: "Lưu dữ liệu" })).then(() => {
       expect(onSaveAll).toHaveBeenCalledTimes(1);

@@ -14,7 +14,7 @@ import {
 } from "@/components/designSystem/primitives.jsx";
 import AccountPermissionGroupsPanel from "@/components/account-manager/AccountPermissionGroupsPanel.jsx";
 import { GROUP_TOGGLE_BUTTON_CLASS } from "@/components/account-manager/accountManagerPermissions.js";
-import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 
 export default function AccountPermissionsDialog({
   open,

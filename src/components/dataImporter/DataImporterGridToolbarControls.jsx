@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Switch } from "@/components/ui/switch.jsx";
+import { Switch } from "@/components/ui/switch.tsx";
 
 function formatServerSearchStatus(serverSearchState) {
   if (!serverSearchState) {

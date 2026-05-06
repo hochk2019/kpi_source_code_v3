@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
 
 export default function useDataImporterDuplicateReview({
   actor = "system",
@@ -19,6 +20,7 @@ export default function useDataImporterDuplicateReview({
   loadSavedRows,
   fetchAlerts,
 }) {
+  const { alert } = useAppDialog();
   const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [duplicate11Plan, setDuplicate11Plan] = useState({});
@@ -157,19 +159,19 @@ export default function useDataImporterDuplicateReview({
     });
   }, []);
 
-  const handleDeleteDuplicates11 = useCallback(() => {
+  const handleDeleteDuplicates11 = useCallback(async () => {
     if (isReadOnlyForEdits) {
-      alert("Bạn không có quyền đánh dấu xóa tờ khai trùng.");
+      await alert("Bạn không có quyền đánh dấu xóa tờ khai trùng.");
       return;
     }
 
     if (mode !== "saved") {
-      alert("Chỉ có thể đánh dấu xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
+      await alert("Chỉ có thể đánh dấu xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
       return;
     }
 
     if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
-      alert("Không có nhóm tờ khai trùng để xử lý.");
+      await alert("Không có nhóm tờ khai trùng để xử lý.");
       return;
     }
 
@@ -191,9 +193,9 @@ export default function useDataImporterDuplicateReview({
     handleCloseDuplicateReview();
   }, [handleCloseDuplicateReview]);
 
-  const handleConfirmDuplicateRemoval = useCallback(() => {
+  const handleConfirmDuplicateRemoval = useCallback(async () => {
     if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
-      alert("Không có nhóm trùng để xử lý.");
+      await alert("Không có nhóm trùng để xử lý.");
       handleCloseDuplicateReview();
       return;
     }
@@ -287,13 +289,13 @@ export default function useDataImporterDuplicateReview({
 
     const removalCount = removalSet.size;
     if (removalCount === 0 && updates.size === 0) {
-      alert("Không có thay đổi nào được áp dụng.");
+      await alert("Không có thay đổi nào được áp dụng.");
       handleCloseDuplicateReview();
       return;
     }
 
     if (blockedGroups > 0 && editingRestrictionMessage) {
-      alert(`Đã bỏ qua ${blockedGroups} nhóm trùng không thuộc phạm vi phụ trách của bạn.`);
+      await alert(`Đã bỏ qua ${blockedGroups} nhóm trùng không thuộc phạm vi phụ trách của bạn.`);
     }
 
     const nextRows = sortDeclRows(
@@ -329,7 +331,7 @@ export default function useDataImporterDuplicateReview({
       },
     });
 
-    alert(
+    await alert(
       `Đã ${deleteGroups ? `xóa ${removalCount} bản ghi trong ${deleteGroups} nhóm` : "cập nhật đánh dấu"}${
         reviewGroups ? `, ${reviewGroups} nhóm được đánh dấu cần rà soát` : ""
       }.`

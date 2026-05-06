@@ -40,7 +40,7 @@ vi.mock("@/lib/store.js", () => {
   };
 });
 
-import MSTAssignment from "@/components/MSTAssignment.jsx";
+import MSTAssignment from "@/components/MSTAssignment.tsx";
 import {
   COLUMN_VISIBILITY_STORAGE_PREFIX,
   DEFAULT_VISIBLE_COLUMNS,

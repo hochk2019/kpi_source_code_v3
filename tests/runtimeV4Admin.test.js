@@ -22,7 +22,7 @@ describe('runtime-v4 admin helpers', () => {
   });
 
   it('resolveDefaultBackupDirectory fallback ve cwd khi db memory', () => {
-    expect(resolveDefaultBackupDirectory(':memory:')).toBe(path.resolve(process.cwd(), 'server', 'data', 'backups'));
+    expect(resolveDefaultBackupDirectory(':memory:')).toBe(path.resolve(process.cwd(), 'data', 'backups'));
   });
 
   it('ensureSqliteBaseline goi listAccounts neu authStore co san', async () => {

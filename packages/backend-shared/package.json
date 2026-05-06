@@ -3,12 +3,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.js",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
     "./auth": {
       "types": "./src/auth/index.d.ts",
       "default": "./src/auth/index.js"
     },
-    "./ecus": "./src/ecus/index.js",
+    "./ecus": {
+      "types": "./src/ecus/index.d.ts",
+      "default": "./src/ecus/index.js"
+    },
     "./persistence": {
       "types": "./src/persistence/index.d.ts",
       "default": "./src/persistence/index.js"
@@ -17,7 +23,13 @@
       "types": "./src/reporting/index.d.ts",
       "default": "./src/reporting/index.js"
     },
-    "./runtime": "./src/runtime/index.js",
-    "./testing": "./src/testing/index.js"
+    "./runtime": {
+      "types": "./src/runtime/index.d.ts",
+      "default": "./src/runtime/index.js"
+    },
+    "./testing": {
+      "types": "./src/testing/index.d.ts",
+      "default": "./src/testing/index.js"
+    }
   }
 }

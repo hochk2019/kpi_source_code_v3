@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('@/components/KPICalculator.jsx', () => ({
+vi.mock('@/components/KPICalculator.tsx', () => ({
   default: function KPICalculatorStub() {
     return <div>Dashboard stub</div>;
   },
@@ -32,13 +32,13 @@ vi.mock('@/components/ThemeToggle.jsx', () => ({
   },
 }));
 
-vi.mock('@/components/NotificationCenter.jsx', () => ({
+vi.mock('@/components/NotificationCenter.tsx', () => ({
   default: function NotificationCenterStub() {
     return <button type="button">Notifications</button>;
   },
 }));
 
-vi.mock('@/components/CommandCenter.jsx', () => ({
+vi.mock('@/components/CommandCenter.tsx', () => ({
   default: function CommandCenterStub() {
     return <button type="button">Command center</button>;
   },
@@ -78,7 +78,7 @@ vi.mock('@/lib/commandBus.js', () => ({
   subscribeCommand: vi.fn(() => () => {}),
 }));
 
-import App from '@/App.jsx';
+import App from '@/App.tsx';
 import { getAuth, getViewerAuth, loadSession, logout } from '@/auth/localAuth.js';
 import {
   clearStorageCache,

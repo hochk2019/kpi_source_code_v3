@@ -8,7 +8,7 @@ vi.mock('@/components/workflows/ReportCenterPanel.jsx', () => ({
   },
 }));
 
-import KPICalculator from '@/components/KPICalculator.jsx';
+import KPICalculator from '@/components/KPICalculator.tsx';
 
 describe('KPICalculator tab error boundary', () => {
   afterEach(() => {
@@ -26,8 +26,8 @@ describe('KPICalculator tab error boundary', () => {
       />,
     );
 
-    expect(screen.getByText('KPI Control Center')).toBeInTheDocument();
-    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể hiển thị Báo cáo KPI.');
+    expect(screen.getByText('KPI Command')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể hiển thị nội dung trang.');
     expect(screen.getByText(/Chi tiết kỹ thuật: report center crashed/i)).toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+import React from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -5,6 +6,7 @@ import {
   useReportViewerActions,
   validateReportExportPermission,
 } from "@/components/reporting/useReportViewerActions.js";
+import { AppDialogProvider } from "@/hooks/useAppDialog.tsx";
 
 const {
   saveReportingScheduleMock,
@@ -29,6 +31,19 @@ vi.mock("@/shared/toast.js", () => ({
   toast: toastMock,
 }));
 
+const { appDialogAlertMock, appDialogConfirmMock } = vi.hoisted(() => ({
+  appDialogAlertMock: vi.fn().mockResolvedValue(undefined),
+  appDialogConfirmMock: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => ({
+    alert: appDialogAlertMock,
+    confirm: appDialogConfirmMock,
+  }),
+  AppDialogProvider: ({ children }) => children,
+}));
+
 describe("useReportViewerActions", () => {
   beforeEach(() => {
     saveReportingScheduleMock.mockReset();
@@ -36,12 +51,11 @@ describe("useReportViewerActions", () => {
     toastMock.success.mockReset();
     toastMock.error.mockReset();
     toastMock.warning.mockReset();
-    vi.stubGlobal("alert", vi.fn());
-    vi.stubGlobal("confirm", vi.fn(() => true));
+    appDialogAlertMock.mockReset().mockResolvedValue(undefined);
+    appDialogConfirmMock.mockReset().mockResolvedValue(true);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -60,13 +74,14 @@ describe("useReportViewerActions", () => {
         report: { range: {}, rules: {} },
         exportColumns: {},
       }),
+      { wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider> },
     );
 
     await act(async () => {
       await result.current.handleExportStaffAll();
     });
 
-    expect(window.alert).toHaveBeenCalledWith(
+    expect(appDialogAlertMock).toHaveBeenCalledWith(
       expect.stringMatching(/không có quyền xuất báo cáo/i),
     );
     expect(result.current.exporting).toBe(false);
@@ -81,13 +96,14 @@ describe("useReportViewerActions", () => {
         exportColumns: {},
         reportError: "boom",
       }),
+      { wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider> },
     );
 
     await act(async () => {
       await result.current.handleExportTeamAll();
     });
 
-    expect(window.alert).toHaveBeenCalledWith(
+    expect(appDialogAlertMock).toHaveBeenCalledWith(
       expect.stringMatching(/không thể xuất báo cáo khi dữ liệu đang lỗi tải: boom/i),
     );
     expect(result.current.exporting).toBe(false);
@@ -113,6 +129,7 @@ describe("useReportViewerActions", () => {
         report: { range: {}, rules: {} },
         exportColumns: {},
       }),
+      { wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider> },
     );
 
     act(() => {
@@ -161,6 +178,7 @@ describe("useReportViewerActions", () => {
         report: { range: {}, rules: {} },
         exportColumns: {},
       }),
+      { wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider> },
     );
 
     act(() => {
@@ -194,6 +212,7 @@ describe("useReportViewerActions", () => {
         report: { range: {}, rules: {} },
         exportColumns: {},
       }),
+      { wrapper: ({ children }) => <AppDialogProvider>{children}</AppDialogProvider> },
     );
 
     act(() => {
