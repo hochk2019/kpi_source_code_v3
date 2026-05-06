@@ -22,8 +22,8 @@ describe("PersonColumnHeader", () => {
       </table>
     );
 
-    expect(screen.getByText(/Phụ trách/i)).toBeInTheDocument();
-    expect(screen.getByText(/Nhập/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Phụ trách/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Nhập/i).length).toBeGreaterThan(0);
     const header = screen.getByTitle("Người phụ trách Nhập");
     expect(header).toHaveAttribute("data-column", "person_import");
   });

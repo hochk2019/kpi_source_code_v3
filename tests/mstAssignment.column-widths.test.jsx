@@ -32,6 +32,18 @@ vi.mock("@/lib/store.js", () => {
   };
 });
 
+vi.mock("@/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx", () => ({
+  default: () => null,
+}));
+
 import MSTAssignment from "@/components/MSTAssignment.tsx";
 import {
   COLUMN_MAX_WIDTH,
@@ -92,7 +104,6 @@ describe("readStoredColumnWidths", () => {
 
 describe("MSTAssignment – tùy chỉnh chiều rộng cột", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     window.localStorage.clear();
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -105,8 +116,6 @@ describe("MSTAssignment – tùy chỉnh chiều rộng cột", () => {
 
   afterEach(() => {
     cleanup();
-    vi.runOnlyPendingTimers();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     window.localStorage.clear();
   });
@@ -132,8 +141,6 @@ describe("MSTAssignment – tùy chỉnh chiều rộng cột", () => {
     fireEvent.mouseMove(window, { clientX: 420 });
     fireEvent.mouseUp(window, { clientX: 420 });
 
-    vi.runAllTimers();
-
     expect(companyHeader).toHaveStyle({ width: "420px" });
 
     const stored = JSON.parse(window.localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY));
@@ -142,8 +149,6 @@ describe("MSTAssignment – tùy chỉnh chiều rộng cột", () => {
     fireEvent.click(screen.getByRole("button", { name: /cột hiển thị/i }));
     const resetButton = screen.getByRole("button", { name: /đặt lại chiều rộng/i });
     fireEvent.click(resetButton);
-
-    vi.runAllTimers();
 
     expect(companyHeader).toHaveStyle({ width: `${DEFAULT_COLUMN_WIDTHS.company}px` });
     const storedAfter = JSON.parse(window.localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY));

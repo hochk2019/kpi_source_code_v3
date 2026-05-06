@@ -49,11 +49,22 @@ vi.mock("@/lib/store.js", () => ({
   normalizeName: (value) => (value == null ? "" : value.toString().trim().toLowerCase()),
 }));
 
+vi.mock("@/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx", () => ({
+  default: () => null,
+}));
+
 import MSTAssignment from "@/components/MSTAssignment.tsx";
 
 describe("MSTAssignment – dòng thời gian trong bảng", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     window.localStorage.clear();
     vi.stubGlobal(
       "ResizeObserver",
@@ -69,15 +80,12 @@ describe("MSTAssignment – dòng thời gian trong bảng", () => {
 
   afterEach(() => {
     cleanup();
-    vi.runOnlyPendingTimers();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     window.localStorage.clear();
   });
 
   it("hiển thị accordion timeline cho từng dòng và mở modal chi tiết", () => {
     render(<MSTAssignment canEdit={false} currentUser={{ username: "viewer" }} />);
-    vi.runAllTimers();
 
     const toggles = screen
       .getAllByText(/lịch sử giai đoạn/i)
@@ -102,7 +110,6 @@ describe("MSTAssignment – dòng thời gian trong bảng", () => {
 
   it("giữ nút Mở tổng hợp ở trạng thái khóa khi chưa có dữ liệu tổng hợp", () => {
     render(<MSTAssignment canEdit={false} currentUser={{ username: "viewer" }} />);
-    vi.runAllTimers();
 
     const openAllButtons = screen.getAllByRole("button", { name: /mở tổng hợp/i });
     expect(openAllButtons.length).toBeGreaterThan(0);

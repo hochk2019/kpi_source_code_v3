@@ -5,7 +5,7 @@ const sharedStaffComboboxMock = vi.fn(({ placeholder }) => (
   <div data-testid="shared-staff-combobox">{placeholder}</div>
 ));
 
-vi.mock("@/components/shared/StaffCombobox.jsx", () => ({
+vi.mock("@/components/shared/StaffCombobox.tsx", () => ({
   default: (props) => sharedStaffComboboxMock(props),
 }));
 

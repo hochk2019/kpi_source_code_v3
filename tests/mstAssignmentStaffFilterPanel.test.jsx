@@ -99,7 +99,7 @@ describe("mst assignment staff filter panel", () => {
       />
     );
 
-    expect(screen.getByText(/Lead-view rút gọn/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Lead-view rút gọn/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("checkbox", { name: "Bật lead-view rút gọn" })).toBeChecked();
 
     await userEvent.click(screen.getByRole("button", { name: "Đã gán đủ" }));

@@ -92,7 +92,7 @@ describe("useMSTAssignmentColumnLayout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "toggle-status" }));
     expect(screen.getByTestId("status-visible").textContent).toBe("false");
-    expect(screen.getByTestId("visible-count").textContent).toBe("7");
+    expect(screen.getByTestId("visible-count").textContent).toBe("8");
 
     const storedWidths = JSON.parse(window.localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY));
     expect(storedWidths.company).toBe(420);

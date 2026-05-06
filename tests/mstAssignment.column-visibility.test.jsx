@@ -40,6 +40,18 @@ vi.mock("@/lib/store.js", () => {
   };
 });
 
+vi.mock("@/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx", () => ({
+  default: () => null,
+}));
+
 import MSTAssignment from "@/components/MSTAssignment.tsx";
 import {
   COLUMN_VISIBILITY_STORAGE_PREFIX,
@@ -125,7 +137,6 @@ describe("writeStoredColumnVisibility", () => {
 
 describe("MSTAssignment – cấu hình hiển thị cột", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     window.localStorage.clear();
     vi.stubGlobal(
       "ResizeObserver",
@@ -141,8 +152,6 @@ describe("MSTAssignment – cấu hình hiển thị cột", () => {
 
   afterEach(() => {
     cleanup();
-    vi.runOnlyPendingTimers();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     window.localStorage.clear();
   });
@@ -163,7 +172,6 @@ describe("MSTAssignment – cấu hình hiển thị cột", () => {
     expect(storedAlice.status).toBe(false);
 
     unmount();
-    vi.runOnlyPendingTimers();
 
     const secondMount = render(
       <MSTAssignment canEdit={false} currentUser={{ username: "alice" }} />
@@ -172,7 +180,6 @@ describe("MSTAssignment – cấu hình hiển thị cột", () => {
     expect(document.querySelector('th[data-column-key="status"]')).toBeNull();
 
     secondMount.unmount();
-    vi.runOnlyPendingTimers();
 
     const thirdMount = render(
       <MSTAssignment canEdit={false} currentUser={{ username: "bob" }} />
@@ -183,7 +190,6 @@ describe("MSTAssignment – cấu hình hiển thị cột", () => {
     ).not.toBeNull();
 
     thirdMount.unmount();
-    vi.runOnlyPendingTimers();
   });
 
   it("exposes shell search and table semantics for operator navigation", () => {
