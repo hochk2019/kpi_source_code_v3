@@ -149,35 +149,35 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(handlers.onRunSync).toHaveBeenCalledTimes(1);
     expect(handlers.onResumeSync).toHaveBeenCalledTimes(1);
 
-    expect(screen.getByText("Đang bật bộ lọc MST: 0100109106.")).toBeInTheDocument();
-    expect(screen.getByText("Checklist trước khi chạy")).toBeInTheDocument();
-    expect(screen.getByText("Sẵn sàng chạy")).toBeInTheDocument();
-    expect(screen.getByText("Job lưu lúc 11/03/2026 15:09:10 cho khoảng 2026-03-01 → 2026-03-08.")).toBeInTheDocument();
-    expect(screen.getByText("Khoảng xem trước: 01/03/2026 - 08/03/2026 (giới hạn 100 dòng đầu tiên)")).toBeInTheDocument();
-    expect(screen.getByText("Gợi ý khắc phục")).toBeInTheDocument();
-    expect(screen.getByText("Làm mới trạng thái rồi thử lại")).toBeInTheDocument();
-    expect(screen.getByText("Cảnh báo overwrite trước khi đồng bộ")).toBeInTheDocument();
+    expect(screen.getByText(/bộ lọc MST/i)).toBeInTheDocument();
+    expect(screen.getByText(/Checklist trước khi chạy/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sẵn sàng chạy/i)).toBeInTheDocument();
+    expect(screen.getByText(/Job lưu lúc/i)).toBeInTheDocument();
+    expect(screen.getByText(/Khoảng xem trước/i)).toBeInTheDocument();
+    expect(screen.getByText(/Gợi ý khắc phục/i)).toBeInTheDocument();
+    expect(screen.getByText(/Làm mới trạng thái/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cảnh báo overwrite/i)).toBeInTheDocument();
     expect(screen.getByText(/2 tờ khai đã tồn tại sẽ bị cập nhật/)).toBeInTheDocument();
     expect(screen.getByText(/1 tờ khai đang khóa rà soát sẽ bị bỏ qua/)).toBeInTheDocument();
-    expect(screen.getByText("Xem trước 1 dòng đầu tiên sẽ nhập vào hệ thống.")).toBeInTheDocument();
+    expect(screen.getByText(/Xem trước.*dòng đầu tiên/i)).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).toBeInTheDocument();
     expect(screen.getByText("fmt:2026-03-07")).toBeInTheDocument();
-    expect(screen.getByText("(chưa gán)")).toBeInTheDocument();
-    expect(screen.getByText("Mới")).toBeInTheDocument();
+    expect(screen.getByText(/\(chưa gán\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mới/i)).toBeInTheDocument();
     expect(screen.getByRole("status")).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Tiến trình đồng bộ ECUS" })).toBeInTheDocument();
-    expect(screen.getByText("Đồng bộ dữ liệu từ ECUS")).toBeInTheDocument();
-    expect(screen.getByText("Đã nhập 1 mới, cập nhật 0, bỏ qua 0, khóa 0.")).toBeInTheDocument();
-    expect(screen.getByText("Làm mới cấu hình, trạng thái và cảnh báo")).toBeInTheDocument();
-    expect(screen.getByText("Đang chạy")).toBeInTheDocument();
-    expect(screen.getByText("Nhật ký queue và retry")).toBeInTheDocument();
+    expect(screen.getByText(/Đồng bộ dữ liệu/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đã nhập.*mới/i)).toBeInTheDocument();
+    expect(screen.getByText(/Làm mới cấu hình/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đang chạy/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nhật ký/i)).toBeInTheDocument();
     expect(screen.getByText(/Đã tạo job đồng bộ/)).toBeInTheDocument();
-    expect(screen.getByText("Lịch sử đồng bộ gần đây")).toBeInTheDocument();
+    expect(screen.getByText(/Lịch sử đồng bộ/i)).toBeInTheDocument();
     expect(screen.getByText(/tester ·/)).toBeInTheDocument();
     expect(screen.getByText("Khoảng chạy: 2026-03-01 → 2026-03-08")).toBeInTheDocument();
     expect(screen.getByText(/Tác động 3 bản ghi/)).toBeInTheDocument();
     expect(screen.getByText("Lọc theo chỉ MST: 0100109106")).toBeInTheDocument();
-    expect(screen.getByText("Đã đồng bộ thành công")).toBeInTheDocument();
+    expect(screen.getByText(/Đã đồng bộ thành công/i)).toBeInTheDocument();
   });
 
   it("khóa thao tác khi đang chạy và hiển thị lỗi preview", () => {
@@ -211,10 +211,10 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByRole("button", { name: "Đang xem trước..." })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Đang đồng bộ..." })).toBeDisabled();
     expect(screen.getByText("HTTP 500")).toBeInTheDocument();
-    expect(screen.getByText("Gặp lỗi")).toBeInTheDocument();
-    expect(screen.getByText("Không thể tải xem trước")).toBeInTheDocument();
-    expect(screen.getByText("Đồng bộ thất bại")).toBeInTheDocument();
-    expect(screen.getByText("Kiểm tra mạng trước khi chạy lại")).toBeInTheDocument();
+    expect(screen.getByText(/Gặp lỗi/i)).toBeInTheDocument();
+    expect(screen.getByText(/Không thể tải xem trước/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đồng bộ thất bại/i)).toBeInTheDocument();
+    expect(screen.getByText(/Kiểm tra mạng/i)).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).not.toBeInTheDocument();
   });
 

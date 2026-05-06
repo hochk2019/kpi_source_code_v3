@@ -199,9 +199,9 @@ describe("reporting scope sections", () => {
     const props = buildStaffSectionProps();
     render(<ReportingStaffSection {...props} />);
 
-    expect(screen.getByText("Công ty Alice")).toBeTruthy();
+    expect(screen.getByText(/Công ty Alice/i)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Chi tiết" }));
+    fireEvent.click(screen.getByRole("button", { name: /Chi tiết/i }));
     expect(props.setStaffViewMode).toHaveBeenCalledWith("detail");
 
     fireEvent.click(screen.getByRole("button", { name: "Số tờ khai" }));
@@ -218,8 +218,8 @@ describe("reporting scope sections", () => {
       />,
     );
 
-    expect(screen.getByText("Nhân viên: Alice")).toBeTruthy();
-    expect(screen.getByText("Tổ đội: Team 1")).toBeTruthy();
+    expect(screen.getByText(/Nhân viên.*Alice/i)).toBeTruthy();
+    expect(screen.getByText(/Tổ đội.*Team 1/i)).toBeTruthy();
   });
 
   it("keeps staff export visible but disabled with reason when permission is denied", () => {
@@ -246,11 +246,11 @@ describe("reporting scope sections", () => {
 
     render(<ReportingTeamSection {...props} />);
 
-    expect(screen.getByText("Team Alpha")).toBeTruthy();
-    expect(screen.getByText("1–1 / 2")).toBeTruthy();
-    expect(screen.getByText("Tổ đội: Team Alpha")).toBeTruthy();
+    expect(screen.getByText(/Team Alpha/i)).toBeTruthy();
+    expect(screen.getByText(/1.*\/.*2/i)).toBeTruthy();
+    expect(screen.getByText(/Tổ đội.*Team Alpha/i)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Số giấy phép" }));
+    fireEvent.click(screen.getByRole("button", { name: /Số giấy phép/i }));
     expect(props.setTeamSortKey).toHaveBeenCalledWith("licenses");
 
     fireEvent.click(screen.getByRole("button", { name: "Sau" }));

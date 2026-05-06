@@ -51,8 +51,8 @@
 - Slice 7 (IA reorganization + Audit pages) da HOAN TAT.
 - Slice 8 (Test fixes) dang in_progress: 
   - Fixed ConflictResolutionDialog.test.jsx: them data-testid
-  - Fixed mstAssignment.person-columns.test.jsx, teamManagerMemberPanel.test.jsx, rulesEditorConfigTabsPanel.test.jsx, appShellAsyncStates.test.jsx: chuyen getByText sang regex pattern
-  - ~36 test files remaining to review
+  - Fixed commandCenter.test.jsx, mstAssignment.person-columns.test.jsx, teamManagerMemberPanel.test.jsx, teamManagerHistoryPanel.test.jsx, rulesEditorConfigTabsPanel.test.jsx, appShellAsyncStates.test.jsx, dataImporter.preview.test.jsx: chuyen getByText string sang regex pattern
+  - ~30 test files remaining to review
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
   - `cng-0if.8` - UX Review Slice 8: Test fixes + visual regression
