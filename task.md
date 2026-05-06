@@ -41,9 +41,10 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.5` (Slice 5.5: Reports restructure); da refactor ReportViewer.tsx voi PageHeader compact, FilterBar, ExportDropdown; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.1` (Slice 6.1: Teams restructure); da refactor TeamManager.tsx voi PageHeader, PermissionBanner, 2-col layout, internal tabs (Members/Companies/History); typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.2` (Slice 6.2: Rules restructure); da refactor RulesEditor.tsx voi PageHeader, PermissionBanner, 3 main tabs (Active/History/Test); typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.3` (Slice 6.3: Health restructure); da refactor DataHealthDashboard.tsx voi PageHeader, PermissionBanner, 5 tabs (All/Duplicates/Missing/ECUS/Alerts); typecheck passed.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
-  - `cng-0if.6.3` - UX Review Slice 6.3: Health restructure
+  - `cng-0if.6.4` - UX Review Slice 6.4: AI restructure
 
 ## Active Slice
 

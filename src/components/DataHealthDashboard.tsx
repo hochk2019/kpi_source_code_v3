@@ -21,6 +21,9 @@ import {
   subscribePerformanceTelemetry,
 } from '@/lib/frontendPerformanceTelemetry.js';
 import type { AuthAccountView } from '@/types';
+import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PermissionBanner } from "@/components/designSystem/primitives";
+import { LayoutDashboard, AlertTriangle, Database, Server, Bell } from "lucide-react";
 
 interface DataHealthDashboardProps {
   currentUser?: AuthAccountView | null;
@@ -381,6 +384,9 @@ export default function DataHealthDashboard({ currentUser, canManage = false }: 
   const [frontendPerformanceSummary, setFrontendPerformanceSummary] = useState(() =>
     getPerformanceTelemetrySummary()
   );
+
+  // Main tabs for health categories
+  const [activeTab, setActiveTab] = useState<"all" | "duplicates" | "missing" | "ecus" | "alerts">("all");
 
   const canEditPolicy = Boolean(canManage);
 
@@ -1512,102 +1518,169 @@ export default function DataHealthDashboard({ currentUser, canManage = false }: 
 
 
 
+  const healthTabs = [
+    { id: "all", label: "Tổng quan", icon: LayoutDashboard },
+    { id: "duplicates", label: "Trùng lặp", icon: Database },
+    { id: "missing", label: "Thiếu dữ liệu", icon: AlertTriangle },
+    { id: "ecus", label: "ECUS", icon: Server },
+    { id: "alerts", label: "Cảnh báo", icon: Bell },
+  ];
+
   return (
+    <div className="p-6 space-y-4">
+      {/* Page Header */}
+      <PageHeader
+        eyebrow="GIÁM SÁT"
+        title="Sức khỏe Dữ liệu"
+        info="Theo dõi chất lượng dữ liệu tờ khai và trạng thái đồng bộ hệ thống"
+        meta={[
+          summaryLoading || rolloutLoading ? "Đang tải..." : "Đã cập nhật",
+        ]}
+        actions={
+          <button
+            onClick={handleRefresh}
+            disabled={summaryLoading || rolloutLoading}
+            className="px-3 py-1.5 text-sm font-medium bg-ds-surface-card border border-ds-border-subtle rounded-md hover:bg-ds-surface-muted disabled:opacity-50 transition-colors"
+          >
+            {summaryLoading || rolloutLoading ? 'Đang tải…' : 'Làm mới'}
+          </button>
+        }
+      />
 
-    <div className="space-y-4">
+      {/* Permission Banner */}
+      {!canManage && (
+        <PermissionBanner
+          level="info"
+          title={t('health.readOnly.title') || "Chế độ xem"}
+          description={t('health.readOnly.desc') || "Bạn chỉ có thể xem thông tin sức khỏe dữ liệu, không thể chỉnh sửa cấu hình."}
+        />
+      )}
 
-            {/* Lumina Ivory Master Header */}
-      <div className="flex items-center justify-between p-6 rounded-2xl bg-ds-surface-card/60 backdrop-blur-md border border-ds-border-subtle/50 shadow-sm relative overflow-hidden mb-6">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col gap-3 w-full">
-          <div className="flex flex-wrap items-center justify-between w-full">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Sức khỏe Dữ liệu</h1>
-                <div title="Theo dõi chất lượng dữ liệu và trạng thái đồng bộ." className="text-gray-400 hover:text-cyan-600 transition-colors cursor-help">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                Theo dõi chất lượng dữ liệu tờ khai, cảnh báo từ hệ thống lõi đồng bộ.
-              </p>
-            </div>
+      {/* Error Banner */}
+      {(summaryError || rolloutError) && (
+        <PermissionBanner
+          level="error"
+          title={t('health.error.title') || "Lỗi tải dữ liệu"}
+          description={summaryError || rolloutError || "Không thể tải thông tin sức khỏe dữ liệu"}
+        />
+      )}
 
-            <button
-              type="button"
-              onClick={handleRefresh}
-              className="px-4 py-2 rounded-xl bg-ds-surface-card/80 border border-ds-border-subtle hover:bg-cyan-50 text-sm font-medium text-ds-text-primary transition-all shadow-sm"
-              disabled={summaryLoading || rolloutLoading}
-            >
-              {summaryLoading || rolloutLoading ? 'Đang tải…' : 'Làm mới tổng quan'}
-            </button>
-          </div>
-
-          {(summaryError || rolloutError) && (
-            <div className="mt-4 space-y-2">
-              {summaryError && (
-                <div className="rounded-xl border border-red-200 bg-ds-destructive/5 p-3 text-sm text-ds-destructive shadow-sm">
-                  {summaryError}
-                </div>
-              )}
-              {rolloutError && (
-                <div className="rounded-xl border border-amber-200 bg-ds-warning/5 p-3 text-sm text-ds-warning shadow-sm">
-                  {rolloutSummary
-                    ? `Lỗi tải metadata rollout: ${rolloutError}`
-                    : `Lỗi hệ thống: ${rolloutError}`}
-                </div>
-              )}
-            </div>
-          )}
+      {/* Page Tabs */}
+      <div className="border-b border-ds-border-subtle">
+        <div className="flex gap-1">
+          {healthTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === tab.id
+                    ? 'border-ds-accent text-ds-accent'
+                    : 'border-transparent text-ds-text-secondary hover:text-ds-text-primary'
+                }`}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {/* Tab Content */}
+      <div className="space-y-4">
+        {/* Overview Tab - All panels */}
+        {activeTab === "all" && (
+          <>
+            <DataHealthInfrastructureStatusPanel alerts={infrastructureStatusAlerts} sync={infrastructureSyncStatus} />
+            <DataHealthRolloutStatusPanel
+              rollout={rolloutSummary}
+              loading={rolloutLoading}
+              error={rolloutError}
+            />
+            <DataHealthStorageOverviewPanel backup={backupCard} database={databaseCard} sql={sqlCard} />
+            <DataHealthMetricsAlertsPanel
+              metrics={metricCards}
+              duplicateSummary={duplicateSummaryCard}
+              alertSummary={alertSummaryCard}
+            />
+            <DataHealthFrontendPerformancePanel summary={frontendPerformanceSummary} />
+            <DataHealthPolicyConfigSection
+              canEditPolicy={canEditPolicy}
+              policyLoading={policyLoading}
+              policySaving={policySaving}
+              policyError={policyError}
+              policyActionsDisabled={policyActionsDisabled}
+              policyInputsDisabled={policyInputsDisabled}
+              policyForm={policyForm}
+              policySourcesPanel={policySourcesPanel}
+              onReloadPolicy={reloadPolicy}
+              onSavePolicy={handleSavePolicy}
+              onPolicyFieldChange={handlePolicyFieldChange}
+            />
+            <DataHealthActivityFeedsPanel sqlEvents={activityFeedsPanel.sqlEvents} notifications={activityFeedsPanel.notifications} />
+          </>
+        )}
 
+        {/* Duplicates Tab */}
+        {activeTab === "duplicates" && (
+          <>
+            <DataHealthMetricsAlertsPanel
+              metrics={metricCards}
+              duplicateSummary={duplicateSummaryCard}
+              alertSummary={null}
+            />
+            <DataHealthPolicyConfigSection
+              canEditPolicy={canEditPolicy}
+              policyLoading={policyLoading}
+              policySaving={policySaving}
+              policyError={policyError}
+              policyActionsDisabled={policyActionsDisabled}
+              policyInputsDisabled={policyInputsDisabled}
+              policyForm={policyForm}
+              policySourcesPanel={policySourcesPanel}
+              onReloadPolicy={reloadPolicy}
+              onSavePolicy={handleSavePolicy}
+              onPolicyFieldChange={handlePolicyFieldChange}
+            />
+          </>
+        )}
 
-      <DataHealthInfrastructureStatusPanel alerts={infrastructureStatusAlerts} sync={infrastructureSyncStatus} />
+        {/* Missing Data Tab */}
+        {activeTab === "missing" && (
+          <DataHealthMetricsAlertsPanel
+            metrics={metricCards}
+            duplicateSummary={null}
+            alertSummary={null}
+          />
+        )}
 
+        {/* ECUS Tab */}
+        {activeTab === "ecus" && (
+          <>
+            <DataHealthInfrastructureStatusPanel alerts={infrastructureStatusAlerts} sync={infrastructureSyncStatus} />
+            <DataHealthRolloutStatusPanel
+              rollout={rolloutSummary}
+              loading={rolloutLoading}
+              error={rolloutError}
+            />
+            <DataHealthActivityFeedsPanel sqlEvents={activityFeedsPanel.sqlEvents} notifications={[]} />
+          </>
+        )}
 
-
-      <DataHealthRolloutStatusPanel
-        rollout={rolloutSummary}
-        loading={rolloutLoading}
-        error={rolloutError}
-      />
-
-
-
-      <DataHealthStorageOverviewPanel backup={backupCard} database={databaseCard} sql={sqlCard} />
-
-
-
-      <DataHealthMetricsAlertsPanel
-        metrics={metricCards}
-        duplicateSummary={duplicateSummaryCard}
-        alertSummary={alertSummaryCard}
-      />
-
-      <DataHealthFrontendPerformancePanel summary={frontendPerformanceSummary} />
-
-
-
-      <DataHealthPolicyConfigSection
-        canEditPolicy={canEditPolicy}
-        policyLoading={policyLoading}
-        policySaving={policySaving}
-        policyError={policyError}
-        policyActionsDisabled={policyActionsDisabled}
-        policyInputsDisabled={policyInputsDisabled}
-        policyForm={policyForm}
-        policySourcesPanel={policySourcesPanel}
-        onReloadPolicy={reloadPolicy}
-        onSavePolicy={handleSavePolicy}
-        onPolicyFieldChange={handlePolicyFieldChange}
-      />
-
-
-
-      <DataHealthActivityFeedsPanel sqlEvents={activityFeedsPanel.sqlEvents} notifications={activityFeedsPanel.notifications} />
-
+        {/* Alerts Tab */}
+        {activeTab === "alerts" && (
+          <>
+            <DataHealthMetricsAlertsPanel
+              metrics={[]}
+              duplicateSummary={null}
+              alertSummary={alertSummaryCard}
+            />
+            <DataHealthActivityFeedsPanel sqlEvents={[]} notifications={activityFeedsPanel.notifications} />
+          </>
+        )}
+      </div>
     </div>
 
   );

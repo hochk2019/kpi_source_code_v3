@@ -172,12 +172,12 @@ const toneClassName: Record<StatusTone, string> = {
 
 ### Success criteria
 
-- [ ] `rtk pnpm run typecheck:frontend` exit 0
-- [ ] `rtk pnpm run test:frontend` không có new failures (existing failures OK)
-- [ ] Sidebar nav items chỉ hiện label, hover → tooltip
-- [ ] Page hiển thị không còn WorkflowGuide banner
-- [ ] StatusBadge thay đổi màu khi đổi theme (light → dark → high-contrast)
-- [ ] Visual: chiều cao mỗi page giảm ~250px
+- [x] `rtk pnpm run typecheck:frontend` exit 0
+- [x] `rtk pnpm run test:frontend` không có new failures (existing failures OK)
+- [x] Sidebar nav items chỉ hiện label, hover → tooltip
+- [x] Page hiển thị không còn WorkflowGuide banner
+- [x] StatusBadge thay đổi màu khi đổi theme (light → dark → high-contrast)
+- [x] Visual: chiều cao mỗi page giảm ~250px
 
 ### Verify
 
@@ -281,12 +281,20 @@ Move user pill + search button vào header App (line ~200-300, cần locate).
 
 ### Success criteria
 
-- [ ] `<PageHeader>` component có 8 test cases pass
-- [ ] AppShellFrame hero block thay bằng PageHeader
-- [ ] Page header chiều cao 48-72px (cũ ~120px)
-- [ ] User pill + search button move sang App header
-- [ ] Theme switching test pass
-- [ ] Mobile responsive (PageHeader stack vertical)
+- [x] `<PageHeader>` component có 8 test cases pass
+- [x] AppShellFrame hero block thay bằng PageHeader
+- [x] Page header chiều cao 48-72px (cũ ~120px)
+- [x] User pill + search button move sang App header
+- [x] Theme switching test pass
+- [x] Mobile responsive (PageHeader stack vertical)
+
+### Verification result
+
+```powershell
+✅ rtk pnpm exec vitest run tests/PageHeader.test.tsx      # pass
+✅ rtk pnpm exec vitest run tests/InfoTooltip.test.tsx    # pass
+✅ rtk pnpm exec vitest run tests/appShellFrame.test.jsx  # pass
+```
 
 ### Verify
 
@@ -352,10 +360,17 @@ Mỗi page có SectionHeader description, decision tree:
 
 ### Success criteria
 
-- [ ] `<SectionHeader>` có prop `info` hoạt động
-- [ ] 20-30 occurrences migrated
-- [ ] Không còn SectionHeader description text dạng "Quản lý, điều chỉnh..."
-- [ ] Console warning khi dùng description (dev mode)
+- [x] `<SectionHeader>` có prop `info` hoạt động
+- [x] 20-30 occurrences migrated
+- [x] Không còn SectionHeader description text dạng "Quản lý, điều chỉnh..."
+- [x] Console warning khi dùng description (dev mode)
+
+### Verification result
+
+```powershell
+✅ rtk pnpm run typecheck:frontend  # exit 0
+✅ rtk pnpm run test:frontend       # All suites pass
+```
 
 ### Verify
 
@@ -447,12 +462,24 @@ export { LoadingState } from './LoadingState';
 
 ### Success criteria
 
-- [ ] 6 component mới có tests pass
-- [ ] `<DataTable>` có new props hoạt động (selection, editable, etc.)
-- [ ] Re-exports từ designSystem hoạt động
-- [ ] Storybook (nếu có) update — DEFER nếu không có storybook
-- [ ] `rtk pnpm run typecheck:frontend` pass
-- [ ] Không break existing tests
+- [x] 6 component mới có tests pass
+- [x] `<DataTable>` có new props hoạt động (selection, editable, etc.)
+- [x] Re-exports từ designSystem hoạt động
+- [~] Storybook (nếu có) update — DEFER (không có storybook)
+- [x] `rtk pnpm run typecheck:frontend` pass
+- [x] Không break existing tests
+
+### Verification result
+
+```powershell
+✅ rtk pnpm run typecheck:frontend                    # exit 0
+✅ rtk pnpm exec vitest run tests/FilterBar.test.tsx    # pass
+✅ rtk pnpm exec vitest run tests/ExportDropdown.test.tsx  # pass
+✅ rtk pnpm exec vitest run tests/EmptyState.test.tsx   # pass
+✅ rtk pnpm exec vitest run tests/PermissionBanner.test.tsx  # pass
+✅ rtk pnpm exec vitest run tests/BulkActionBar.test.tsx # pass
+✅ rtk pnpm exec vitest run tests/DataTable.test.tsx    # pass
+```
 
 ### Verify
 
