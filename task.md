@@ -47,9 +47,10 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.6` (Slice 6.6: Navigation IA); da update appShellNavigation.ts - health→operations, ai→governance; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.2` (Slice 7.2: AuditLog split); da tao cac modules: useAuditLogData.ts, AuditLogShell.tsx, AuditLogFilters.tsx, types.ts; AuditLog.tsx goc van giu lai, da them re-exports; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.3` (Slice 7.3: ExportAuditReport polish); da refactor ExportAuditReport.tsx voi PageHeader, meta stats summary; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.4` (Slice 7.4: useEditPermission hook); da tao useEditPermission.ts voi 2 hooks: useEditPermission(tab) va useEditPermissions(tabs[]); typecheck passed.
+- Slice 7 (IA reorganization + Audit pages) da HOAN TAT.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
-  - `cng-0if.7.4` - UX Review Slice 7.4: useEditPermission hook
   - `cng-0if.8` - UX Review Slice 8: Test fixes + visual regression
 
 ## Active Slice
