@@ -2,6 +2,9 @@ import React, { Suspense, useCallback, useEffect, useMemo, useState } from "reac
 import { useAppDialog } from '@/hooks/useAppDialog';
 
 import { t } from '@/lib/i18n.js';
+import { PageHeader } from '@/components/designSystem/PageHeader';
+import { PermissionBanner, FilterBar } from '@/components/designSystem/primitives';
+import { Settings, BarChart3, List } from "lucide-react";
 
 import {
   getKpiAdjustments,
@@ -608,11 +611,46 @@ export default function KPIAdjustments({ currentUser }: KPIAdjustmentsProps) {
         />
       </Suspense>
 
+      <PageHeader
+        eyebrow="HIỆU SUẤT"
+        title="Điểm KPI +/- Thêm"
+        info="Quản lý điểm KPI bổ sung, cộng/trừ điểm theo tháng"
+        actions={
+          <button
+            onClick={() => openSettingsDialog()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-ds-text-primary bg-ds-surface-card border border-ds-border-subtle rounded-md hover:bg-ds-surface-muted transition-colors"
+          >
+            <Settings size={14} />
+            Cài đặt
+          </button>
+        }
+      />
+
+      {/* Permission Banner */}
+      {!canApprove && !canSubmit && (
+        <PermissionBanner
+          level="warning"
+          title={t('adjustments.noPermission.title') || "Không có quyền"}
+          description={t('adjustments.noPermission.desc') || "Bạn không có quyền nhập hoặc duyệt điểm KPI bổ sung."}
+        />
+      )}
+
       <Tabs defaultValue="form" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="form">Nhập điều chỉnh</TabsTrigger>
-          <TabsTrigger value="list">Danh sách</TabsTrigger>
-          <TabsTrigger value="settings">Cài đặt</TabsTrigger>
+        <TabsList className="mb-4 border-b border-ds-border-subtle w-full justify-start rounded-none bg-transparent p-0 h-auto">
+          <TabsTrigger 
+            value="form"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-ds-accent data-[state=active]:text-ds-accent data-[state=active]:shadow-none rounded-none bg-transparent"
+          >
+            <BarChart3 size={14} />
+            Tổng quan
+          </TabsTrigger>
+          <TabsTrigger 
+            value="list"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-ds-accent data-[state=active]:text-ds-accent data-[state=active]:shadow-none rounded-none bg-transparent"
+          >
+            <List size={14} />
+            Danh sách
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="form" className="space-y-6 mt-0">
@@ -680,6 +718,34 @@ export default function KPIAdjustments({ currentUser }: KPIAdjustmentsProps) {
         </TabsContent>
 
         <TabsContent value="list" className="space-y-6 mt-0">
+          {/* Filter Bar for List Tab */}
+          <FilterBar
+            activeFilterCount={(filterMonth ? 1 : 0) + (filterStatus ? 1 : 0) + (showMineOnly ? 1 : 0)}
+            onReset={() => {
+              setFilterMonth('');
+              setFilterStatus('');
+              if (showMineOnly) handleMineToggle();
+            }}
+          >
+            <FilterBar.Search
+              placeholder="Tìm theo MST, tên công ty..."
+              value={declarationSearch}
+              onChange={setDeclarationSearch}
+            />
+            <FilterBar.Select
+              label="Tháng"
+              value={filterMonth}
+              onChange={setFilterMonth}
+              options={[{ value: '', label: 'Tất cả tháng' }, { value: '01', label: 'Tháng 1' }, { value: '02', label: 'Tháng 2' }, { value: '03', label: 'Tháng 3' }]}
+            />
+            <FilterBar.Select
+              label="Trạng thái"
+              value={filterStatus}
+              onChange={setFilterStatus}
+              options={[{ value: '', label: 'Tất cả' }, { value: 'pending', label: 'Chờ duyệt' }, { value: 'approved', label: 'Đã duyệt' }, { value: 'rejected', label: 'Từ chối' }]}
+            />
+          </FilterBar>
+
           {isLoading ? (
             <TabLoadingSkeleton />
           ) : (
@@ -732,29 +798,6 @@ export default function KPIAdjustments({ currentUser }: KPIAdjustmentsProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="settings" className="space-y-6 mt-0">
-          {isLoading ? (
-            <TabLoadingSkeleton />
-          ) : (
-            <Suspense fallback={<TabLoadingSkeleton />}>
-              <KpiAdjustmentSettingsDialog
-                embedded
-                open={true}
-                focusCategory={settingsFocusCategory}
-                settingsDraft={settingsDraft}
-                settingsError={settingsError}
-                settingsSaving={settingsSaving}
-                onOpenChange={() => {}}
-                onClose={() => {}}
-                onReset={handleSettingsReset}
-                onSubmit={handleSettingsSubmit}
-                onUpdateDraft={updateSettingsDraft}
-                buildSettingsFieldId={buildSettingsFieldId}
-                buildLicenseFieldId={buildLicenseFieldId}
-              />
-            </Suspense>
-          )}
-        </TabsContent>
       </Tabs>
     </div>
   );
