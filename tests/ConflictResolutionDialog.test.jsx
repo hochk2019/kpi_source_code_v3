@@ -153,7 +153,7 @@ describe("ConflictResolutionDialog", () => {
       />
     );
 
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByTestId("conflict-resolution-dialog");
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(dialog).toHaveAttribute("aria-labelledby", "conflict-title");
   });

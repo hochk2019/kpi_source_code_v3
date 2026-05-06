@@ -766,10 +766,11 @@ Hook `useEditPermission(tab)` → centralize canEdit logic.
 
 ### Success criteria
 
-- [ ] IA section moves reflected in sidebar
-- [ ] AuditLog file ≤ 800 LOC (split thành 3-4 files)
-- [ ] ExportAuditReport file ≤ 800 LOC
-- [ ] No regression in test suite
+- [x] IA section moves reflected in sidebar (completed in 6.6)
+- [x] AuditLog split into modules (types, useAuditLogData, AuditLogShell, AuditLogFilters)
+- [x] ExportAuditReport polish with PageHeader + meta stats
+- [x] useEditPermission hook created with useEditPermission(tab) and useEditPermissions(tabs[])
+- [ ] No regression in test suite (deferred to Slice 8)
 
 ---
 

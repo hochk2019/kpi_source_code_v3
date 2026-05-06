@@ -41,6 +41,7 @@ export default function ConflictResolutionDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="conflict-title"
+      data-testid="conflict-resolution-dialog"
     >
       <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl">
         <h2

@@ -49,6 +49,7 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.3` (Slice 7.3: ExportAuditReport polish); da refactor ExportAuditReport.tsx voi PageHeader, meta stats summary; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.4` (Slice 7.4: useEditPermission hook); da tao useEditPermission.ts voi 2 hooks: useEditPermission(tab) va useEditPermissions(tabs[]); typecheck passed.
 - Slice 7 (IA reorganization + Audit pages) da HOAN TAT.
+- Slice 8 (Test fixes) dang in_progress: fixed ConflictResolutionDialog.test.jsx bang cach them data-testid vao component va update test assertion.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
   - `cng-0if.8` - UX Review Slice 8: Test fixes + visual regression
