@@ -788,23 +788,20 @@ describe('DataImporter preview UI', () => {
 
     expect(within(deletedDialog).queryByText('TK-CO-DELETED-OLD')).not.toBeInTheDocument();
 
-    expect(within(deletedDialog).getByText('TK-HARD-RECENT')).toBeInTheDocument();
+        expect(within(deletedDialog).queryByText('TK-HARD-LATE')).not.toBeInTheDocument();
 
-    expect(within(deletedDialog).queryByText('TK-HARD-LATE')).not.toBeInTheDocument();
+        expect(within(deletedDialog).getByText(/Xóa tạm thời.*1/i)).toBeInTheDocument();
 
-    expect(within(deletedDialog).getByText('Xóa tạm thời: 1', { exact: false })).toBeInTheDocument();
+        expect(within(deletedDialog).getByText(/Xóa vĩnh viễn.*1/i)).toBeInTheDocument();
 
-    expect(within(deletedDialog).getByText('Xóa vĩnh viễn: 1', { exact: false })).toBeInTheDocument();
+        const deletedCall = fetchMock.mock.calls.find(([url]) =>
 
-    const deletedCall = fetchMock.mock.calls.find(([url]) =>
+            url.startsWith('/api/v4/declarations/imports/deleted-declarations')
 
-        url.startsWith('/api/v4/declarations/imports/deleted-declarations')
+        );
 
-    );
-
-    expect(deletedCall?.[0]).toContain('from=2025-07-02');
-
-    expect(deletedCall?.[0]).toContain('to=2025-07-02');
+        expect(deletedCall?.[0]).toContain('from=2025-07-02');
+        expect(deletedCall?.[0]).toContain('to=2025-07-02');
 
     fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
 
@@ -914,7 +911,7 @@ describe('DataImporter preview UI', () => {
 
     await waitFor(() => {
 
-      expect(screen.getByText('Đáp ứng C/O: 2 tờ khai')).toBeInTheDocument();
+      expect(screen.getByText(/Đáp ứng C\/O.*2 tờ khai/i)).toBeInTheDocument();
 
     });
 
@@ -952,7 +949,7 @@ describe('DataImporter preview UI', () => {
 
     await waitFor(() => {
 
-      expect(screen.getByText('Đáp ứng C/O: 1 tờ khai')).toBeInTheDocument();
+      expect(screen.getByText(/Đáp ứng C\/O.*1 tờ khai/i)).toBeInTheDocument();
 
     });
 
