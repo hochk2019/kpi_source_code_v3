@@ -28,7 +28,7 @@ Trạng thái Slice 8.1 gần nhất:
 - reporting* batch: **76 pass / 0 fail**
 - rules* batch: **41 pass / 0 fail**
 - useDataImporterActionGuards: **3 pass / 0 fail**
-- useDataImporter* batch còn lại: **99 pass / 21 fail / 0 unhandled errors**
+- useDataImporter* batch: **117 pass / 0 fail / 0 unhandled errors**
 
 Ghi chú chạy test:
 - Full `test:frontend` dễ chạy lâu và tạo log rất lớn.
@@ -48,6 +48,24 @@ Theo các test file đã verified pass trong commits gần đây:
 - `tests/reportViewer.test.jsx` ✅
 
 → **Smoke core test pass**. Failing là edge case test files.
+
+### A4. Component + a11y tests (Slice 8.2-8.4)
+
+New test files added:
+- `tests/ExportDropdown.test.tsx` — **9 pass** (trigger, dropdown, onExport, disabled, loading, close)
+- `tests/a11y.test.tsx` — **8 pass** (axe-core for PageHeader, InfoTooltip, EmptyState, PermissionBanner, BulkActionBar, LoadingState, FilterBar, ExportDropdown)
+- `tests/playwright/visual-regression.spec.js` — screenshot baselines for 5 pages (needs --update-snapshots)
+
+Existing component tests (all pass):
+- `tests/PageHeader.test.tsx` — 8 pass
+- `tests/InfoTooltip.test.tsx` — 5 pass
+- `tests/FilterBar.test.tsx` — 7 pass
+- `tests/EmptyState.test.tsx` — 8 pass
+- `tests/PermissionBanner.test.tsx` — 6 pass
+- `tests/BulkActionBar.test.tsx` — 7 pass
+- `tests/LoadingState.test.tsx` — 8 pass
+
+**Total: 66 pass / 0 fail across 9 component + a11y test files**
 
 ---
 
@@ -113,20 +131,28 @@ rtk pnpm exec vitest run -u  # update snapshots
 
 → **CHỈ chạy sau khi đã verify visual đúng**. Đừng update snapshot bừa bãi.
 
-### B4. `useDataImporter*` async hook/action updates 🔴
+### B4. `useDataImporter*` async hook/action updates ✅
 
-**Status hiện tại**: batch `useDataImporter*` còn **21 fail**.
+**Status hiện tại**: batch `useDataImporter*` đạt **117 pass / 0 fail / 0 unhandled errors**.
 
 **Root cause chính**:
 - Một số hook action đã chuyển sang async/Promise.
 - Test cũ vẫn assert sync return value hoặc `window.confirm`.
 - Một số flows dùng AppDialog/async alert/confirm thay vì browser confirm trực tiếp.
 
-**Next files ưu tiên**:
+**Files đã ổn định trong batch cuối**:
+- `tests/useDataImporterDuplicateReview.test.jsx`
+- `tests/useDataImporterEditAccess.test.jsx`
+- `tests/useDataImporterFilterPresets.test.jsx`
 - `tests/useDataImporterImportFlow.test.jsx`
-- `tests/useDataImporterRowMutations.test.jsx`
-- `tests/useDataImporterSavedSession.test.jsx`
 - `tests/useDataImporterLicenseExclusions.test.jsx`
+- `tests/useDataImporterListPreferences.test.jsx`
+- `tests/useDataImporterRowMutations.test.jsx`
+- `tests/useDataImporterSavedEdits.test.jsx`
+- `tests/useDataImporterSavedHighlights.test.jsx`
+- `tests/useDataImporterSavedSession.test.jsx`
+- `tests/useDataImporterSelectionBulkActions.test.jsx`
+- `tests/useDataImporterSync.test.jsx`
 
 ---
 
