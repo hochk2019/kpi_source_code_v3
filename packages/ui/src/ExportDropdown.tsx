@@ -51,7 +51,7 @@ export function ExportDropdown({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild disabled={disabled || busy}>
         <button
           type="button"
           disabled={disabled || busy}
