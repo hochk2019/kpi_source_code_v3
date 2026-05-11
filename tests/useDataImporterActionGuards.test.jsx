@@ -22,11 +22,11 @@ function createProps(overrides = {}) {
 }
 
 describe("useDataImporterActionGuards", () => {
-  it("returns allowed editable keys and warns when reviewed rows are skipped", () => {
+  it("returns allowed editable keys and warns when reviewed rows are skipped", async () => {
     const props = createProps();
     const { result } = renderHook(() => useDataImporterActionGuards(props));
 
-    expect(result.current.ensureEditableKeys(["editable", "review-locked", "blocked"], "cap nhat")).toEqual([
+    await expect(result.current.ensureEditableKeys(["editable", "review-locked", "blocked"], "cap nhat")).resolves.toEqual([
       "editable",
     ]);
     expect(props.showAlert).toHaveBeenCalledWith(
@@ -34,22 +34,22 @@ describe("useDataImporterActionGuards", () => {
     );
   });
 
-  it("returns null and shows the review-lock message when nothing can be edited", () => {
+  it("returns null and shows the review-lock message when nothing can be edited", async () => {
     const props = createProps();
     const { result } = renderHook(() => useDataImporterActionGuards(props));
 
-    expect(result.current.ensureEditableKeys(["review-locked"], "xoa")).toBeNull();
+    await expect(result.current.ensureEditableKeys(["review-locked"], "xoa")).resolves.toBeNull();
     expect(props.showAlert).toHaveBeenCalledWith(
       "Khong the xoa 1 to khai da duoc ra soat. Chi quan tri vien moi duoc sua hoac xoa."
     );
   });
 
-  it("allows hard delete for a soft-deleted row when the restored shape is editable", () => {
+  it("allows hard delete for a soft-deleted row when the restored shape is editable", async () => {
     const props = createProps();
     const { result } = renderHook(() => useDataImporterActionGuards(props));
 
     expect(result.current.canHardDeleteRow(props.rawRows[3])).toBe(true);
-    expect(result.current.ensureHardDeleteKeys(["deleted-editable"], "xoa vinh vien")).toEqual([
+    await expect(result.current.ensureHardDeleteKeys(["deleted-editable"], "xoa vinh vien")).resolves.toEqual([
       "deleted-editable",
     ]);
     expect(props.showAlert).not.toHaveBeenCalled();

@@ -49,10 +49,11 @@
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.3` (Slice 7.3: ExportAuditReport polish); da refactor ExportAuditReport.tsx voi PageHeader, meta stats summary; typecheck passed.
 - Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.4` (Slice 7.4: useEditPermission hook); da tao useEditPermission.ts voi 2 hooks: useEditPermission(tab) va useEditPermissions(tabs[]); typecheck passed.
 - Slice 7 (IA reorganization + Audit pages) da HOAN TAT.
-- Slice 8 (Test fixes) dang in_progress: 
-  - Fixed ConflictResolutionDialog.test.jsx: them data-testid
-  - Fixed aiAssistant.panels.test.jsx, commandCenter.test.jsx, dataImporter.preview.test.jsx, dataImporterSyncPreviewPanel.test.jsx, mstAssignment.person-columns.test.jsx, reportingScopeSections.test.jsx, teamManagerMemberPanel.test.jsx, teamManagerHistoryPanel.test.jsx, rulesEditorConfigTabsPanel.test.jsx, appShellAsyncStates.test.jsx, dataImporter.preview.test.jsx: chuyen getByText sang regex pattern
-  - ~28 test files remaining to review
+- Slice 8.1 (Fix existing failing tests) dang in_progress, da land batch test-stabilization ngay 2026-05-06:
+  - Green verified batches: KPIAdjustments (36 pass), KPICalculator (5 pass), reporting* (76 pass), rules* (41 pass), useDataImporterActionGuards (3 pass).
+  - Da sua nhom MSTAssignment, KPIAdjustments, KPICalculator, reporting panels, rules editor/persistence, va 1 hook useDataImporterActionGuards theo DOM moi/async flow moi.
+  - Con lai: useDataImporter* batch hien `99 pass / 21 fail / 0 unhandled errors`; fail chu yeu do tests cu assert sync trong khi hook actions/confirm flow da async.
+  - 8.2 component tests, 8.3 visual regression, 8.4 a11y, 8.5 performance chua bat dau.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
   - `cng-0if.8` - UX Review Slice 8: Test fixes + visual regression
@@ -62,7 +63,7 @@
 -- Bead: cng-sr1.6
 -- Title: server-entrypoint-retirement-and-delete
 -- Status: in_progress
--- Last updated: 2026-04-08
+-- Last updated: 2026-05-06
 
 ## Sync Notebook
 
@@ -71,6 +72,14 @@
 - Pending Verify: targeted legacy API/backups/seed/monitor test harness verify; `pnpm verify:server-retirement`; `pnpm bd:check`.
 - Verify: `pnpm exec eslint tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js packages/backend-shared/src/testing/index.js`; `pnpm exec vitest run tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js --environment node`; `pnpm verify:server-retirement`; `pnpm bd:check`.
 - Handoff: direct imports da ve 0, nhung `packages/backend-shared/src/testing/index.js` van la quarantine layer re-export `server/index.js` de phuc vu legacy route suite (`/api/auth/*`, `/api/bootstrap`, `/api/notifications`, `/api/ai/*`, ...); muon dong that su `cng-sr1.6` can thay layer nay bang harness/modular runtime khong con import noi bo vao `server/`.
+
+### Checkpoint: cng-0if.8.1 / frontend test stabilization partial
+
+- Done: stabilized KPIAdjustments, KPICalculator, reporting*, rules*, MSTAssignment-related tests, and `useDataImporterActionGuards` against the new DOM and async storage/dialog flows.
+- Verify: JSON-redirected Vitest targeted commit verify reported `success=True`, `passed=56`, `failed=0`, `errors=0` for modified test files; prior batch evidence: KPIAdjustments 36 pass, KPICalculator 5 pass, reporting* 76 pass, rules* 41 pass, useDataImporterActionGuards 3 pass.
+- Risk: `useDataImporter*` batch still has `99 pass / 21 fail / 0 unhandled errors`; failures are mostly old sync assertions around async hook actions/AppDialog confirm flows.
+- Decision: commit stabilized batch now so tomorrow can continue from the smaller remaining fail cluster without re-running large verbose logs.
+- Next: continue from `useDataImporterImportFlow`, `useDataImporterRowMutations`, `useDataImporterSavedSession`, and `useDataImporterLicenseExclusions`; keep using JSON redirect + short parser to avoid context-window overflow.
 
 ### Checkpoint: cng-sr1.5 / legacy-test-and-orphan-helper-migration complete
 

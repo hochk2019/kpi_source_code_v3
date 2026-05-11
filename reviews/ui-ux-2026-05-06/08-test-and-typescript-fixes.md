@@ -22,10 +22,17 @@ rtk pnpm run test:frontend
 # Long running (>10 minutes for full suite)
 ```
 
-Lần chạy gần nhất (theo `test-output.txt`):
-- Test files: 1 failed (chỉ một file)
-- Tests: **5 failed**, 2 passed
-- File fail: `tests/ConflictResolutionDialog.test.jsx`
+Trạng thái Slice 8.1 gần nhất:
+- KPIAdjustments batch: **36 pass / 0 fail**
+- KPICalculator batch: **5 pass / 0 fail**
+- reporting* batch: **76 pass / 0 fail**
+- rules* batch: **41 pass / 0 fail**
+- useDataImporterActionGuards: **3 pass / 0 fail**
+- useDataImporter* batch còn lại: **99 pass / 21 fail / 0 unhandled errors**
+
+Ghi chú chạy test:
+- Full `test:frontend` dễ chạy lâu và tạo log rất lớn.
+- Dùng Vitest `--reporter=json` redirect ra `.vitest-*.json`, sau đó parse summary ngắn bằng Python.
 
 ### A3. Per-test breakdown
 
@@ -46,7 +53,7 @@ Theo các test file đã verified pass trong commits gần đây:
 
 ## B. Test fail cần fix
 
-### B1. `tests/ConflictResolutionDialog.test.jsx` 🔴
+### B1. `tests/ConflictResolutionDialog.test.jsx` ✅
 
 **5 tests fail** vì `getByRole("dialog")` returns multiple elements.
 
@@ -81,12 +88,12 @@ Hoặc dùng `data-testid`:
 const dialog = screen.getByTestId("conflict-resolution-dialog");
 ```
 
-**Files cần edit**:
-- `tests/ConflictResolutionDialog.test.jsx` (5 test cases, line ~155, 200, ...)
+**Status**: đã ổn định ở batch trước; tiếp tục tránh `getByRole("dialog")` đơn lẻ khi Radix render nhiều dialog-like nodes.
 
-### B2. i18n test assertion updates 🟡
+### B2. DOM/text assertion updates ✅/🟡
 
-(Nếu có) — các test query bằng text Việt sẽ fail nếu i18n key đổi value.
+Đã áp dụng cho các cụm MSTAssignment, KPIAdjustments, KPICalculator, reporting, rules.
+Phần còn lại cần tiếp tục trong `useDataImporter*` fail cluster.
 
 **Pattern fix**:
 ```diff
@@ -105,6 +112,21 @@ rtk pnpm exec vitest run -u  # update snapshots
 ```
 
 → **CHỈ chạy sau khi đã verify visual đúng**. Đừng update snapshot bừa bãi.
+
+### B4. `useDataImporter*` async hook/action updates 🔴
+
+**Status hiện tại**: batch `useDataImporter*` còn **21 fail**.
+
+**Root cause chính**:
+- Một số hook action đã chuyển sang async/Promise.
+- Test cũ vẫn assert sync return value hoặc `window.confirm`.
+- Một số flows dùng AppDialog/async alert/confirm thay vì browser confirm trực tiếp.
+
+**Next files ưu tiên**:
+- `tests/useDataImporterImportFlow.test.jsx`
+- `tests/useDataImporterRowMutations.test.jsx`
+- `tests/useDataImporterSavedSession.test.jsx`
+- `tests/useDataImporterLicenseExclusions.test.jsx`
 
 ---
 

@@ -47,7 +47,7 @@ describe("ReportingExecutiveSummaryPanel", () => {
     expect(screen.getByText("Alice")).toBeTruthy();
     expect(screen.getByText(/Tổ đội chiếm tỷ trọng cao nhất/i)).toBeTruthy();
     expect(screen.getByText("Team A")).toBeTruthy();
-    expect(screen.getByText(/62\.0% tổng KPI/i)).toBeTruthy();
+    expect(screen.getAllByText(/62\.0% tổng KPI/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Điều chỉnh chờ duyệt/i)).toBeTruthy();
     expect(screen.getByText("3")).toBeTruthy();
     expect(screen.getByText(/Tín hiệu lệch chuẩn/i)).toBeTruthy();

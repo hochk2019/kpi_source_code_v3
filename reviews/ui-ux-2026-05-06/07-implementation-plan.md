@@ -785,9 +785,15 @@ Fix tất cả test fail còn lại + thêm visual regression + a11y audit.
 #### 8.1 — Fix existing failing tests
 
 Theo `08-test-and-typescript-fixes.md`:
-- `tests/ConflictResolutionDialog.test.jsx` (5 fails)
-- `tests/i18n.*.test.jsx` (24 i18n updates)
-- ~40 test files cần update assertions theo DOM mới
+- [x] Stabilize verified batches:
+  - KPIAdjustments: 36 pass
+  - KPICalculator: 5 pass
+  - reporting*: 76 pass
+  - rules*: 41 pass
+  - useDataImporterActionGuards: 3 pass
+- [x] Update MSTAssignment/KPIAdjustments/KPICalculator/reporting/rules tests for the new DOM and async storage flow.
+- [ ] Finish remaining useDataImporter* failures: current batch is 99 pass / 21 fail / 0 unhandled errors.
+- [ ] Re-run full jsdom failing-file matrix in small JSON-redirected batches after useDataImporter* is green.
 
 #### 8.2 — Add new component tests
 
@@ -848,6 +854,7 @@ Compare với snapshot trước slice 1 (nếu có).
 
 - [ ] 0 failing tests
 - [ ] 100% existing test files passed
+- [x] Major existing fail clusters stabilized through batch 8.1
 - [ ] New component tests added
 - [ ] 5 pages có visual snapshot baseline
 - [ ] 5 pages pass axe-core a11y

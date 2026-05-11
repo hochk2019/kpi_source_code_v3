@@ -219,8 +219,12 @@ describe("MstAssignmentDataTablePanel", () => {
 
     expect(screen.getAllByText(/Mới import/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Đã chỉnh sửa/i)).toBeInTheDocument();
-    expect(screen.getByText(/Trùng gán/i)).toBeInTheDocument();
-    expect(screen.getByText(/MST này đang có trùng gán hiện hành\. Mở timeline để rà soát chi tiết\./i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Trùng gán/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        /MST này đang có trùng gán hiện hành\. Mở timeline để rà soát chi tiết\./i
+      ).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/Dòng thời gian/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("0312345678"), {

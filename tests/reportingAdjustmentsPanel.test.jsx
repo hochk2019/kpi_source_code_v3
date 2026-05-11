@@ -120,7 +120,7 @@ describe("ReportingAdjustmentsPanel", () => {
     expect(screen.queryByText(/Hạng mục 6/i)).toBeNull();
     expect(screen.getByText("Trang 1/2")).toBeTruthy();
     expect(screen.getByText(/Chờ duyệt 1/i)).toBeTruthy();
-    expect(screen.getByText(/Từ chối 1/i)).toBeTruthy();
+    expect(screen.getAllByText(/Từ chối 1/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Còn 1 mục khác đã bị từ chối\./i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Sau" }));

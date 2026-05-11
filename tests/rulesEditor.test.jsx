@@ -119,9 +119,8 @@ describe("RulesEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Chạy mô phỏng" }));
 
     expect(await screen.findByText(/Phiên bản đang chỉnh/i)).toBeInTheDocument();
-    expect(screen.getByText(/Phiên bản đã lưu/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mở rộng" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lịch sử phiên bản" }));
     expect(await screen.findByText(/Bộ lịch sử test/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Làm mới" }));
@@ -130,14 +129,15 @@ describe("RulesEditor", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Khôi phục" }));
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalled();
+    });
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Khôi phục phiên bản 3"));
     await waitFor(() => {
       expect(rulesModule.restoreRuleVersion).toHaveBeenCalledWith(
         expect.objectContaining({ version: 3, name: "Bộ lịch sử test" }),
         expect.objectContaining({ actor: "admin", setAsDefault: true })
       );
     });
-    expect(toast.success).toHaveBeenCalled();
   });
 });

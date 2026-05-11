@@ -3,15 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { getAppTabRootId } from '@/components/appShell/appShellWorkflowState.js';
 
-let mstModuleLoadCount = 0;
+let mstHqModuleLoadCount = 0;
 let resolveAdjustmentsModule;
 
-vi.mock('@/components/workflows/MSTWorkflowPanel.jsx', () => {
-  mstModuleLoadCount += 1;
+vi.mock('@/components/MstHqContainer', () => {
+  mstHqModuleLoadCount += 1;
 
   return {
-    default: function MSTWorkflowPanelStub() {
-      return <div>MST workflow stub</div>;
+    default: function MstHqContainerStub() {
+      return <div>MST HQ container stub</div>;
     },
   };
 });
@@ -66,12 +66,12 @@ describe('KPICalculator lazy tab loading', () => {
     const view = render(<KPICalculator auth={adminAuth} activeTab="reports" />);
 
     expect(await screen.findByText('Report center stub')).toBeInTheDocument();
-    expect(mstModuleLoadCount).toBe(0);
+    expect(mstHqModuleLoadCount).toBe(0);
 
-    view.rerender(<KPICalculator auth={adminAuth} activeTab="mst" />);
+    view.rerender(<KPICalculator auth={adminAuth} activeTab="mst-hq" />);
 
-    expect(await screen.findByText('MST workflow stub')).toBeInTheDocument();
-    expect(mstModuleLoadCount).toBe(1);
+    expect(await screen.findByText('MST HQ container stub')).toBeInTheDocument();
+    expect(mstHqModuleLoadCount).toBe(1);
   });
 
   it('giu focus target va loading status san sang khi lazy tab dang resolve', async () => {

@@ -1,5 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import MstAssignmentStaffFilterPanel from "@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx";
@@ -10,7 +9,7 @@ afterEach(() => {
 });
 
 describe("mst assignment staff filter panel", () => {
-  it("renders the saved quick filters and wires actions to the provided callbacks", async () => {
+  it("renders the saved quick filters and wires actions to the provided callbacks", () => {
     const onClearStaffFilter = vi.fn();
     const onSaveStaffFavorite = vi.fn();
     const onStaffFilterSelect = vi.fn();
@@ -39,16 +38,16 @@ describe("mst assignment staff filter panel", () => {
     expect(screen.getByText(/2 bộ lọc nhanh/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lưu bộ lọc nhân viên" })).toBeEnabled();
 
-    await userEvent.click(screen.getByRole("button", { name: "Xóa lọc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xóa lọc" }));
     expect(onClearStaffFilter).toHaveBeenCalledTimes(1);
 
-    await userEvent.click(screen.getByRole("button", { name: "Lưu bộ lọc nhân viên" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu bộ lọc nhân viên" }));
     expect(onSaveStaffFavorite).toHaveBeenCalledTimes(1);
 
-    await userEvent.click(screen.getByRole("button", { name: "Nguyễn Văn A" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nguyễn Văn A" }));
     expect(onApplyStaffFavorite).toHaveBeenCalledWith("Nguyễn Văn A");
 
-    await userEvent.click(screen.getByRole("button", { name: "Xóa Nguyễn Văn A" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xóa Nguyễn Văn A" }));
     expect(onRemoveQuickFavorite).toHaveBeenCalledWith("staff", "Nguyễn Văn A");
   });
 
@@ -70,7 +69,7 @@ describe("mst assignment staff filter panel", () => {
     expect(screen.getByRole("button", { name: "Lưu bộ lọc nhân viên" })).toBeDisabled();
   });
 
-  it("surfaces lead-view quick filters for status and team selection", async () => {
+  it("surfaces lead-view quick filters for status and team selection", () => {
     const onLeadViewEnabledChange = vi.fn();
     const onLeadViewStatusChange = vi.fn();
     const onLeadViewTeamChange = vi.fn();
@@ -102,16 +101,15 @@ describe("mst assignment staff filter panel", () => {
     expect(screen.getAllByText(/Lead-view rút gọn/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("checkbox", { name: "Bật lead-view rút gọn" })).toBeChecked();
 
-    await userEvent.click(screen.getByRole("button", { name: "Đã gán đủ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Đã gán đủ" }));
     expect(onLeadViewStatusChange).toHaveBeenCalledWith(LEAD_VIEW_STATUSES.ASSIGNED);
 
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Lọc lead-view theo team" }),
-      "Beta",
-    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Lọc lead-view theo team" }), {
+      target: { value: "Beta" },
+    });
     expect(onLeadViewTeamChange).toHaveBeenCalledWith("Beta");
 
-    await userEvent.click(screen.getByRole("button", { name: "Xóa bộ lọc lead-view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xóa bộ lọc lead-view" }));
     expect(onResetLeadView).toHaveBeenCalledTimes(1);
   });
 });

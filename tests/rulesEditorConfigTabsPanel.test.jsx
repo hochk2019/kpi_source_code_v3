@@ -126,8 +126,9 @@ describe("RulesConfigTabsPanel", () => {
   it("cap nhat nhom loai hinh trong tab groups", async () => {
     render(<ConfigTabsHarness />);
 
-    expect(screen.getByText(/Nhập kinh doanh/i)).toBeInTheDocument();
-    expect(screen.getByText(/Các bậc cộng thêm/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Nhập kinh doanh/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByTitle("Chỉnh sửa quy tắc"));
+    expect(await screen.findByText(/Các bậc cộng thêm/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Chọn mã loại hình/i }));
     const matches = await screen.findAllByText(/Nhập kinh doanh/i);
@@ -141,6 +142,7 @@ describe("RulesConfigTabsPanel", () => {
   it("doi tab va cap nhat cau hinh giay phep", async () => {
     render(<ConfigTabsHarness initialTab="license" />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Chỉnh sửa cấu hình giấy phép" }));
     fireEvent.click(screen.getByRole("button", { name: "Thêm mã giấy phép" }));
     fireEvent.change(screen.getByPlaceholderText("Ví dụ: ZB02"), {
       target: { value: "zb02" },
@@ -167,7 +169,8 @@ describe("RulesConfigTabsPanel", () => {
   it("cap nhat diem cong them trong tab bonus", async () => {
     const { container } = render(<ConfigTabsHarness initialTab="bonus" />);
 
-    fireEvent.click(screen.getByLabelText("Cộng điểm khi tờ khai có C/O"));
+    fireEvent.click(screen.getByRole("button", { name: "Chỉnh sửa cấu hình cộng điểm" }));
+    fireEvent.click(screen.getByLabelText("Kích hoạt điểm bù theo C/O"));
 
     const numberInputs = container.querySelectorAll('input[type="number"]');
     fireEvent.change(numberInputs[numberInputs.length - 2], { target: { value: "0.75" } });

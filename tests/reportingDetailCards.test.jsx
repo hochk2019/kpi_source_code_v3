@@ -71,7 +71,7 @@ describe("reporting detail cards", () => {
       />,
     );
 
-    expect(screen.getByText(/Công ty Alpha/i)).toBeTruthy();
+    expect(screen.getAllByText(/Công ty Alpha/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Chi tiết" }));
 

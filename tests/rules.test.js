@@ -4,6 +4,17 @@ vi.mock('@/auth/localAuth.js', () => ({
   fetchWithAuth: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
 }));
 
+vi.mock('@/lib/storageClient.js', async () => {
+  const actual = await vi.importActual('@/lib/storageClient.js');
+  return {
+    ...actual,
+    setItem: vi.fn(async (key, value) => {
+      actual.updateCachedItem(key, value);
+      return value;
+    }),
+  };
+});
+
 import {
 
   computeKPI,

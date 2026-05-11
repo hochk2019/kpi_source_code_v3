@@ -193,7 +193,13 @@ describe("ReportingPanels", () => {
       expect(within(scheduleRegion).getByText(/Lịch đang tạm tắt/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText("Excel + PDF")).toBeTruthy();
       expect(within(scheduleRegion).getByText(/Không dùng email/i)).toBeTruthy();
-      expect(within(scheduleRegion).getByText(/Trung tâm báo cáo + Gói tải xuống/i)).toBeTruthy();
+      expect(
+        within(scheduleRegion).getAllByText(
+          (_, element) =>
+            (element?.textContent || '').includes('Trung tâm báo cáo') &&
+            (element?.textContent || '').includes('Gói tải xuống')
+        ).length
+      ).toBeGreaterThan(0);
       expect(within(scheduleRegion).getByText(/read model tháng mặc định 2026-03-01 → 2026-03-31/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText(/09:45 31\/03\/2026/)).toBeTruthy();
     } finally {

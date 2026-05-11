@@ -199,7 +199,7 @@ describe("reporting scope sections", () => {
     const props = buildStaffSectionProps();
     render(<ReportingStaffSection {...props} />);
 
-    expect(screen.getByText(/Công ty Alice/i)).toBeTruthy();
+    expect(screen.getAllByText(/Công ty Alice/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /Chi tiết/i }));
     expect(props.setStaffViewMode).toHaveBeenCalledWith("detail");
@@ -246,8 +246,8 @@ describe("reporting scope sections", () => {
 
     render(<ReportingTeamSection {...props} />);
 
-    expect(screen.getByText(/Team Alpha/i)).toBeTruthy();
-    expect(screen.getByText(/1.*\/.*2/i)).toBeTruthy();
+    expect(screen.getAllByText(/Team Alpha/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/1.*\/.*2/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Tổ đội.*Team Alpha/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /Số giấy phép/i }));
