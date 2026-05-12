@@ -580,6 +580,29 @@ ls -lh dist/assets/*.js | sort -k5 -h
 
 Target: main bundle ≤ 500KB (gzipped).
 
+### H3. Actual results (2026-05-12)
+
+Build succeeded in 6.85s. Bundle analysis:
+
+| Bundle | Size | Gzipped | Status |
+|--------|------|---------|--------|
+| index (main) | 156.69 kB | 48.07 kB | ✅ |
+| vendor-react-dom | 622.09 kB | 179.95 kB | vendor |
+| vendor-xlsx | 429.53 kB | 143.08 kB | vendor |
+| KPICalculator | 252.02 kB | 73.66 kB | lazy |
+| DataImporter | 242.87 kB | 69.31 kB | lazy |
+| ReportViewer | 117.04 kB | 24.80 kB | lazy |
+| vendor-radix | 117.52 kB | 34.84 kB | vendor |
+
+**Main bundle: 48 kB gzipped** — well under 500 kB target.
+Code splitting: 39 lazy-loaded chunks. Largest page chunk (KPICalculator): 73 kB gzipped.
+
+Lighthouse CLI not installed. Run manually:
+```powershell
+npm install -g lighthouse
+lighthouse http://localhost:4173 --output=json --quiet > lighthouse-snapshot.json
+```
+
 ---
 
 ## I. Common pitfalls khi update tests
