@@ -6,7 +6,7 @@ import React from 'react';
 
 
 
-import AiAssistant from '@/components/AiAssistant.jsx';
+import AiAssistant from '@/components/AiAssistant.tsx';
 
 import { installMockApi } from './helpers/mockApi.js';
 
@@ -106,7 +106,7 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
     installMockApi({
 
-      'GET /api/ai/profile': () =>
+      'GET /api/v4/ai/profile': () =>
 
         jsonResponse({
 
@@ -128,7 +128,7 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
         }),
 
-      'GET /api/ai/config': () =>
+      'GET /api/v4/ai/config': () =>
 
         jsonResponse({
 
@@ -162,9 +162,9 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
         }),
 
-      'GET /api/ai/history': () => jsonResponse({ ok: true, messages: [] }),
+      'GET /api/v4/ai/history': () => jsonResponse({ ok: true, messages: [] }),
 
-      'GET /api/ai/insights': () =>
+      'GET /api/v4/ai/insights': () =>
 
         jsonResponse({
 
@@ -186,11 +186,11 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
         }),
 
-      'GET /api/ai/data/snapshot': () => jsonResponse({ ok: true, snapshot: null }),
+      'GET /api/v4/ai/data/snapshot': () => jsonResponse({ ok: true, snapshot: null }),
 
-      'GET /api/ai/data/snapshot/history': () => jsonResponse({ ok: true, entries: [] }),
+      'GET /api/v4/ai/data/snapshot/history': () => jsonResponse({ ok: true, entries: [] }),
 
-      'PUT /api/ai/insights/settings': ({ init }) => {
+      'PUT /api/v4/ai/insights/settings': ({ init }) => {
 
         const body = JSON.parse(init?.body ?? '{}');
 
@@ -198,7 +198,7 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
       },
 
-      'POST /api/ai/providers/test': () =>
+      'POST /api/v4/ai/providers/test': () =>
 
         jsonResponse({
 
@@ -212,7 +212,7 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
         }),
 
-      'POST /api/ai/providers/ping': () =>
+      'POST /api/v4/ai/providers/ping': () =>
 
         jsonResponse({ ok: true, provider: { id: 'ollama-local' }, message: 'pong' }),
 
@@ -336,7 +336,7 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
     installMockApi({
 
-      'GET /api/ai/insights': () =>
+      'GET /api/v4/ai/insights': () =>
 
         jsonResponse({
 
@@ -382,9 +382,9 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
         }),
 
-      'GET /api/ai/data/snapshot/history': () => jsonResponse({ ok: true, entries: [historyEntry] }),
+      'GET /api/v4/ai/data/snapshot/history': () => jsonResponse({ ok: true, entries: [historyEntry] }),
 
-      'POST /api/ai/insights/feedback': ({ init }) => {
+      'POST /api/v4/ai/insights/feedback': ({ init }) => {
 
         const body = JSON.parse(init?.body ?? '{}');
 
@@ -406,7 +406,7 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
       },
 
-      'PUT /api/ai/insights/settings': ({ init }) => {
+      'PUT /api/v4/ai/insights/settings': ({ init }) => {
 
         const body = JSON.parse(init?.body ?? '{}');
 

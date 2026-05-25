@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 
 
-import AuditLog from '@/components/AuditLog.jsx';
+import AuditLog from '@/components/AuditLog.tsx';
 
 import { AUDIT_KEY } from '@/lib/store.js';
 
@@ -140,7 +140,7 @@ describe('AuditLog', () => {
 
     expect(fetchSpy).toHaveBeenCalledWith(
 
-      '/api/admin/backups/summary',
+      '/api/v4/backups/summary',
 
       expect.objectContaining({ cache: 'no-store' })
 
@@ -238,15 +238,15 @@ describe('AuditLog', () => {
 
     };
 
-    fetchSpy.mockImplementation((url, init) => {
+    fetchSpy.mockImplementation((url) => {
 
-      if (url === '/api/admin/backups/summary') {
+      if (url === '/api/v4/backups/summary') {
 
         return Promise.resolve(summaryResponse);
 
       }
 
-      if (url === '/api/admin/backups/files') {
+      if (url === '/api/v4/backups/files') {
 
         return Promise.resolve({
 
@@ -258,7 +258,7 @@ describe('AuditLog', () => {
 
       }
 
-      if (url === '/api/admin/backups/schedule') {
+      if (url === '/api/v4/backups/schedule') {
 
         return Promise.resolve(updateResponse);
 
@@ -350,6 +350,50 @@ describe('AuditLog', () => {
 
     });
 
+  });
+
+  it('downloads audit CSV through canonical v4 reporting route', async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => 'blob:audit-csv');
+    URL.revokeObjectURL = vi.fn();
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+
+    fetchSpy.mockImplementation((url) => {
+      if (url === '/api/v4/backups/summary') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ ok: true, summary: SUCCESS_SUMMARY }),
+        });
+      }
+      if (String(url).startsWith('/api/v4/reporting/audit/export')) {
+        return Promise.resolve({
+          ok: true,
+          blob: async () => new Blob(['audit']),
+        });
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
+
+    try {
+      render(<AuditLog currentUser={{ username: 'admin' }} />);
+      await screen.findByText('0 3 * * *');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Tải CSV' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/v4/reporting/audit/export',
+          expect.objectContaining({ headers: { Accept: 'text/csv' } })
+        )
+      );
+    } finally {
+      anchorClickSpy.mockRestore();
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
   });
 
 });

@@ -506,16 +506,6 @@ export async function enableDemoMode() {
 
   window.__kpiDemoMode = true
 
-  try {
-
-    window.localStorage?.setItem('kpi_session_token', 'demo-token')
-
-  } catch (err) {
-
-    console.warn('Không thể lưu token demo vào localStorage', err)
-
-  }
-
 
 
   const bootstrapStore = buildBootstrapStore()
@@ -628,6 +618,130 @@ export async function enableDemoMode() {
 
   }
 
+  const hqHistoryEntries = [
+
+    {
+
+      id: 'hq-0101234567-company-1',
+
+      mst: '0101234567',
+
+      field: 'company',
+
+      from: 'Công ty Ánh Dương',
+
+      to: 'Công ty Ánh Dương Logistics',
+
+      actor: 'admin',
+
+      timestamp: '2024-09-12T05:00:00.000Z',
+
+      type: 'update',
+
+    },
+
+    {
+
+      id: 'hq-0207654321-agency-1',
+
+      mst: '0207654321',
+
+      field: 'agency',
+
+      from: 'ECUS',
+
+      to: 'Excel',
+
+      actor: 'lan',
+
+      timestamp: '2024-09-10T02:30:00.000Z',
+
+      type: 'update',
+
+    },
+
+  ]
+
+  let backupSchedule = {
+
+    cron: '0 3 * * *',
+
+    cronDescription: 'Vào 03:00 hằng ngày',
+
+    retentionCopies: 14,
+
+    directory: '/var/backups/kpi',
+
+    directoryRaw: '/var/backups/kpi',
+
+    active: true,
+
+    reasons: [],
+
+    lastError: null,
+
+    refreshedAt: '2024-09-12T06:00:00.000Z',
+
+    nextRun: '2024-09-13T03:00:00.000Z',
+
+    nextRunHuman: '03:00 Thứ Sáu, 13/09/2024',
+
+  }
+
+  const backupFiles = [
+
+    {
+
+      filename: 'kpi-backup-20240912-030000.sql.gz',
+
+      size: 40960,
+
+      modifiedAt: '2024-09-12T03:00:00.000Z',
+
+    },
+
+    {
+
+      filename: 'kpi-backup-20240911-030000.sql.gz',
+
+      size: 39520,
+
+      modifiedAt: '2024-09-11T03:00:00.000Z',
+
+    },
+
+  ]
+
+  const buildBackupSummary = () => ({
+
+    ok: true,
+
+    summary: {
+
+      schedule: backupSchedule,
+
+      lastSuccess: {
+
+        ts: '2024-09-12T03:00:00.000Z',
+
+        actor: 'system',
+
+        action: 'db.backup',
+
+        detail: 'Sao lưu CSDL (scheduled)',
+
+        meta: { status: 'success', reason: 'scheduled', bytes: 40960 },
+
+      },
+
+      lastFailure: null,
+
+      recent: [],
+
+    },
+
+  })
+
 
 
   const responses = {
@@ -674,6 +788,14 @@ export async function enableDemoMode() {
 
     notifications: notificationHistory,
 
+    hqHistory: { entries: hqHistoryEntries, total: hqHistoryEntries.length, limit: 50 },
+
+    backupFiles: { ok: true, files: backupFiles },
+
+    backupRun: { ok: true, started: true },
+
+    backupRestore: { ok: true, restored: true },
+
   }
 
 
@@ -690,38 +812,102 @@ export async function enableDemoMode() {
 
     try {
 
-      if (url.includes('/api/auth/login')) return createResponse(responses.login)
+      if (url.includes('/api/v4/auth/login')) return createResponse(responses.login)
 
-      if (url.includes('/api/auth/session')) return createResponse(responses.session)
+      if (url.includes('/api/v4/auth/session')) return createResponse(responses.session)
 
-      if (url.includes('/api/auth/accounts')) return createResponse(responses.accounts)
+      if (url.includes('/api/v4/auth/accounts')) return createResponse(responses.accounts)
 
       if (url.includes('/api/bootstrap')) return createResponse(responses.bootstrap)
 
-      if (url.includes('/api/duplicate-policy')) return createResponse(responses.duplicatePolicy)
+      if (url.includes('/api/v4/duplicate-policy') || url.includes('/api/duplicate-policy')) return createResponse(responses.duplicatePolicy)
 
-      if (url.includes('/api/data-health/summary')) return createResponse(responses.dataHealth)
+      if (url.includes('/api/v4/data-health/summary') || url.includes('/api/data-health/summary')) return createResponse(responses.dataHealth)
 
-      if (url.includes('/api/training-resources')) return createResponse(responses.training)
+      if (url.includes('/api/v4/feedback-training/training-resources') || url.includes('/api/training-resources')) return createResponse(responses.training)
 
-      if (url.includes('/api/feedback/summary')) return createResponse(responses.feedbackSummary)
+      if (url.includes('/api/v4/feedback-training/feedback/summary') || url.includes('/api/feedback/summary')) return createResponse(responses.feedbackSummary)
 
-      if (url.includes('/api/feedback') && method === 'POST') return createResponse(responses.feedbackSubmit)
+      if ((url.includes('/api/v4/feedback-training/feedback') || url.includes('/api/feedback')) && method === 'POST') return createResponse(responses.feedbackSubmit)
 
-      if (url.includes('/api/ai/config')) return createResponse(responses.aiConfig)
+      if (url.includes('/api/v4/ai/config') || url.includes('/api/ai/config')) return createResponse(responses.aiConfig)
 
-      if (url.includes('/api/ai/cache')) return createResponse(responses.aiCache)
+      if (url.includes('/api/v4/ai/cache') || url.includes('/api/ai/cache')) return createResponse(responses.aiCache)
 
-      if (url.includes('/api/ai/history')) return createResponse(responses.aiHistory)
+      if (url.includes('/api/v4/ai/history') || url.includes('/api/ai/history')) return createResponse(responses.aiHistory)
 
-      if (url.includes('/api/ai/chat')) return createResponse(responses.aiChat)
+      if (url.includes('/api/v4/ai/chat') || url.includes('/api/ai/chat')) return createResponse(responses.aiChat)
 
-      if (url.includes('/api/ai/providers/test')) return createResponse(responses.aiProviderTest)
-      if (url.includes('/api/ai/providers/ping')) return createResponse(responses.aiProviderTest)
+      if (url.includes('/api/v4/ai/providers/test') || url.includes('/api/ai/providers/test')) return createResponse(responses.aiProviderTest)
+      if (url.includes('/api/v4/ai/providers/ping') || url.includes('/api/ai/providers/ping')) return createResponse(responses.aiProviderTest)
 
       if (url.includes('/api/storage/')) return createResponse(responses.storageOk)
 
-      if (url.includes('/api/notifications')) return createResponse(responses.notifications)
+      if (url.includes('/api/v4/alerts/notifications') || url.includes('/api/notifications')) return createResponse(responses.notifications)
+
+      if (url.includes('/api/v4/hq-agencies/history')) return createResponse(responses.hqHistory)
+
+      if (url.includes('/api/v4/backups/summary')) return createResponse(buildBackupSummary())
+
+      if (url.includes('/api/v4/backups/files')) return createResponse(responses.backupFiles)
+
+      if (url.includes('/api/v4/backups/schedule') && method === 'POST') {
+
+        try {
+
+          const payload = init?.body ? JSON.parse(init.body) : {}
+
+          const retentionValue = Number.parseInt(payload.retentionCopies, 10)
+
+          backupSchedule = {
+
+            ...backupSchedule,
+
+            cron: typeof payload?.cron === 'string' && payload.cron.trim() ? payload.cron.trim() : backupSchedule.cron,
+
+            retentionCopies: Number.isFinite(retentionValue) ? retentionValue : backupSchedule.retentionCopies,
+
+            directory: typeof payload?.directory === 'string' && payload.directory.trim() ? payload.directory.trim() : backupSchedule.directory,
+
+            directoryRaw: typeof payload?.directory === 'string' ? payload.directory.trim() : backupSchedule.directoryRaw,
+
+            active: payload?.cron !== 'never',
+
+            refreshedAt: new Date().toISOString(),
+
+          }
+
+        } catch {
+
+          // no-op for demo mode
+
+        }
+
+        return createResponse({
+
+          ok: true,
+
+          config: {
+
+            cron: backupSchedule.cron,
+
+            retentionCopies: backupSchedule.retentionCopies,
+
+            directory: backupSchedule.directory,
+
+            directoryRaw: backupSchedule.directoryRaw,
+
+          },
+
+          summary: buildBackupSummary().summary,
+
+        })
+
+      }
+
+      if (url.includes('/api/v4/backups/run') && method === 'POST') return createResponse(responses.backupRun)
+
+      if (url.includes('/api/v4/backups/restore') && method === 'POST') return createResponse(responses.backupRestore)
 
     } catch (error) {
 

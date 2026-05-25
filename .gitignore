@@ -5,7 +5,17 @@ node-compile-cache/
 server/data/*.sqlite
 server/data/*.sqlite-shm
 server/data/*.sqlite-wal
+server/data/backups/*.sqlite
+server/data/backups/*.sqlite-shm
+server/data/backups/*.sqlite-wal
 server/data/kpi-rules.json
 server/data/rules-history/
 .env
 test-results/
+.codex_tmp/
+.codex_tmp_*
+.gitnexus
+.tmp/
+/node
+.claude/
+!.claude/skills/gitnexus/

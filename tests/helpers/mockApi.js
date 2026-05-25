@@ -1,4 +1,8 @@
 import { vi } from 'vitest';
+import {
+  getPasswordMinLengthMessage,
+  MIN_PASSWORD_LENGTH,
+} from '../../packages/domain/src/passwordPolicy.js';
 
 import {
 
@@ -58,7 +62,7 @@ export function installMockApi(overrides = {}) {
 
 
 
-    if (path.startsWith('/api/auth/accounts/')) {
+    if (path.startsWith('/api/v4/auth/accounts/')) {
 
       const parts = path.split('/').filter(Boolean);
 
@@ -78,9 +82,9 @@ export function installMockApi(overrides = {}) {
 
         }
 
-        if (password.length < 6) {
+        if (password.length < MIN_PASSWORD_LENGTH) {
 
-          return jsonResponse({ ok: false, error: 'Mật khẩu cần tối thiểu 6 ký tự' }, 400);
+          return jsonResponse({ ok: false, error: getPasswordMinLengthMessage() }, 400);
 
         }
 
@@ -224,7 +228,7 @@ export function installMockApi(overrides = {}) {
 
 
 
-    if (path === '/api/auth/accounts' && method === 'POST') {
+    if (path === '/api/v4/auth/accounts' && method === 'POST') {
 
       const body = safeParse(init?.body, {});
 
@@ -244,9 +248,9 @@ export function installMockApi(overrides = {}) {
 
       const password = String(body?.password || '').trim();
 
-      if (password.length < 6) {
+      if (password.length < MIN_PASSWORD_LENGTH) {
 
-        return jsonResponse({ ok: false, error: 'Mật khẩu cần tối thiểu 6 ký tự' }, 400);
+        return jsonResponse({ ok: false, error: getPasswordMinLengthMessage() }, 400);
 
       }
 
@@ -282,7 +286,7 @@ export function installMockApi(overrides = {}) {
 
 
 
-    if (path === '/api/auth/password/change' && method === 'POST') {
+    if (path === '/api/v4/auth/password/change' && method === 'POST') {
 
       const body = safeParse(init?.body, {});
 
@@ -294,19 +298,19 @@ export function installMockApi(overrides = {}) {
 
       if (!username) {
 
-        return jsonResponse({ ok: false, error: "Thi???u tA?i kho???n c??\u0015n ?`??\u0007i m??-t kh??cu" }, 400);
+        return jsonResponse({ ok: false, error: "Thiếu tài khoản cần đổi mật khẩu." }, 400);
 
       }
 
-      if (newPassword.length < 6) {
+      if (newPassword.length < MIN_PASSWORD_LENGTH) {
 
-        return jsonResponse({ ok: false, error: "M??-t kh??cu m??>i c??\u0015n t??`i thi???u 6 kA? t???" }, 400);
+        return jsonResponse({ ok: false, error: "Mật khẩu mới cần tối thiểu " + MIN_PASSWORD_LENGTH + " ký tự." }, 400);
 
       }
 
       if (state.passwords.get(username) !== currentPassword) {
 
-        return jsonResponse({ ok: false, error: "M??-t kh??cu hi???n t???i khA'ng ?`A?ng" }, 400);
+        return jsonResponse({ ok: false, error: "Mật khẩu hiện tại không đúng." }, 400);
 
       }
 
@@ -316,9 +320,7 @@ export function installMockApi(overrides = {}) {
 
       state.currentUser = account ?? null;
 
-      state.sessionToken = `mock-token-${username}-${Date.now()}`;
-
-      return jsonResponse({ ok: true, account, token: state.sessionToken });
+      return jsonResponse({ ok: true, account });
 
     }
 

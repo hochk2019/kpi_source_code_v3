@@ -1,5 +1,7 @@
 import { test as base, expect } from '@playwright/test';
 
+import { resetStorageClientForTests } from '../../src/lib/storageClient.js';
+
 import {
 
   createDefaultAccountsState,
@@ -48,19 +50,63 @@ function toHeadersObject(headersList) {
 
 }
 
+function buildCorsHeaders(requestHeaders) {
+
+  const requestOrigin = String(requestHeaders?.origin || '').trim();
+  const referer = String(requestHeaders?.referer || '').trim();
+  const fallbackBaseUrl = String(process.env.PLAYWRIGHT_BASE_URL || '')
+    .trim()
+    || `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '4173'}`;
+  let fallbackOrigin = 'http://127.0.0.1:4173';
+  try {
+    fallbackOrigin = new URL(fallbackBaseUrl).origin;
+  } catch {
+    // keep default fallback origin
+  }
+
+  let allowOrigin = requestOrigin;
+  if (!allowOrigin && referer) {
+    try {
+      allowOrigin = new URL(referer).origin;
+    } catch {
+      allowOrigin = '';
+    }
+  }
+  if (!allowOrigin) {
+    allowOrigin = fallbackOrigin;
+  }
+  const allowHeaders =
+    String(requestHeaders?.['access-control-request-headers'] || '').trim() ||
+    'Content-Type, X-CSRF-Token';
+
+  return {
+    'access-control-allow-origin': allowOrigin,
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    'access-control-allow-headers': allowHeaders,
+    'access-control-allow-private-network': 'true',
+    'access-control-expose-headers': 'Content-Type, Content-Disposition',
+    vary: 'Origin',
+  };
+
+}
+
 
 
 const test = base.extend({
 
-  apiEvents: async (_args, applyFixture) => {
+  apiEvents: async ({ browserName }, applyFixture) => {
+    void browserName;
 
-    const events = { preview: [], run: [], reportExports: [] };
+    const events = { preview: [], run: [], reportExports: [], requests: [] };
 
     await applyFixture(events);
 
   },
 
   page: async ({ page, apiEvents }, applyFixture) => {
+
+    resetStorageClientForTests();
 
     const state = createDefaultAccountsState();
 
@@ -78,7 +124,7 @@ const test = base.extend({
 
     handlerMap.set('GET /api/bootstrap', () => jsonResponse({ ok: true, data: {} }));
 
-    handlerMap.set('GET /api/import/ecus/status', () =>
+    handlerMap.set('GET /api/v4/declarations/imports/ecus-status', () =>
 
       jsonResponse({
 
@@ -112,11 +158,79 @@ const test = base.extend({
 
 
 
-    handlerMap.set('POST /api/import/ecus/preview', ({ init }) => {
+    handlerMap.set('POST /api/import/ecus/preview', ({ init, path }) => {
 
       const body = safeParse(init?.body, {});
 
-      apiEvents.preview.push(body);
+      apiEvents.preview.push({ path, body });
+
+      const from = body?.from || '2025-08-01';
+
+      const to = body?.to || '2025-08-02';
+
+      return jsonResponse({
+
+        ok: true,
+
+        preview: {
+
+          rows: [
+
+            {
+
+              so_tk: 'TK-PREVIEW-001',
+
+              date: '2025-08-01',
+
+              mst: '0101234567',
+
+              cong_ty: 'CÔNG TY PREVIEW',
+
+              nhan_vien: '',
+
+              status: 'new',
+
+              co_line_count: 2,
+
+            },
+
+            {
+
+              so_tk: 'TK-PREVIEW-888',
+
+              date: '2025-08-01',
+
+              mst: '0312345678',
+
+              cong_ty: 'CÔNG TY ĐÃ CÓ',
+
+              nhan_vien: 'Hạnh',
+
+              status: 'existing',
+
+              co_line_count: 0,
+
+            },
+
+          ],
+
+          limited: false,
+
+          fetched: 2,
+
+          range: { from, to },
+
+        },
+
+      });
+
+    });
+
+    handlerMap.set('POST /api/v4/declarations/imports/ecus-preview', ({ init, path }) => {
+
+      const body = safeParse(init?.body, {});
+
+      apiEvents.preview.push({ path, body });
 
       const from = body?.from || '2025-08-01';
 
@@ -182,11 +296,27 @@ const test = base.extend({
 
 
 
-    handlerMap.set('POST /api/import/ecus/run', ({ init }) => {
+    handlerMap.set('POST /api/import/ecus/run', ({ init, path }) => {
 
       const body = safeParse(init?.body, {});
 
-      apiEvents.run.push(body);
+      apiEvents.run.push({ path, body });
+
+      return jsonResponse({
+
+        ok: true,
+
+        result: { imported: 4, fetched: 4, skipped: 0, alerts: {} },
+
+      });
+
+    });
+
+    handlerMap.set('POST /api/v4/declarations/imports/ecus-commit', ({ init, path }) => {
+
+      const body = safeParse(init?.body, {});
+
+      apiEvents.run.push({ path, body });
 
       return jsonResponse({
 
@@ -227,12 +357,63 @@ const test = base.extend({
       };
 
     });
+    handlerMap.set('POST /api/v4/reporting/exports', ({ init }) => {
+
+      const payload = safeParse(init?.body, {});
+
+      apiEvents.reportExports.push(payload);
+
+      const buffer = Buffer.from('mock-excel');
+
+      return {
+
+        ok: true,
+
+        status: 200,
+
+        body: buffer,
+
+        headers: {
+
+          'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+
+          'content-disposition': "attachment; filename=bao-cao-kpi.xlsx",
+
+        },
+
+      };
+
+    });
 
 
 
     handlerMap.set('GET /api/import/co-discrepancy', () =>
 
       jsonResponse({ ok: true, state: { lastRun: null, total: 0, limited: false, entries: [] } })
+
+    );
+
+    handlerMap.set('GET /api/v4/declarations/imports/co-codes', () =>
+
+      jsonResponse({ ok: true, config: { whitelist: [], blacklist: [] } })
+
+    );
+
+    handlerMap.set('PUT /api/v4/declarations/imports/co-codes', ({ init }) => {
+
+      const body = safeParse(init?.body, {});
+
+      return jsonResponse({ ok: true, config: body?.config || { whitelist: [], blacklist: [] } });
+
+    });
+
+    handlerMap.set('GET /api/v4/declarations/imports/co-discrepancy', () =>
+
+      jsonResponse({
+        ok: true,
+        config: { enabled: false, cron: '', rangeDays: 3, threshold: 10, sampleLimit: 500 },
+        state: { lastRun: null, total: 0, limited: false, entries: [] },
+      })
 
     );
 
@@ -260,6 +441,60 @@ const test = base.extend({
 
     });
 
+    handlerMap.set('PUT /api/v4/declarations/imports/co-discrepancy/config', ({ init }) => {
+
+      const body = safeParse(init?.body, {});
+
+      return jsonResponse({ ok: true, config: body?.config || {} });
+
+    });
+
+    handlerMap.set('POST /api/v4/declarations/imports/co-discrepancy/run', ({ init }) => {
+
+      const body = safeParse(init?.body, {});
+
+      return jsonResponse({
+
+        ok: true,
+
+        result: {
+
+          config: { enabled: false, cron: '', rangeDays: 3, threshold: 10, sampleLimit: 500 },
+
+          state: {
+
+            lastRunAt: null,
+
+            range: body?.range || null,
+
+            mismatchCount: 0,
+
+            totalChecked: 0,
+
+            status: 'ok',
+
+            error: null,
+
+            durationMs: 0,
+
+            mismatches: [],
+
+            triggered: false,
+
+            limited: false,
+
+            actor: null,
+
+            reason: body?.reason || null,
+
+          },
+
+        },
+
+      });
+
+    });
+
 
 
     await page.route('**/api/**', async (route, request) => {
@@ -270,23 +505,36 @@ const test = base.extend({
 
       const path = normalisePath(url);
 
+      const headersArray =
+
+        typeof request.headersArray === 'function'
+
+          ? request.headersArray()
+
+          : Object.entries(request.headers());
+
+      const requestHeaders = toHeadersObject(headersArray);
+      const corsHeaders = buildCorsHeaders(requestHeaders);
+
+      apiEvents.requests.push({ method, path });
+
+      if (method === 'OPTIONS') {
+
+        await route.fulfill({ status: 204, body: '', headers: corsHeaders });
+
+        return;
+
+      }
+
       const handler = resolveHandler(handlerMap, method, path);
 
       if (handler) {
-
-        const headersArray =
-
-          typeof request.headersArray === 'function'
-
-            ? request.headersArray()
-
-            : Object.entries(request.headers());
 
         const init = {
 
           method,
 
-          headers: toHeadersObject(headersArray),
+          headers: requestHeaders,
 
           body: request.postData(),
 
@@ -296,7 +544,7 @@ const test = base.extend({
 
         if (!result) {
 
-          await route.fulfill({ status: 204, body: '' });
+          await route.fulfill({ status: 204, body: '', headers: corsHeaders });
 
           return;
 
@@ -304,7 +552,7 @@ const test = base.extend({
 
 
 
-        const headers = { 'content-type': 'application/json', ...(result.headers || {}) };
+        const headers = { ...corsHeaders, 'content-type': 'application/json', ...(result.headers || {}) };
 
         const status = result.status ?? (result.ok === false ? 500 : 200);
 
@@ -334,7 +582,11 @@ const test = base.extend({
 
 
 
-      await route.fulfill({ status: 200, body: JSON.stringify({ ok: true }), headers: { 'content-type': 'application/json' } });
+      await route.fulfill({
+        status: 200,
+        body: JSON.stringify({ ok: true }),
+        headers: { ...corsHeaders, 'content-type': 'application/json' },
+      });
 
     });
 

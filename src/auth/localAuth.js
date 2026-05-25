@@ -14,7 +14,12 @@ import {
 
   normalizeRoleKey,
 
-} from "../shared/accountRoles.js";
+} from "../../packages/domain/src/accountRoles.js";
+import {
+  getNewPasswordMinLengthMessage,
+  getPasswordMinLengthMessage,
+  MIN_PASSWORD_LENGTH,
+} from "../../packages/domain/src/passwordPolicy.js";
 
 
 
@@ -22,7 +27,13 @@ export const PERMISSION_KEYS = [...ACCOUNT_PERMISSION_KEYS];
 
 export const ROLE_OPTIONS = listRoleOptions();
 
-export { ADMIN_ROLE, DEFAULT_ROLE, TEAM_LEAD_ROLE, MANAGER_ROLE } from "../shared/accountRoles.js";
+export { ADMIN_ROLE, DEFAULT_ROLE, TEAM_LEAD_ROLE, MANAGER_ROLE } from "../../packages/domain/src/accountRoles.js";
+export {
+  getNewPasswordMinLengthMessage,
+  getPasswordMinLengthMessage,
+  getPasswordMinLengthPlaceholder,
+  MIN_PASSWORD_LENGTH,
+} from "../../packages/domain/src/passwordPolicy.js";
 
 
 
@@ -34,127 +45,36 @@ export function normalizeRole(role) {
 
 
 
-const MIN_PASSWORD_LENGTH = 6;
-
-
-
 let sessionCache = null;
 
 let accountCache = [];
 
 
 
-const SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
-
-let sessionTokenCache = null;
-
-let sessionTokenLoaded = false;
-
+const LEGACY_SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
+const CSRF_COOKIE_NAME = 'kpi_csrf';
+const CSRF_HEADER_NAME = 'X-CSRF-Token';
+const UNSAFE_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 
-function getBrowserStorage() {
+
+function clearLegacySessionToken() {
 
   if (typeof window === 'undefined') {
 
-    return null;
+    return;
 
   }
 
   try {
 
-    return window.localStorage ?? null;
+    window.localStorage?.removeItem(LEGACY_SESSION_TOKEN_STORAGE_KEY);
 
   } catch {
 
-    return null;
+    // ignore storage errors
 
   }
-
-}
-
-
-
-function loadSessionTokenFromStorage() {
-
-  if (sessionTokenLoaded) {
-
-    return sessionTokenCache;
-
-  }
-
-  sessionTokenLoaded = true;
-
-  const storage = getBrowserStorage();
-
-  if (!storage) {
-
-    sessionTokenCache = null;
-
-    return sessionTokenCache;
-
-  }
-
-  try {
-
-    const value = storage.getItem(SESSION_TOKEN_STORAGE_KEY);
-
-    if (value && typeof value === 'string') {
-
-      const trimmed = value.trim();
-
-      sessionTokenCache = trimmed ? trimmed : null;
-
-    } else {
-
-      sessionTokenCache = null;
-
-    }
-
-  } catch {
-
-    sessionTokenCache = null;
-
-  }
-
-  return sessionTokenCache;
-
-}
-
-
-
-function setSessionToken(token) {
-
-  const normalized = typeof token === 'string' ? token.trim() : '';
-
-  sessionTokenCache = normalized || null;
-
-  sessionTokenLoaded = true;
-
-  const storage = getBrowserStorage();
-
-  if (storage) {
-
-    try {
-
-      if (sessionTokenCache) {
-
-        storage.setItem(SESSION_TOKEN_STORAGE_KEY, sessionTokenCache);
-
-      } else {
-
-        storage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-
-      }
-
-    } catch {
-
-      // ignore storage errors
-
-    }
-
-  }
-
-  return sessionTokenCache;
 
 }
 
@@ -162,7 +82,9 @@ function setSessionToken(token) {
 
 export function getSessionToken() {
 
-  return sessionTokenLoaded ? sessionTokenCache : loadSessionTokenFromStorage();
+  clearLegacySessionToken();
+
+  return null;
 
 }
 
@@ -236,6 +158,50 @@ function setAccountCache(accounts) {
 
 let apiBaseCache = null;
 
+function normalizeApiBase(rawBase) {
+  if (typeof rawBase !== "string") {
+    return "";
+  }
+
+  const trimmed = rawBase.trim();
+  if (!trimmed || trimmed === "/") {
+    return "";
+  }
+
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
+function shouldPreferDevProxy(base) {
+  if (!base) {
+    return false;
+  }
+
+  if (!(base.startsWith("http://") || base.startsWith("https://"))) {
+    return false;
+  }
+
+  const runtimeEnv = typeof import.meta === "undefined" ? undefined : import.meta.env;
+
+  if (runtimeEnv?.MODE === "test") {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  if (runtimeEnv?.DEV !== true) {
+    return false;
+  }
+
+  try {
+    const targetOrigin = new URL(base).origin;
+    return targetOrigin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 
 
 function resolveApiBase() {
@@ -254,15 +220,8 @@ function resolveApiBase() {
 
   }
 
-  if (typeof base !== "string") {
-
-    base = "";
-
-  }
-
-  base = base.trim();
-
-  apiBaseCache = base.endsWith("/") ? base.slice(0, -1) : base;
+  const normalizedBase = normalizeApiBase(base);
+  apiBaseCache = shouldPreferDevProxy(normalizedBase) ? "" : normalizedBase;
 
   return apiBaseCache;
 
@@ -284,7 +243,14 @@ export function buildUrl(path) {
 
   const normalized = path.startsWith("/") ? path : `/${path}`;
 
-  return `${base || ""}${normalized}`;
+  if (!base) {
+    const origin = typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost";
+    return `${origin}${normalized}`;
+  }
+
+  return `${base}${normalized}`;
 
 }
 
@@ -292,19 +258,40 @@ export function buildUrl(path) {
 
 export function createAuthHeaders(baseHeaders) {
 
+  clearLegacySessionToken();
+
   const headers =
 
     baseHeaders instanceof Headers ? new Headers(baseHeaders) : new Headers(baseHeaders || undefined);
 
-  const token = getSessionToken();
+  return headers;
 
-  if (token) {
+}
 
-    headers.set('Authorization', `Bearer ${token}`);
+function readCookie(name) {
+
+  if (typeof document === 'undefined') {
+
+    return '';
 
   }
 
-  return headers;
+  const entries = `${document.cookie || ''}`.split(';');
+  for (const entry of entries) {
+    const trimmed = entry.trim();
+    if (!trimmed.startsWith(`${name}=`)) {
+      continue;
+    }
+    return decodeURIComponent(trimmed.slice(name.length + 1));
+  }
+
+  return '';
+
+}
+
+function shouldAttachCsrfHeader(method) {
+
+  return UNSAFE_HTTP_METHODS.has(`${method || 'GET'}`.trim().toUpperCase());
 
 }
 
@@ -321,6 +308,12 @@ export function fetchWithAuth(path, init = {}) {
   const finalInit = { ...init };
 
   finalInit.headers = createAuthHeaders(init.headers);
+  if (shouldAttachCsrfHeader(finalInit.method) && !finalInit.headers.has(CSRF_HEADER_NAME)) {
+    const csrfToken = readCookie(CSRF_COOKIE_NAME);
+    if (csrfToken) {
+      finalInit.headers.set(CSRF_HEADER_NAME, csrfToken);
+    }
+  }
 
   if (finalInit.credentials === undefined) {
 
@@ -367,8 +360,9 @@ async function requestJson(path, { method = "GET", body } = {}) {
   if (!response.ok) {
 
     const message = payload?.error || payload?.message || `HTTP ${response.status}`;
-
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
 
   }
 
@@ -376,7 +370,29 @@ async function requestJson(path, { method = "GET", body } = {}) {
 
 }
 
+function readResponseData(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const data = payload.data;
+  return data && typeof data === "object" ? data : null;
+}
 
+function readAuthUser(payload) {
+  const data = readResponseData(payload);
+  return data?.user ?? payload?.user ?? data?.account ?? payload?.account ?? null;
+}
+
+function readAuthAccount(payload) {
+  const data = readResponseData(payload);
+  return data?.account ?? payload?.account ?? null;
+}
+
+function readAuthAccounts(payload) {
+  const data = readResponseData(payload);
+  const accounts = data?.accounts ?? payload?.accounts ?? [];
+  return Array.isArray(accounts) ? accounts : [];
+}
 
 function sanitizeUserForSession(user) {
 
@@ -418,11 +434,11 @@ function sanitizeUserForSession(user) {
 
 function setSessionFromUser(user) {
 
+  clearLegacySessionToken();
+
   if (!user) {
 
     sessionCache = null;
-
-    setSessionToken(null);
 
     return null;
 
@@ -448,6 +464,58 @@ function syncSessionForUser(user) {
 
   return null;
 
+}
+
+function authRoute(...segments) {
+  const normalizedSegments = segments
+    .map((segment) => String(segment || "").replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  const suffix = normalizedSegments.length ? `/${normalizedSegments.join("/")}` : "";
+  return `/api/v4/auth${suffix}`;
+}
+
+const AUTH_LOGIN_ROUTE = authRoute("login");
+const AUTH_SESSION_ROUTE = authRoute("session");
+const AUTH_LOGOUT_ROUTE = authRoute("logout");
+const AUTH_ACCOUNTS_ROUTE = authRoute("accounts");
+
+function toUserFacingLoginError(error) {
+  const status = Number(error?.status);
+  const rawMessage = String(error?.message || "").trim();
+  const normalized = rawMessage.toLowerCase();
+
+  if (!rawMessage) {
+    return "Không đăng nhập được. Vui lòng thử lại.";
+  }
+
+  if (
+    normalized.includes("sai tài khoản") ||
+    normalized.includes("sai mat khau") ||
+    normalized.includes("invalid credential") ||
+    status === 401
+  ) {
+    return "Sai tài khoản hoặc mật khẩu";
+  }
+
+  if (status === 404 || normalized.includes("http 404")) {
+    return "Không tìm thấy API đăng nhập. Vui lòng kiểm tra API base/proxy.";
+  }
+
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("load failed") ||
+    normalized.includes("cors") ||
+    normalized.includes("err_network")
+  ) {
+    return "Không kết nối được máy chủ đăng nhập. Vui lòng kiểm tra proxy/CORS.";
+  }
+
+  if (status === 429 || normalized.includes("too many request")) {
+    return "Bạn thử đăng nhập quá nhiều lần. Vui lòng đợi một lúc rồi thử lại.";
+  }
+
+  return rawMessage;
 }
 
 
@@ -506,7 +574,7 @@ export async function login(usernameInput, passwordInput) {
 
   try {
 
-    const payload = await requestJson("/api/auth/login", {
+    const payload = await requestJson(AUTH_LOGIN_ROUTE, {
 
       method: "POST",
 
@@ -514,9 +582,7 @@ export async function login(usernameInput, passwordInput) {
 
     });
 
-    setSessionToken(payload?.token ?? null);
-
-    const session = setSessionFromUser(payload?.user);
+    const session = setSessionFromUser(readAuthUser(payload));
 
     await reloadAccounts().catch(() => {});
 
@@ -524,7 +590,7 @@ export async function login(usernameInput, passwordInput) {
 
   } catch (err) {
 
-    return { ok: false, error: err?.message || "Sai tài khoản hoặc mật khẩu" };
+    return { ok: false, error: toUserFacingLoginError(err) };
 
   }
 
@@ -536,17 +602,12 @@ export async function loadSession() {
 
   try {
 
-    const payload = await requestJson("/api/auth/session");
+    const payload = await requestJson(AUTH_SESSION_ROUTE);
 
-    const session = setSessionFromUser(payload?.user);
+    const sessionUser = readAuthUser(payload);
+    const session = setSessionFromUser(sessionUser);
 
-    if (payload?.token) {
-
-      setSessionToken(payload.token);
-
-    }
-
-    if (payload?.user) {
+    if (sessionUser) {
 
       await reloadAccounts().catch(() => {});
 
@@ -570,7 +631,7 @@ export async function logout() {
 
   try {
 
-    await requestJson("/api/auth/logout", { method: "POST" });
+    await requestJson(AUTH_LOGOUT_ROUTE, { method: "POST" });
 
   } catch {
 
@@ -612,9 +673,9 @@ export function getPermissionTemplate(role = DEFAULT_ROLE) {
 
 export async function reloadAccounts() {
 
-  const payload = await requestJson("/api/auth/accounts");
+  const payload = await requestJson(AUTH_ACCOUNTS_ROUTE);
 
-  const accounts = setAccountCache(payload?.accounts ?? []);
+  const accounts = setAccountCache(readAuthAccounts(payload));
 
   if (sessionCache) {
 
@@ -634,63 +695,67 @@ export async function reloadAccounts() {
 
 
 
-export async function createAccount(payload, { actor = "system" } = {}) {
+export async function createAccount(payload) {
 
-  const response = await requestJson("/api/auth/accounts", {
+  const response = await requestJson(AUTH_ACCOUNTS_ROUTE, {
 
     method: "POST",
 
-    body: { ...payload, actor },
+    body: { ...payload },
 
   });
 
-  setAccountCache(response?.accounts ?? []);
+  setAccountCache(readAuthAccounts(response));
 
-  return response?.account ?? null;
+  return readAuthAccount(response);
 
 }
 
 
 
-export async function updateAccount(usernameInput, patch, { actor = "system" } = {}) {
+export async function updateAccount(usernameInput, patch) {
 
-  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+  const response = await requestJson(authRoute("accounts", encodeURIComponent(usernameInput)), {
 
     method: "PATCH",
 
-    body: { ...patch, actor },
+    body: { ...patch },
 
   });
 
-  const accounts = setAccountCache(response?.accounts ?? []);
+  const accounts = setAccountCache(readAuthAccounts(response));
+  const updatedAccount = readAuthAccount(response);
 
-  syncSessionForUser(response?.account);
+  syncSessionForUser(updatedAccount);
 
-  return response?.account ?? accounts.find((account) => account.username === usernameInput) ?? null;
+  return updatedAccount ?? accounts.find((account) => account.username === usernameInput) ?? null;
 
 }
 
 
 
-export async function setAccountPassword(usernameInput, newPasswordInput, { actor = "system" } = {}) {
+export async function setAccountPassword(usernameInput, newPasswordInput) {
 
   const password = String(newPasswordInput || "").trim();
 
   if (password.length < MIN_PASSWORD_LENGTH) {
 
-    throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+    throw new Error(getPasswordMinLengthMessage());
 
   }
 
-  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}/password`, {
+  const response = await requestJson(
+    authRoute("accounts", encodeURIComponent(usernameInput), "password"),
+    {
 
-    method: "POST",
+      method: "POST",
 
-    body: { password, actor },
+      body: { password },
 
-  });
+    },
+  );
 
-  setAccountCache(response?.accounts ?? []);
+  setAccountCache(readAuthAccounts(response));
 
   if (sessionCache?.username === usernameInput) {
 
@@ -704,17 +769,15 @@ export async function setAccountPassword(usernameInput, newPasswordInput, { acto
 
 
 
-export async function deleteAccount(usernameInput, { actor = "system" } = {}) {
+export async function deleteAccount(usernameInput) {
 
-  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+  const response = await requestJson(authRoute("accounts", encodeURIComponent(usernameInput)), {
 
     method: "DELETE",
 
-    body: { actor },
-
   });
 
-  const accounts = setAccountCache(response?.accounts ?? []);
+  const accounts = setAccountCache(readAuthAccounts(response));
 
   const session = getAuth();
 
@@ -740,11 +803,11 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
 
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
 
-    throw new Error(`Mật khẩu mới cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+    throw new Error(getNewPasswordMinLengthMessage());
 
   }
 
-  const response = await requestJson("/api/auth/password/change", {
+  const response = await requestJson(authRoute("password", "change"), {
 
     method: "POST",
 
@@ -752,11 +815,9 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
 
   });
 
-  setSessionToken(response?.token ?? null);
-
   await reloadAccounts().catch(() => {});
 
-  const session = setSessionFromUser(response?.account);
+  const session = setSessionFromUser(readAuthAccount(response) ?? readAuthUser(response));
 
   return session;
 

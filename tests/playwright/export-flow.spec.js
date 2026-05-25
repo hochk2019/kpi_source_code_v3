@@ -32,9 +32,9 @@ test('xuất Excel các tờ khai đã chọn trong Import Data', async ({ page 
 
   await page.getByRole('button', { name: 'Import XLSX' }).click();
 
+  const sourceStage = page.getByLabel('Bước 1: Nạp nguồn');
 
-
-  await page.getByRole('button', { name: 'Hiển thị dữ liệu đã lưu' }).click();
+  await sourceStage.getByRole('button', { name: 'Hiển thị dữ liệu đã lưu' }).click();
 
   const checkbox = page.locator('tbody input[type="checkbox"]').first();
 

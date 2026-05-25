@@ -6,9 +6,13 @@ import XLSX from 'xlsx';
 
 
 
-export function registerDialogAutoAccept(page) {
+export function registerDialogAutoAccept(page, { promptText = 'Playwright@2026' } = {}) {
 
   page.on('dialog', (dialog) => {
+    if (dialog.type() === 'prompt') {
+      dialog.accept(promptText).catch(() => {});
+      return;
+    }
 
     dialog.accept().catch(() => {});
 
@@ -22,21 +26,74 @@ export async function loginAsAdmin(page) {
 
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Đăng nhập quản trị' }).click();
+  const loginButton = page.getByRole('button', { name: 'Đăng nhập quản trị' });
+  const logoutButton = page.getByRole('button', { name: 'Đăng xuất' });
 
-  await page.getByPlaceholder('admin').fill('admin');
-
-  await page.getByPlaceholder(/•/).fill('admin123');
-
-  await Promise.all([
-
-    page.waitForResponse((resp) => resp.url().includes('/api/auth/login') && resp.request().method() === 'POST'),
-
-    page.getByRole('button', { name: /^Đăng nhập$/i }).click(),
-
+  await Promise.race([
+    loginButton.waitFor({ state: 'visible', timeout: 10000 }),
+    logoutButton.waitFor({ state: 'visible', timeout: 10000 }),
   ]);
 
-  await page.getByText(/Xin chào, \s*Quản trị viên/i).waitFor();
+  if (await logoutButton.isVisible().catch(() => false)) {
+    return;
+  }
+
+  await loginButton.click();
+  await page.getByPlaceholder('admin').fill('admin');
+  await page.getByPlaceholder(/•/).fill('admin123');
+
+  const loginResponse = await Promise.all([
+    page.waitForResponse((resp) => {
+      if (resp.request().method() !== 'POST') {
+        return false;
+      }
+      const pathname = new URL(resp.url()).pathname;
+      return pathname === '/api/v4/auth/login';
+    }),
+    page.getByRole('button', { name: /^Đăng nhập$/i }).click(),
+  ]).then(([response]) => response);
+
+  if (loginResponse.status() >= 400) {
+    const payload = await loginResponse.text().catch(() => '');
+    throw new Error(`Đăng nhập quản trị thất bại (${loginResponse.status()}): ${payload}`);
+  }
+
+  const signedInWithoutReload = await page
+    .getByRole('button', { name: 'Đăng xuất' })
+    .isVisible()
+    .catch(() => false);
+
+  if (!signedInWithoutReload) {
+    await page.reload();
+  }
+
+  await page.getByRole('button', { name: 'Đăng xuất' }).waitFor({ timeout: 20000 });
+  await page.getByRole('button', { name: 'Đăng nhập quản trị' }).waitFor({ state: 'hidden', timeout: 20000 });
+
+}
+
+async function revealTab(page, tabName) {
+
+  const visibleTab = page.getByRole('tab', { name: tabName });
+
+  if (await visibleTab.isVisible().catch(() => false)) {
+    return visibleTab;
+  }
+
+  const group = page
+    .locator('.ds-app-shell__nav-group')
+    .filter({ has: page.getByRole('tab', { name: tabName, includeHidden: true }) })
+    .first();
+
+  if (await group.count()) {
+    const toggle = group.locator('.ds-app-shell__group-toggle');
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+  }
+
+  await visibleTab.waitFor();
+
+  return visibleTab;
 
 }
 
@@ -44,9 +101,78 @@ export async function loginAsAdmin(page) {
 
 export async function openImportTab(page) {
 
-  await page.getByRole('tab', { name: 'Import Data' }).click();
+  const importTab = await revealTab(page, 'Import Data');
+  const importRoot = page.locator('#app-tab-root-import');
 
-  await page.getByRole('heading', { name: 'Đồng bộ ECUS' }).waitFor();
+  if (!(await importRoot.isVisible().catch(() => false))) {
+
+    await importTab.scrollIntoViewIfNeeded();
+    await importTab.click();
+
+  }
+
+  if (!(await importRoot.isVisible().catch(() => false))) {
+
+    await page.getByRole('button', { name: 'Command Center' }).first().click();
+
+    const commandDialog = page.getByRole('dialog');
+    const commandSearch = commandDialog.getByRole('searchbox', { name: 'Tìm thao tác trong Command Center' });
+
+    await commandSearch.fill('Import Data');
+    await commandDialog.getByRole('button', { name: /^Đi tới tab Import Data/i }).click();
+
+  }
+
+  await importRoot.waitFor({ state: 'visible' });
+  await Promise.any([
+    page.getByRole('button', { name: /Xem trước/i }).waitFor({ timeout: 5000 }),
+    page.getByRole('button', { name: /Đồng bộ/i }).waitFor({ timeout: 5000 }),
+    importRoot.locator('h1, h2, h3, [role="heading"]').first().waitFor({ timeout: 5000 }),
+  ]).catch(() => {});
+
+}
+
+async function openTabWithRoot(page, tabName, tabId) {
+
+  const tab = await revealTab(page, tabName);
+  const root = page.locator(`#app-tab-root-${tabId}`);
+
+  if (!(await root.isVisible().catch(() => false))) {
+    await tab.scrollIntoViewIfNeeded();
+    await tab.click();
+  }
+
+  await root.waitFor({ state: 'visible' });
+
+  return root;
+
+}
+
+export async function openAccountsTab(page) {
+
+  await openTabWithRoot(page, 'Tài khoản', 'accounts');
+  await page.getByRole('button', { name: 'Tạo tài khoản' }).waitFor();
+
+}
+
+export async function openTeamsTab(page) {
+
+  await openTabWithRoot(page, 'Quản lý Tổ đội', 'teams');
+  await page.getByRole('button', { name: 'Lưu thay đổi' }).waitFor();
+
+}
+
+export async function openHQTab(page) {
+
+  await openTabWithRoot(page, 'Đại Lý HQ', 'hq');
+  await page.getByRole('button', { name: 'Lưu cấu hình' }).waitFor();
+
+}
+
+export async function openReportsTab(page) {
+
+  await openTabWithRoot(page, 'Báo cáo KPI', 'reports');
+  await page.getByRole('region', { name: 'Điều khiển báo cáo KPI' }).waitFor();
 
 }
 

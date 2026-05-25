@@ -1,0 +1,12 @@
+{
+  "name": "@kpi/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:v4": "pnpm --dir ../.. build:server-v4",
+    "dev": "pnpm run build:v4 && node src/cli.js",
+    "start": "pnpm run build:v4 && node src/cli.js",
+    "test": "pnpm --dir ../.. vitest run tests/appsApiRuntimeConfig.test.js tests/appsApiStart.test.js --environment node",
+    "typecheck:v4": "pnpm --dir ../.. typecheck:server-v4"
+  }
+}

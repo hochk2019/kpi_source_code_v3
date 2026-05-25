@@ -1,0 +1,35 @@
+{
+  "name": "@kpi/backend-shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./auth": {
+      "types": "./src/auth/index.d.ts",
+      "default": "./src/auth/index.js"
+    },
+    "./ecus": {
+      "types": "./src/ecus/index.d.ts",
+      "default": "./src/ecus/index.js"
+    },
+    "./persistence": {
+      "types": "./src/persistence/index.d.ts",
+      "default": "./src/persistence/index.js"
+    },
+    "./reporting": {
+      "types": "./src/reporting/index.d.ts",
+      "default": "./src/reporting/index.js"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.d.ts",
+      "default": "./src/runtime/index.js"
+    },
+    "./testing": {
+      "types": "./src/testing/index.d.ts",
+      "default": "./src/testing/index.js"
+    }
+  }
+}

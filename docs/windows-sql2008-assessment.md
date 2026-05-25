@@ -19,8 +19,9 @@
 2. **Phân trang tương thích SQL 2008**: Hiện tại khi `compatibility_level < 110` hệ thống tải toàn bộ dữ liệu rồi lọc trên Node.js, có thể chậm với dữ liệu lớn. Có thể thêm tuỳ chọn `ROW_NUMBER()` để mô phỏng phân trang cho SQL 2008 nhằm giảm tải mạng và bộ nhớ.【F:server/index.js†L7281-L7335】【F:server/index.js†L8667-L8742】
 3. **Giám sát & cảnh báo kết nối**: Mặc dù đã ghi nhận timeout, có thể bổ sung health-check định kỳ cho cổng SQL (ví dụ script Powershell dùng `Test-NetConnection`) và ghi log rõ ràng để cảnh báo sớm khi dịch vụ SQL Server dừng hoặc thông tin đăng nhập hết hạn.【F:server/index.js†L7336-L7522】【F:server/index.js†L9061-L9081】
 
-## 4. Tình trạng kế hoạch nâng cấp
-- Đối chiếu lại `TODO.md` xác nhận toàn bộ 11 hạng mục lớn (Import Data → UI/UX chung) đều đã đánh dấu hoàn tất, không còn công việc bỏ sót trong kế hoạch nâng cấp KPI v4.0.【F:TODO.md†L1-L94】
+## 4. Tình trạng tài liệu theo dõi
+- `TODO.md` và `docs/system-v4-review-plan.md` là tài liệu review/lập kế hoạch của các giai đoạn cũ, không còn phản ánh đúng runtime và backlog hiện tại nên đã được loại khỏi bộ tài liệu theo dõi chủ động.
+- Trạng thái công việc hiện tại được theo dõi bằng bead đang hoạt động và bộ notebook gốc repo (`task.md`, `task_plan.md`, `findings.md`, `progress.md`), tránh tiếp tục dùng tài liệu lịch sử như nguồn sự thật vận hành.
 
 ## 5. Gợi ý tối ưu giao diện & trải nghiệm
 1. **Hiển thị trạng thái tải preset rõ ràng**: Cụm thao tác lưu preset trong Import Data hiện chỉ vô hiệu hoá nút khi đang đồng bộ (`presetBusy`) mà chưa hiển thị tiến trình; nên bổ sung spinner hoặc nhãn “Đang xử lý” trong menu preset để tránh người dùng thao tác lặp.【F:src/components/DataImporter.jsx†L2250-L2285】【F:src/components/DataImporter.jsx†L7080-L7145】

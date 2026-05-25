@@ -1,0 +1,10 @@
+{
+  "name": "@kpi/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --dir ../.. dev:frontend",
+    "build": "pnpm --dir ../.. build",
+    "test": "pnpm --dir ../.. test:frontend"
+  }
+}

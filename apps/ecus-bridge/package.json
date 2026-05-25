@@ -1,0 +1,13 @@
+{
+  "name": "@kpi/ecus-bridge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ./src/bridgeCli.js",
+    "service:install": "node ./src/bridgeWindowsServiceCli.js install",
+    "service:remove": "node ./src/bridgeWindowsServiceCli.js remove",
+    "service:status": "node ./src/bridgeWindowsServiceCli.js status",
+    "inspect": "pnpm --dir ../.. ecus:inspect",
+    "mock": "pnpm --dir ../.. ecus:mock"
+  }
+}

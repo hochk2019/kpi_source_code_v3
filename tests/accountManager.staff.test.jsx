@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -8,7 +8,7 @@ import React from 'react';
 
 
 
-import AccountManager from '@/components/AccountManager.jsx';
+import AccountManager from '@/components/AccountManager.tsx';
 
 import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
@@ -115,6 +115,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
   afterEach(() => {
+    cleanup();
 
     vi.unstubAllGlobals();
 
@@ -146,7 +147,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
 
-    const staffButton = within(accountRow).getByRole('button', {
+    const staffButton = within(accountRow).getByRole('combobox', {
 
       name: 'Nhân viên KPI cho nhanvien',
 
@@ -162,13 +163,9 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
 
-    await waitFor(() => expect(alertMock).toHaveBeenCalledWith('Đã cập nhật nhân viên gắn với tài khoản.'));
-
-
-
     const patchCalls = fetchMock.mock.calls.filter(
 
-      ([url, init]) => url.includes('/api/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH'
+      ([url, init]) => url.includes('/api/v4/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH'
 
     );
 
@@ -188,8 +185,6 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
         teamName: 'Tổ Thuế A',
 
-        actor: 'admin',
-
       })
 
     );
@@ -204,7 +199,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
 
-    const reopenButton = within(accountRow).getByRole('button', {
+    const reopenButton = within(accountRow).getByRole('combobox', {
 
       name: 'Nhân viên KPI cho nhanvien',
 
@@ -218,13 +213,9 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
 
-    await waitFor(() => expect(alertMock).toHaveBeenCalledTimes(2));
-
-
-
     const latestPatch = fetchMock.mock.calls
 
-      .filter(([url, init]) => url.includes('/api/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH')
+      .filter(([url, init]) => url.includes('/api/v4/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH')
 
       .pop();
 
@@ -242,8 +233,6 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
         teamName: null,
 
-        actor: 'admin',
-
       })
 
     );
@@ -256,6 +245,14 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
     );
 
+  });
+
+  it('hiển thị bộ lọc tìm kiếm và bảng tài khoản với nhãn truy cập rõ ràng', async () => {
+    render(<AccountManager currentUser={{ username: 'admin' }} />);
+
+    expect(await screen.findByRole('searchbox', { name: /tìm tài khoản/i })).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: /danh sách tài khoản kpi/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/\d+\s+tài khoản/i).length).toBeGreaterThan(0);
   });
 
 

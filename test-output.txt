@@ -1,0 +1,4193 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mE:/GPT/kpi_source_code_v4[39m
+
+ [31mΓ¥»[39m tests/ConflictResolutionDialog.test.jsx [2m([22m[2m7 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[90m 138[2mms[22m[39m
+[31m   [31m├ù[31m ConflictResolutionDialog[2m > [22mcalls onResolve with server-wins strategy when clicking Server button[90m 13[2mms[22m[31m[39m
+[31m     ΓåÆ Found multiple elements by: [data-testid="server-wins-button"]
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+  [33mdata-testid[31m=[32m"server-wins-button"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mGiß╗» phi├¬n bß║ún Server[0m
+[36m</button>[31m
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+  [33mdata-testid[31m=[32m"server-wins-button"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mGiß╗» phi├¬n bß║ún Server[0m
+[36m</button>[31m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div />[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby[31m=[32m"conflict-title"[31m
+      [33maria-modal[31m=[32m"true"[31m
+      [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+      [33mrole[31m=[32m"dialog"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+      [36m>[31m
+        [36m<h2[31m
+          [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+          [33mid[31m=[32m"conflict-title"[31m
+        [36m>[31m
+          [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+        [36m</h2>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+        [36m>[31m
+          [0mDß╗» liß╗çu [0m
+          [36m<strong>[31m
+            [0mdeclarations[0m
+          [36m</strong>[31m
+          [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+        [36m</p>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 rounded-lg bg-amber-50 p-4"[31m
+        [36m>[31m
+          [36m<h3[31m
+            [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+          [36m>[31m
+            [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+          [36m</h3>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"list-inside list-disc text-sm text-amber-700"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0mname[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0mLocal Version[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0mServer Version[0m
+              [36m</span>[31m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0mversion[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0m5[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0m8[0m
+              [36m</span>[31m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+            [33mdata-testid[31m=[32m"local-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+            [36m>[31m
+              [0m≡ƒôü Phi├¬n bß║ún Local[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m15:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-green-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m5[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+              [33mdata-testid[31m=[32m"local-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Local[0m
+            [36m</button>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+            [33mdata-testid[31m=[32m"server-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+            [36m>[31m
+              [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m17:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-blue-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m8[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+              [33mdata-testid[31m=[32m"server-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Server[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+        [36m>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+            [33mtype[31m=[32m"button"[31m
+          [36m>[31m
+            [0mHß╗ºy bß╗Å[0m
+          [36m</button>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"flex gap-2"[31m
+          [36m>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGß╗Öp cß║ú hai (Merge)[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+        [36m>[31m
+          [36m<p[31m
+            [33mclass[31m=[32m"font-medium"[31m
+          [36m>[31m
+            [0m≡ƒÆí L╞░u ├╜:[0m
+          [36m</p>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby[31m=[32m"conflict-title"[31m
+      [33maria-modal[31m=[32m"true"[31m
+      [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+      [33mrole[31m=[32m"dialog"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+      [36m>[31m
+        [36m<h2[31m
+          [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+          [33mid[31m=[32m"conflict-title"[31m
+        [36m>[31m
+          [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+        [36m</h2>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+        [36m>[31m
+          [0mDß╗» liß╗çu [0m
+          [36m<strong>[31m
+            [0mdata[0m
+          [36m</strong>[31m
+          [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+        [36m</p>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+            [33mdata-testid[31m=[32m"local-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+            [36m>[31m
+              [0m≡ƒôü Phi├¬n bß║ún Local[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m15:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-green-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m5[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+              [33mdata-testid[31m=[32m"local-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Local[0m
+            [36m</button>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+            [33mdata-testid[31m=[32m"server-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+            [36m>[31m
+              [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m17:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-blue-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m8[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+              [33mdata-testid[31m=[32m"server-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Server[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+        [36m>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+            [33mtype[31m=[32m"button"[31m
+          [36m>[31m
+            [0mHß╗ºy bß╗Å[0m
+          [36m</button>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"flex gap-2"[31m
+          [36m>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGß╗Öp cß║ú hai (Merge)[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+        [36m>[31m
+          [36m<p[31m
+            [33mclass[31m=[32m"font-medium"[31m
+          [36m>[31m
+            [0m≡ƒÆí L╞░u ├╜:[0m
+          [36m</p>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[31m   [31m├ù[31m ConflictResolutionDialog[2m > [22mcalls onResolve with local-wins strategy when clicking Local button[90m 6[2mms[22m[31m[39m
+[31m     ΓåÆ Found multiple elements by: [data-testid="local-wins-button"]
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+  [33mdata-testid[31m=[32m"local-wins-button"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mGiß╗» phi├¬n bß║ún Local[0m
+[36m</button>[31m
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+  [33mdata-testid[31m=[32m"local-wins-button"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mGiß╗» phi├¬n bß║ún Local[0m
+[36m</button>[31m
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+  [33mdata-testid[31m=[32m"local-wins-button"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mGiß╗» phi├¬n bß║ún Local[0m
+[36m</button>[31m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div />[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby[31m=[32m"conflict-title"[31m
+      [33maria-modal[31m=[32m"true"[31m
+      [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+      [33mrole[31m=[32m"dialog"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+      [36m>[31m
+        [36m<h2[31m
+          [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+          [33mid[31m=[32m"conflict-title"[31m
+        [36m>[31m
+          [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+        [36m</h2>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+        [36m>[31m
+          [0mDß╗» liß╗çu [0m
+          [36m<strong>[31m
+            [0mdeclarations[0m
+          [36m</strong>[31m
+          [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+        [36m</p>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 rounded-lg bg-amber-50 p-4"[31m
+        [36m>[31m
+          [36m<h3[31m
+            [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+          [36m>[31m
+            [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+          [36m</h3>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"list-inside list-disc text-sm text-amber-700"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0mname[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0mLocal Version[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0mServer Version[0m
+              [36m</span>[31m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0mversion[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0m5[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0m8[0m
+              [36m</span>[31m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+            [33mdata-testid[31m=[32m"local-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+            [36m>[31m
+              [0m≡ƒôü Phi├¬n bß║ún Local[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m15:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-green-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m5[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+              [33mdata-testid[31m=[32m"local-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Local[0m
+            [36m</button>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+            [33mdata-testid[31m=[32m"server-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+            [36m>[31m
+              [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m17:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-blue-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m8[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+              [33mdata-testid[31m=[32m"server-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Server[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+        [36m>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+            [33mtype[31m=[32m"button"[31m
+          [36m>[31m
+            [0mHß╗ºy bß╗Å[0m
+          [36m</button>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"flex gap-2"[31m
+          [36m>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGß╗Öp cß║ú hai (Merge)[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+        [36m>[31m
+          [36m<p[31m
+            [33mclass[31m=[32m"font-medium"[31m
+          [36m>[31m
+            [0m≡ƒÆí L╞░u ├╜:[0m
+          [36m</p>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby...[39m
+[31m   [31m├ù[31m ConflictResolutionDialog[2m > [22mcalls onCancel when clicking Cancel button[90m 10[2mms[22m[31m[39m
+[31m     ΓåÆ Found multiple elements with the text: Hß╗ºy bß╗Å
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mHß╗ºy bß╗Å[0m
+[36m</button>[31m
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mHß╗ºy bß╗Å[0m
+[36m</button>[31m
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mHß╗ºy bß╗Å[0m
+[36m</button>[31m
+
+Ignored nodes: comments, script, style
+[36m<button[31m
+  [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+  [33mtype[31m=[32m"button"[31m
+[36m>[31m
+  [0mHß╗ºy bß╗Å[0m
+[36m</button>[31m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div />[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby[31m=[32m"conflict-title"[31m
+      [33maria-modal[31m=[32m"true"[31m
+      [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+      [33mrole[31m=[32m"dialog"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+      [36m>[31m
+        [36m<h2[31m
+          [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+          [33mid[31m=[32m"conflict-title"[31m
+        [36m>[31m
+          [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+        [36m</h2>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+        [36m>[31m
+          [0mDß╗» liß╗çu [0m
+          [36m<strong>[31m
+            [0mdeclarations[0m
+          [36m</strong>[31m
+          [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+        [36m</p>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 rounded-lg bg-amber-50 p-4"[31m
+        [36m>[31m
+          [36m<h3[31m
+            [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+          [36m>[31m
+            [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+          [36m</h3>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"list-inside list-disc text-sm text-amber-700"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0mname[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0mLocal Version[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0mServer Version[0m
+              [36m</span>[31m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0mversion[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0m5[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0m8[0m
+              [36m</span>[31m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+            [33mdata-testid[31m=[32m"local-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+            [36m>[31m
+              [0m≡ƒôü Phi├¬n bß║ún Local[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m15:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-green-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m5[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+              [33mdata-testid[31m=[32m"local-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Local[0m
+            [36m</button>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+            [33mdata-testid[31m=[32m"server-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+            [36m>[31m
+              [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m17:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-blue-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m8[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+              [33mdata-testid[31m=[32m"server-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Server[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+        [36m>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+            [33mtype[31m=[32m"button"[31m
+          [36m>[31m
+            [0mHß╗ºy bß╗Å[0m
+          [36m</button>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"flex gap-2"[31m
+          [36m>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGß╗Öp cß║ú hai (Merge)[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+        [36m>[31m
+          [36m<p[31m
+            [33mclass[31m=[32m"font-medium"[31m
+          [36m>[31m
+            [0m≡ƒÆí L╞░u ├╜:[0m
+          [36m</p>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby...[39m
+[31m   [31m├ù[31m ConflictResolutionDialog[2m > [22mdisplays conflict fields with values[90m 10[2mms[22m[31m[39m
+[31m     ΓåÆ Found multiple elements with the text: C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<h3[31m
+  [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+[36m>[31m
+  [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+[36m</h3>[31m
+
+Ignored nodes: comments, script, style
+[36m<h3[31m
+  [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+[36m>[31m
+  [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+[36m</h3>[31m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div />[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby[31m=[32m"conflict-title"[31m
+      [33maria-modal[31m=[32m"true"[31m
+      [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+      [33mrole[31m=[32m"dialog"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+      [36m>[31m
+        [36m<h2[31m
+          [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+          [33mid[31m=[32m"conflict-title"[31m
+        [36m>[31m
+          [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+        [36m</h2>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+        [36m>[31m
+          [0mDß╗» liß╗çu [0m
+          [36m<strong>[31m
+            [0mdeclarations[0m
+          [36m</strong>[31m
+          [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+        [36m</p>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 rounded-lg bg-amber-50 p-4"[31m
+        [36m>[31m
+          [36m<h3[31m
+            [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+          [36m>[31m
+            [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+          [36m</h3>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"list-inside list-disc text-sm text-amber-700"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0mname[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0mLocal Version[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0mServer Version[0m
+              [36m</span>[31m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0mversion[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0m5[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0m8[0m
+              [36m</span>[31m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+            [33mdata-testid[31m=[32m"local-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+            [36m>[31m
+              [0m≡ƒôü Phi├¬n bß║ún Local[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m15:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-green-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m5[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+              [33mdata-testid[31m=[32m"local-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Local[0m
+            [36m</button>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+            [33mdata-testid[31m=[32m"server-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+            [36m>[31m
+              [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m17:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-blue-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m8[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+              [33mdata-testid[31m=[32m"server-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Server[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+        [36m>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+            [33mtype[31m=[32m"button"[31m
+          [36m>[31m
+            [0mHß╗ºy bß╗Å[0m
+          [36m</button>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"flex gap-2"[31m
+          [36m>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGß╗Öp cß║ú hai (Merge)[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+        [36m>[31m
+          [36m<p[31m
+            [33mclass[31m=[32m"font-medium"[31m
+          [36m>[31m
+            [0m≡ƒÆí L╞░u ├╜:[0m
+          [36m</p>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby...[39m
+[31m   [31m├ù[31m ConflictResolutionDialog[2m > [22mhas correct ARIA attributes for accessibility[90m 45[2mms[22m[31m[39m
+[31m     ΓåÆ Found multiple elements with the role "dialog"
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33maria-labelledby[31m=[32m"conflict-title"[31m
+  [33maria-modal[31m=[32m"true"[31m
+  [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+  [33mrole[31m=[32m"dialog"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+  [36m>[31m
+    [36m<h2[31m
+      [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+      [33mid[31m=[32m"conflict-title"[31m
+    [36m>[31m
+      [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+    [36m</h2>[31m
+    [36m<p[31m
+      [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+    [36m>[31m
+      [0mDß╗» liß╗çu [0m
+      [36m<strong>[31m
+        [0mdeclarations[0m
+      [36m</strong>[31m
+      [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+    [36m</p>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 rounded-lg bg-amber-50 p-4"[31m
+    [36m>[31m
+      [36m<h3[31m
+        [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+      [36m>[31m
+        [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+      [36m</h3>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"list-inside list-disc text-sm text-amber-700"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0mname[0m
+          [0m:[0m
+          [0m [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-green-600"[31m
+          [36m>[31m
+            [0mLocal Version[0m
+          [36m</span>[31m
+          [0m vs [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-blue-600"[31m
+          [36m>[31m
+            [0mServer Version[0m
+          [36m</span>[31m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0mversion[0m
+          [0m:[0m
+          [0m [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-green-600"[31m
+          [36m>[31m
+            [0m5[0m
+          [36m</span>[31m
+          [0m vs [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-blue-600"[31m
+          [36m>[31m
+            [0m8[0m
+          [36m</span>[31m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+        [33mdata-testid[31m=[32m"local-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+        [36m>[31m
+          [0m≡ƒôü Phi├¬n bß║ún Local[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m15:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-green-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m5[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+          [33mdata-testid[31m=[32m"local-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Local[0m
+        [36m</button>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+        [33mdata-testid[31m=[32m"server-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+        [36m>[31m
+          [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m17:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-blue-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m8[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+          [33mdata-testid[31m=[32m"server-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Server[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+    [36m>[31m
+      [36m<button[31m
+        [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+        [33mtype[31m=[32m"button"[31m
+      [36m>[31m
+        [0mHß╗ºy bß╗Å[0m
+      [36m</button>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"flex gap-2"[31m
+      [36m>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGß╗Öp cß║ú hai (Merge)[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+    [36m>[31m
+      [36m<p[31m
+        [33mclass[31m=[32m"font-medium"[31m
+      [36m>[31m
+        [0m≡ƒÆí L╞░u ├╜:[0m
+      [36m</p>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</div>[31m
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33maria-labelledby[31m=[32m"conflict-title"[31m
+  [33maria-modal[31m=[32m"true"[31m
+  [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+  [33mrole[31m=[32m"dialog"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+  [36m>[31m
+    [36m<h2[31m
+      [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+      [33mid[31m=[32m"conflict-title"[31m
+    [36m>[31m
+      [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+    [36m</h2>[31m
+    [36m<p[31m
+      [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+    [36m>[31m
+      [0mDß╗» liß╗çu [0m
+      [36m<strong>[31m
+        [0mdata[0m
+      [36m</strong>[31m
+      [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+    [36m</p>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+        [33mdata-testid[31m=[32m"local-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+        [36m>[31m
+          [0m≡ƒôü Phi├¬n bß║ún Local[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m15:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-green-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m5[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+          [33mdata-testid[31m=[32m"local-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Local[0m
+        [36m</button>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+        [33mdata-testid[31m=[32m"server-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+        [36m>[31m
+          [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m17:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-blue-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m8[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+          [33mdata-testid[31m=[32m"server-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Server[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+    [36m>[31m
+      [36m<button[31m
+        [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+        [33mtype[31m=[32m"button"[31m
+      [36m>[31m
+        [0mHß╗ºy bß╗Å[0m
+      [36m</button>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"flex gap-2"[31m
+      [36m>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGß╗Öp cß║ú hai (Merge)[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+    [36m>[31m
+      [36m<p[31m
+        [33mclass[31m=[32m"font-medium"[31m
+      [36m>[31m
+        [0m≡ƒÆí L╞░u ├╜:[0m
+      [36m</p>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</div>[31m
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33maria-labelledby[31m=[32m"conflict-title"[31m
+  [33maria-modal[31m=[32m"true"[31m
+  [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+  [33mrole[31m=[32m"dialog"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+  [36m>[31m
+    [36m<h2[31m
+      [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+      [33mid[31m=[32m"conflict-title"[31m
+    [36m>[31m
+      [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+    [36m</h2>[31m
+    [36m<p[31m
+      [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+    [36m>[31m
+      [0mDß╗» liß╗çu [0m
+      [36m<strong>[31m
+        [0mdata[0m
+      [36m</strong>[31m
+      [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+    [36m</p>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+        [33mdata-testid[31m=[32m"local-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+        [36m>[31m
+          [0m≡ƒôü Phi├¬n bß║ún Local[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m15:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-green-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m5[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+          [33mdata-testid[31m=[32m"local-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Local[0m
+        [36m</button>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+        [33mdata-testid[31m=[32m"server-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+        [36m>[31m
+          [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m17:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-blue-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m8[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+          [33mdata-testid[31m=[32m"server-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Server[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+    [36m>[31m
+      [36m<button[31m
+        [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+        [33mtype[31m=[32m"button"[31m
+      [36m>[31m
+        [0mHß╗ºy bß╗Å[0m
+      [36m</button>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"flex gap-2"[31m
+      [36m>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGß╗Öp cß║ú hai (Merge)[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+    [36m>[31m
+      [36m<p[31m
+        [33mclass[31m=[32m"font-medium"[31m
+      [36m>[31m
+        [0m≡ƒÆí L╞░u ├╜:[0m
+      [36m</p>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</div>[31m
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33maria-labelledby[31m=[32m"conflict-title"[31m
+  [33maria-modal[31m=[32m"true"[31m
+  [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+  [33mrole[31m=[32m"dialog"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+  [36m>[31m
+    [36m<h2[31m
+      [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+      [33mid[31m=[32m"conflict-title"[31m
+    [36m>[31m
+      [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+    [36m</h2>[31m
+    [36m<p[31m
+      [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+    [36m>[31m
+      [0mDß╗» liß╗çu [0m
+      [36m<strong>[31m
+        [0mdata[0m
+      [36m</strong>[31m
+      [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+    [36m</p>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+        [33mdata-testid[31m=[32m"local-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+        [36m>[31m
+          [0m≡ƒôü Phi├¬n bß║ún Local[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m15:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-green-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m5[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+          [33mdata-testid[31m=[32m"local-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Local[0m
+        [36m</button>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+        [33mdata-testid[31m=[32m"server-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+        [36m>[31m
+          [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m17:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-blue-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m8[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+          [33mdata-testid[31m=[32m"server-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Server[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+    [36m>[31m
+      [36m<button[31m
+        [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+        [33mtype[31m=[32m"button"[31m
+      [36m>[31m
+        [0mHß╗ºy bß╗Å[0m
+      [36m</button>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"flex gap-2"[31m
+      [36m>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGß╗Öp cß║ú hai (Merge)[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+    [36m>[31m
+      [36m<p[31m
+        [33mclass[31m=[32m"font-medium"[31m
+      [36m>[31m
+        [0m≡ƒÆí L╞░u ├╜:[0m
+      [36m</p>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</div>[31m
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33maria-labelledby[31m=[32m"conflict-title"[31m
+  [33maria-modal[31m=[32m"true"[31m
+  [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+  [33mrole[31m=[32m"dialog"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+  [36m>[31m
+    [36m<h2[31m
+      [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+      [33mid[31m=[32m"conflict-title"[31m
+    [36m>[31m
+      [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+    [36m</h2>[31m
+    [36m<p[31m
+      [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+    [36m>[31m
+      [0mDß╗» liß╗çu [0m
+      [36m<strong>[31m
+        [0mdata[0m
+      [36m</strong>[31m
+      [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+    [36m</p>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 rounded-lg bg-amber-50 p-4"[31m
+    [36m>[31m
+      [36m<h3[31m
+        [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+      [36m>[31m
+        [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+      [36m</h3>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"list-inside list-disc text-sm text-amber-700"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0mname[0m
+          [0m:[0m
+          [0m [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-green-600"[31m
+          [36m>[31m
+            [0mLocal Version[0m
+          [36m</span>[31m
+          [0m vs [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-blue-600"[31m
+          [36m>[31m
+            [0mServer Version[0m
+          [36m</span>[31m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0mversion[0m
+          [0m:[0m
+          [0m [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-green-600"[31m
+          [36m>[31m
+            [0m5[0m
+          [36m</span>[31m
+          [0m vs [0m
+          [36m<span[31m
+            [33mclass[31m=[32m"text-blue-600"[31m
+          [36m>[31m
+            [0m8[0m
+          [36m</span>[31m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+        [33mdata-testid[31m=[32m"local-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+        [36m>[31m
+          [0m≡ƒôü Phi├¬n bß║ún Local[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m15:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-green-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m5[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+          [33mdata-testid[31m=[32m"local-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Local[0m
+        [36m</button>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+        [33mdata-testid[31m=[32m"server-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+        [36m>[31m
+          [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m17:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-blue-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m8[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+          [33mdata-testid[31m=[32m"server-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Server[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+    [36m>[31m
+      [36m<button[31m
+        [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+        [33mtype[31m=[32m"button"[31m
+      [36m>[31m
+        [0mHß╗ºy bß╗Å[0m
+      [36m</button>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"flex gap-2"[31m
+      [36m>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGß╗Öp cß║ú hai (Merge)[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+    [36m>[31m
+      [36m<p[31m
+        [33mclass[31m=[32m"font-medium"[31m
+      [36m>[31m
+        [0m≡ƒÆí L╞░u ├╜:[0m
+      [36m</p>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</div>[31m
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33maria-labelledby[31m=[32m"conflict-title"[31m
+  [33maria-modal[31m=[32m"true"[31m
+  [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+  [33mrole[31m=[32m"dialog"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+  [36m>[31m
+    [36m<h2[31m
+      [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+      [33mid[31m=[32m"conflict-title"[31m
+    [36m>[31m
+      [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+    [36m</h2>[31m
+    [36m<p[31m
+      [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+    [36m>[31m
+      [0mDß╗» liß╗çu [0m
+      [36m<strong>[31m
+        [0mdata[0m
+      [36m</strong>[31m
+      [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+    [36m</p>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+        [33mdata-testid[31m=[32m"local-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+        [36m>[31m
+          [0m≡ƒôü Phi├¬n bß║ún Local[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m15:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-green-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m5[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+          [33mdata-testid[31m=[32m"local-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Local[0m
+        [36m</button>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+        [33mdata-testid[31m=[32m"server-card"[31m
+      [36m>[31m
+        [36m<h3[31m
+          [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+        [36m>[31m
+          [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+        [36m</h3>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+        [36m>[31m
+          [0mCß║¡p nhß║¡t l├║c: [0m
+          [0m17:00:00 29/4/2026[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-xs text-blue-600"[31m
+        [36m>[31m
+          [0mVersion: [0m
+          [0m8[0m
+        [36m</p>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+          [33mdata-testid[31m=[32m"server-wins-button"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGiß╗» phi├¬n bß║ún Server[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+    [36m>[31m
+      [36m<button[31m
+        [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+        [33mtype[31m=[32m"button"[31m
+      [36m>[31m
+        [0mHß╗ºy bß╗Å[0m
+      [36m</button>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"flex gap-2"[31m
+      [36m>[31m
+        [36m<button[31m
+          [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+          [33mtype[31m=[32m"button"[31m
+        [36m>[31m
+          [0mGß╗Öp cß║ú hai (Merge)[0m
+        [36m</button>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+    [36m>[31m
+      [36m<p[31m
+        [33mclass[31m=[32m"font-medium"[31m
+      [36m>[31m
+        [0m≡ƒÆí L╞░u ├╜:[0m
+      [36m</p>[31m
+      [36m<ul[31m
+        [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+      [36m>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+        [36m</li>[31m
+        [36m<li>[31m
+          [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+        [36m</li>[31m
+      [36m</ul>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</div>[31m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div />[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby[31m=[32m"conflict-title"[31m
+      [33maria-modal[31m=[32m"true"[31m
+      [33mclass[31m=[32m"fixed inset-0 z-50 flex items-center justify-center bg-black/50"[31m
+      [33mrole[31m=[32m"dialog"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"[31m
+      [36m>[31m
+        [36m<h2[31m
+          [33mclass[31m=[32m"mb-4 text-xl font-semibold text-gray-900"[31m
+          [33mid[31m=[32m"conflict-title"[31m
+        [36m>[31m
+          [0mPh├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu[0m
+        [36m</h2>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"mb-6 text-gray-600"[31m
+        [36m>[31m
+          [0mDß╗» liß╗çu [0m
+          [36m<strong>[31m
+            [0mdeclarations[0m
+          [36m</strong>[31m
+          [0m tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?[0m
+        [36m</p>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 rounded-lg bg-amber-50 p-4"[31m
+        [36m>[31m
+          [36m<h3[31m
+            [33mclass[31m=[32m"mb-2 font-medium text-amber-800"[31m
+          [36m>[31m
+            [0mC├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:[0m
+          [36m</h3>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"list-inside list-disc text-sm text-amber-700"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0mname[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0mLocal Version[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0mServer Version[0m
+              [36m</span>[31m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0mversion[0m
+              [0m:[0m
+              [0m [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-green-600"[31m
+              [36m>[31m
+                [0m5[0m
+              [36m</span>[31m
+              [0m vs [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-blue-600"[31m
+              [36m>[31m
+                [0m8[0m
+              [36m</span>[31m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mb-6 grid gap-4 md:grid-cols-2"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-green-200 bg-green-50"[31m
+            [33mdata-testid[31m=[32m"local-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-green-800"[31m
+            [36m>[31m
+              [0m≡ƒôü Phi├¬n bß║ún Local[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-green-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m15:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-green-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m5[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"[31m
+              [33mdata-testid[31m=[32m"local-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Local[0m
+            [36m</button>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"rounded-lg border-2 p-4 border-blue-200 bg-blue-50"[31m
+            [33mdata-testid[31m=[32m"server-card"[31m
+          [36m>[31m
+            [36m<h3[31m
+              [33mclass[31m=[32m"mb-2 font-semibold text-blue-800"[31m
+            [36m>[31m
+              [0mΓÿü∩╕Å Phi├¬n bß║ún Server[0m
+            [36m</h3>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"mb-2 text-sm text-blue-700"[31m
+            [36m>[31m
+              [0mCß║¡p nhß║¡t l├║c: [0m
+              [0m17:00:00 29/4/2026[0m
+            [36m</p>[31m
+            [36m<p[31m
+              [33mclass[31m=[32m"text-xs text-blue-600"[31m
+            [36m>[31m
+              [0mVersion: [0m
+              [0m8[0m
+            [36m</p>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"[31m
+              [33mdata-testid[31m=[32m"server-wins-button"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGiß╗» phi├¬n bß║ún Server[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-t pt-4"[31m
+        [36m>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"[31m
+            [33mtype[31m=[32m"button"[31m
+          [36m>[31m
+            [0mHß╗ºy bß╗Å[0m
+          [36m</button>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"flex gap-2"[31m
+          [36m>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"[31m
+              [33mtype[31m=[32m"button"[31m
+            [36m>[31m
+              [0mGß╗Öp cß║ú hai (Merge)[0m
+            [36m</button>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"[31m
+        [36m>[31m
+          [36m<p[31m
+            [33mclass[31m=[32m"font-medium"[31m
+          [36m>[31m
+            [0m≡ƒÆí L╞░u ├╜:[0m
+          [36m</p>[31m
+          [36m<ul[31m
+            [33mclass[31m=[32m"mt-1 list-inside list-disc"[31m
+          [36m>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º[0m
+            [36m</li>[31m
+            [36m<li>[31m
+              [0m"Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)[0m
+            [36m</li>[31m
+          [36m</ul>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33maria-labelledby...[39m
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 5 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  tests/ConflictResolutionDialog.test.jsx > ConflictResolutionDialog > calls onResolve with server-wins strategy when clicking Server button
+TestingLibraryElementError: Found multiple elements by: [data-testid="server-wins-button"]
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+<button
+  class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+  data-testid="server-wins-button"
+  type="button"
+>
+  Giß╗» phi├¬n bß║ún Server
+</button>
+
+Ignored nodes: comments, script, style
+<button
+  class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+  data-testid="server-wins-button"
+  type="button"
+>
+  Giß╗» phi├¬n bß║ún Server
+</button>
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+<body>
+  <div />
+  <div>
+    <div
+      aria-labelledby="conflict-title"
+      aria-modal="true"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog"
+    >
+      <div
+        class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2
+          class="mb-4 text-xl font-semibold text-gray-900"
+          id="conflict-title"
+        >
+          Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+        </h2>
+        <p
+          class="mb-6 text-gray-600"
+        >
+          Dß╗» liß╗çu 
+          <strong>
+            declarations
+          </strong>
+           tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+        </p>
+        <div
+          class="mb-6 rounded-lg bg-amber-50 p-4"
+        >
+          <h3
+            class="mb-2 font-medium text-amber-800"
+          >
+            C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+          </h3>
+          <ul
+            class="list-inside list-disc text-sm text-amber-700"
+          >
+            <li>
+              name
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                Local Version
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                Server Version
+              </span>
+            </li>
+            <li>
+              version
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                5
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                8
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div
+          class="mb-6 grid gap-4 md:grid-cols-2"
+        >
+          <div
+            class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+            data-testid="local-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-green-800"
+            >
+              ≡ƒôü Phi├¬n bß║ún Local
+            </h3>
+            <p
+              class="mb-2 text-sm text-green-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              15:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-green-600"
+            >
+              Version: 
+              5
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              data-testid="local-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Local
+            </button>
+          </div>
+          <div
+            class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+            data-testid="server-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-blue-800"
+            >
+              Γÿü∩╕Å Phi├¬n bß║ún Server
+            </h3>
+            <p
+              class="mb-2 text-sm text-blue-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              17:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-blue-600"
+            >
+              Version: 
+              8
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              data-testid="server-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Server
+            </button>
+          </div>
+        </div>
+        <div
+          class="flex items-center justify-between border-t pt-4"
+        >
+          <button
+            class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            type="button"
+          >
+            Hß╗ºy bß╗Å
+          </button>
+          <div
+            class="flex gap-2"
+          >
+            <button
+              class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              type="button"
+            >
+              Gß╗Öp cß║ú hai (Merge)
+            </button>
+          </div>
+        </div>
+        <div
+          class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+        >
+          <p
+            class="font-medium"
+          >
+            ≡ƒÆí L╞░u ├╜:
+          </p>
+          <ul
+            class="mt-1 list-inside list-disc"
+          >
+            <li>
+              "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+            </li>
+            <li>
+              "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+            </li>
+            <li>
+              "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div
+      aria-labelledby="conflict-title"
+      aria-modal="true"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog"
+    >
+      <div
+        class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2
+          class="mb-4 text-xl font-semibold text-gray-900"
+          id="conflict-title"
+        >
+          Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+        </h2>
+        <p
+          class="mb-6 text-gray-600"
+        >
+          Dß╗» liß╗çu 
+          <strong>
+            data
+          </strong>
+           tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+        </p>
+        <div
+          class="mb-6 grid gap-4 md:grid-cols-2"
+        >
+          <div
+            class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+            data-testid="local-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-green-800"
+            >
+              ≡ƒôü Phi├¬n bß║ún Local
+            </h3>
+            <p
+              class="mb-2 text-sm text-green-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              15:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-green-600"
+            >
+              Version: 
+              5
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              data-testid="local-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Local
+            </button>
+          </div>
+          <div
+            class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+            data-testid="server-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-blue-800"
+            >
+              Γÿü∩╕Å Phi├¬n bß║ún Server
+            </h3>
+            <p
+              class="mb-2 text-sm text-blue-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              17:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-blue-600"
+            >
+              Version: 
+              8
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              data-testid="server-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Server
+            </button>
+          </div>
+        </div>
+        <div
+          class="flex items-center justify-between border-t pt-4"
+        >
+          <button
+            class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            type="button"
+          >
+            Hß╗ºy bß╗Å
+          </button>
+          <div
+            class="flex gap-2"
+          >
+            <button
+              class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              type="button"
+            >
+              Gß╗Öp cß║ú hai (Merge)
+            </button>
+          </div>
+        </div>
+        <div
+          class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+        >
+          <p
+            class="font-medium"
+          >
+            ≡ƒÆí L╞░u ├╜:
+          </p>
+          <ul
+            class="mt-1 list-inside list-disc"
+          >
+            <li>
+              "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+            </li>
+            <li>
+              "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+            </li>
+            <li>
+              "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+ Γ¥» Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ Γ¥» getMultipleElementsFoundError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» tests/ConflictResolutionDialog.test.jsx:76:33
+     74|     );
+     75| 
+     76|     const serverButton = screen.getByTestId("server-wins-button");
+       |                                 ^
+     77|     fireEvent.click(serverButton);
+     78| 
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/5]ΓÄ»
+
+ FAIL  tests/ConflictResolutionDialog.test.jsx > ConflictResolutionDialog > calls onResolve with local-wins strategy when clicking Local button
+TestingLibraryElementError: Found multiple elements by: [data-testid="local-wins-button"]
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+<button
+  class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+  data-testid="local-wins-button"
+  type="button"
+>
+  Giß╗» phi├¬n bß║ún Local
+</button>
+
+Ignored nodes: comments, script, style
+<button
+  class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+  data-testid="local-wins-button"
+  type="button"
+>
+  Giß╗» phi├¬n bß║ún Local
+</button>
+
+Ignored nodes: comments, script, style
+<button
+  class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+  data-testid="local-wins-button"
+  type="button"
+>
+  Giß╗» phi├¬n bß║ún Local
+</button>
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+<body>
+  <div />
+  <div>
+    <div
+      aria-labelledby="conflict-title"
+      aria-modal="true"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog"
+    >
+      <div
+        class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2
+          class="mb-4 text-xl font-semibold text-gray-900"
+          id="conflict-title"
+        >
+          Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+        </h2>
+        <p
+          class="mb-6 text-gray-600"
+        >
+          Dß╗» liß╗çu 
+          <strong>
+            declarations
+          </strong>
+           tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+        </p>
+        <div
+          class="mb-6 rounded-lg bg-amber-50 p-4"
+        >
+          <h3
+            class="mb-2 font-medium text-amber-800"
+          >
+            C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+          </h3>
+          <ul
+            class="list-inside list-disc text-sm text-amber-700"
+          >
+            <li>
+              name
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                Local Version
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                Server Version
+              </span>
+            </li>
+            <li>
+              version
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                5
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                8
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div
+          class="mb-6 grid gap-4 md:grid-cols-2"
+        >
+          <div
+            class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+            data-testid="local-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-green-800"
+            >
+              ≡ƒôü Phi├¬n bß║ún Local
+            </h3>
+            <p
+              class="mb-2 text-sm text-green-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              15:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-green-600"
+            >
+              Version: 
+              5
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              data-testid="local-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Local
+            </button>
+          </div>
+          <div
+            class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+            data-testid="server-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-blue-800"
+            >
+              Γÿü∩╕Å Phi├¬n bß║ún Server
+            </h3>
+            <p
+              class="mb-2 text-sm text-blue-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              17:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-blue-600"
+            >
+              Version: 
+              8
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              data-testid="server-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Server
+            </button>
+          </div>
+        </div>
+        <div
+          class="flex items-center justify-between border-t pt-4"
+        >
+          <button
+            class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            type="button"
+          >
+            Hß╗ºy bß╗Å
+          </button>
+          <div
+            class="flex gap-2"
+          >
+            <button
+              class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              type="button"
+            >
+              Gß╗Öp cß║ú hai (Merge)
+            </button>
+          </div>
+        </div>
+        <div
+          class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+        >
+          <p
+            class="font-medium"
+          >
+            ≡ƒÆí L╞░u ├╜:
+          </p>
+          <ul
+            class="mt-1 list-inside list-disc"
+          >
+            <li>
+              "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+            </li>
+            <li>
+              "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+            </li>
+            <li>
+              "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div
+      aria-labelledby...
+ Γ¥» Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ Γ¥» getMultipleElementsFoundError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» tests/ConflictResolutionDialog.test.jsx:97:32
+     95|     );
+     96| 
+     97|     const localButton = screen.getByTestId("local-wins-button");
+       |                                ^
+     98|     fireEvent.click(localButton);
+     99| 
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/5]ΓÄ»
+
+ FAIL  tests/ConflictResolutionDialog.test.jsx > ConflictResolutionDialog > calls onCancel when clicking Cancel button
+TestingLibraryElementError: Found multiple elements with the text: Hß╗ºy bß╗Å
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+<button
+  class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+  type="button"
+>
+  Hß╗ºy bß╗Å
+</button>
+
+Ignored nodes: comments, script, style
+<button
+  class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+  type="button"
+>
+  Hß╗ºy bß╗Å
+</button>
+
+Ignored nodes: comments, script, style
+<button
+  class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+  type="button"
+>
+  Hß╗ºy bß╗Å
+</button>
+
+Ignored nodes: comments, script, style
+<button
+  class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+  type="button"
+>
+  Hß╗ºy bß╗Å
+</button>
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+<body>
+  <div />
+  <div>
+    <div
+      aria-labelledby="conflict-title"
+      aria-modal="true"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog"
+    >
+      <div
+        class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2
+          class="mb-4 text-xl font-semibold text-gray-900"
+          id="conflict-title"
+        >
+          Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+        </h2>
+        <p
+          class="mb-6 text-gray-600"
+        >
+          Dß╗» liß╗çu 
+          <strong>
+            declarations
+          </strong>
+           tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+        </p>
+        <div
+          class="mb-6 rounded-lg bg-amber-50 p-4"
+        >
+          <h3
+            class="mb-2 font-medium text-amber-800"
+          >
+            C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+          </h3>
+          <ul
+            class="list-inside list-disc text-sm text-amber-700"
+          >
+            <li>
+              name
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                Local Version
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                Server Version
+              </span>
+            </li>
+            <li>
+              version
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                5
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                8
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div
+          class="mb-6 grid gap-4 md:grid-cols-2"
+        >
+          <div
+            class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+            data-testid="local-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-green-800"
+            >
+              ≡ƒôü Phi├¬n bß║ún Local
+            </h3>
+            <p
+              class="mb-2 text-sm text-green-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              15:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-green-600"
+            >
+              Version: 
+              5
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              data-testid="local-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Local
+            </button>
+          </div>
+          <div
+            class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+            data-testid="server-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-blue-800"
+            >
+              Γÿü∩╕Å Phi├¬n bß║ún Server
+            </h3>
+            <p
+              class="mb-2 text-sm text-blue-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              17:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-blue-600"
+            >
+              Version: 
+              8
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              data-testid="server-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Server
+            </button>
+          </div>
+        </div>
+        <div
+          class="flex items-center justify-between border-t pt-4"
+        >
+          <button
+            class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            type="button"
+          >
+            Hß╗ºy bß╗Å
+          </button>
+          <div
+            class="flex gap-2"
+          >
+            <button
+              class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              type="button"
+            >
+              Gß╗Öp cß║ú hai (Merge)
+            </button>
+          </div>
+        </div>
+        <div
+          class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+        >
+          <p
+            class="font-medium"
+          >
+            ≡ƒÆí L╞░u ├╜:
+          </p>
+          <ul
+            class="mt-1 list-inside list-disc"
+          >
+            <li>
+              "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+            </li>
+            <li>
+              "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+            </li>
+            <li>
+              "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div
+      aria-labelledby...
+ Γ¥» Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ Γ¥» getMultipleElementsFoundError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» tests/ConflictResolutionDialog.test.jsx:119:33
+    117|     );
+    118| 
+    119|     const cancelButton = screen.getByText("Hß╗ºy bß╗Å");
+       |                                 ^
+    120|     fireEvent.click(cancelButton);
+    121| 
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3/5]ΓÄ»
+
+ FAIL  tests/ConflictResolutionDialog.test.jsx > ConflictResolutionDialog > displays conflict fields with values
+TestingLibraryElementError: Found multiple elements with the text: C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+<h3
+  class="mb-2 font-medium text-amber-800"
+>
+  C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+</h3>
+
+Ignored nodes: comments, script, style
+<h3
+  class="mb-2 font-medium text-amber-800"
+>
+  C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+</h3>
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+<body>
+  <div />
+  <div>
+    <div
+      aria-labelledby="conflict-title"
+      aria-modal="true"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog"
+    >
+      <div
+        class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2
+          class="mb-4 text-xl font-semibold text-gray-900"
+          id="conflict-title"
+        >
+          Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+        </h2>
+        <p
+          class="mb-6 text-gray-600"
+        >
+          Dß╗» liß╗çu 
+          <strong>
+            declarations
+          </strong>
+           tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+        </p>
+        <div
+          class="mb-6 rounded-lg bg-amber-50 p-4"
+        >
+          <h3
+            class="mb-2 font-medium text-amber-800"
+          >
+            C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+          </h3>
+          <ul
+            class="list-inside list-disc text-sm text-amber-700"
+          >
+            <li>
+              name
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                Local Version
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                Server Version
+              </span>
+            </li>
+            <li>
+              version
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                5
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                8
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div
+          class="mb-6 grid gap-4 md:grid-cols-2"
+        >
+          <div
+            class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+            data-testid="local-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-green-800"
+            >
+              ≡ƒôü Phi├¬n bß║ún Local
+            </h3>
+            <p
+              class="mb-2 text-sm text-green-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              15:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-green-600"
+            >
+              Version: 
+              5
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              data-testid="local-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Local
+            </button>
+          </div>
+          <div
+            class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+            data-testid="server-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-blue-800"
+            >
+              Γÿü∩╕Å Phi├¬n bß║ún Server
+            </h3>
+            <p
+              class="mb-2 text-sm text-blue-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              17:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-blue-600"
+            >
+              Version: 
+              8
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              data-testid="server-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Server
+            </button>
+          </div>
+        </div>
+        <div
+          class="flex items-center justify-between border-t pt-4"
+        >
+          <button
+            class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            type="button"
+          >
+            Hß╗ºy bß╗Å
+          </button>
+          <div
+            class="flex gap-2"
+          >
+            <button
+              class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              type="button"
+            >
+              Gß╗Öp cß║ú hai (Merge)
+            </button>
+          </div>
+        </div>
+        <div
+          class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+        >
+          <p
+            class="font-medium"
+          >
+            ≡ƒÆí L╞░u ├╜:
+          </p>
+          <ul
+            class="mt-1 list-inside list-disc"
+          >
+            <li>
+              "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+            </li>
+            <li>
+              "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+            </li>
+            <li>
+              "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div
+      aria-labelledby...
+ Γ¥» Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ Γ¥» getMultipleElementsFoundError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» tests/ConflictResolutionDialog.test.jsx:138:19
+    136|     );
+    137| 
+    138|     expect(screen.getByText("C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:")).toBeInTheDocumΓÇª
+       |                   ^
+    139|     // Should show local vs server values
+    140|     expect(screen.getByText(/Local Version/)).toBeInTheDocument();
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[4/5]ΓÄ»
+
+ FAIL  tests/ConflictResolutionDialog.test.jsx > ConflictResolutionDialog > has correct ARIA attributes for accessibility
+TestingLibraryElementError: Found multiple elements with the role "dialog"
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="conflict-title"
+  aria-modal="true"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+  role="dialog"
+>
+  <div
+    class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+  >
+    <h2
+      class="mb-4 text-xl font-semibold text-gray-900"
+      id="conflict-title"
+    >
+      Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+    </h2>
+    <p
+      class="mb-6 text-gray-600"
+    >
+      Dß╗» liß╗çu 
+      <strong>
+        declarations
+      </strong>
+       tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+    </p>
+    <div
+      class="mb-6 rounded-lg bg-amber-50 p-4"
+    >
+      <h3
+        class="mb-2 font-medium text-amber-800"
+      >
+        C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+      </h3>
+      <ul
+        class="list-inside list-disc text-sm text-amber-700"
+      >
+        <li>
+          name
+          :
+           
+          <span
+            class="text-green-600"
+          >
+            Local Version
+          </span>
+           vs 
+          <span
+            class="text-blue-600"
+          >
+            Server Version
+          </span>
+        </li>
+        <li>
+          version
+          :
+           
+          <span
+            class="text-green-600"
+          >
+            5
+          </span>
+           vs 
+          <span
+            class="text-blue-600"
+          >
+            8
+          </span>
+        </li>
+      </ul>
+    </div>
+    <div
+      class="mb-6 grid gap-4 md:grid-cols-2"
+    >
+      <div
+        class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+        data-testid="local-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-green-800"
+        >
+          ≡ƒôü Phi├¬n bß║ún Local
+        </h3>
+        <p
+          class="mb-2 text-sm text-green-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          15:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-green-600"
+        >
+          Version: 
+          5
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          data-testid="local-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Local
+        </button>
+      </div>
+      <div
+        class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+        data-testid="server-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-blue-800"
+        >
+          Γÿü∩╕Å Phi├¬n bß║ún Server
+        </h3>
+        <p
+          class="mb-2 text-sm text-blue-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          17:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-blue-600"
+        >
+          Version: 
+          8
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          data-testid="server-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Server
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex items-center justify-between border-t pt-4"
+    >
+      <button
+        class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        type="button"
+      >
+        Hß╗ºy bß╗Å
+      </button>
+      <div
+        class="flex gap-2"
+      >
+        <button
+          class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          type="button"
+        >
+          Gß╗Öp cß║ú hai (Merge)
+        </button>
+      </div>
+    </div>
+    <div
+      class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+    >
+      <p
+        class="font-medium"
+      >
+        ≡ƒÆí L╞░u ├╜:
+      </p>
+      <ul
+        class="mt-1 list-inside list-disc"
+      >
+        <li>
+          "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+        </li>
+        <li>
+          "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+        </li>
+        <li>
+          "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="conflict-title"
+  aria-modal="true"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+  role="dialog"
+>
+  <div
+    class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+  >
+    <h2
+      class="mb-4 text-xl font-semibold text-gray-900"
+      id="conflict-title"
+    >
+      Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+    </h2>
+    <p
+      class="mb-6 text-gray-600"
+    >
+      Dß╗» liß╗çu 
+      <strong>
+        data
+      </strong>
+       tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+    </p>
+    <div
+      class="mb-6 grid gap-4 md:grid-cols-2"
+    >
+      <div
+        class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+        data-testid="local-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-green-800"
+        >
+          ≡ƒôü Phi├¬n bß║ún Local
+        </h3>
+        <p
+          class="mb-2 text-sm text-green-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          15:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-green-600"
+        >
+          Version: 
+          5
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          data-testid="local-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Local
+        </button>
+      </div>
+      <div
+        class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+        data-testid="server-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-blue-800"
+        >
+          Γÿü∩╕Å Phi├¬n bß║ún Server
+        </h3>
+        <p
+          class="mb-2 text-sm text-blue-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          17:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-blue-600"
+        >
+          Version: 
+          8
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          data-testid="server-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Server
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex items-center justify-between border-t pt-4"
+    >
+      <button
+        class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        type="button"
+      >
+        Hß╗ºy bß╗Å
+      </button>
+      <div
+        class="flex gap-2"
+      >
+        <button
+          class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          type="button"
+        >
+          Gß╗Öp cß║ú hai (Merge)
+        </button>
+      </div>
+    </div>
+    <div
+      class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+    >
+      <p
+        class="font-medium"
+      >
+        ≡ƒÆí L╞░u ├╜:
+      </p>
+      <ul
+        class="mt-1 list-inside list-disc"
+      >
+        <li>
+          "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+        </li>
+        <li>
+          "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+        </li>
+        <li>
+          "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="conflict-title"
+  aria-modal="true"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+  role="dialog"
+>
+  <div
+    class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+  >
+    <h2
+      class="mb-4 text-xl font-semibold text-gray-900"
+      id="conflict-title"
+    >
+      Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+    </h2>
+    <p
+      class="mb-6 text-gray-600"
+    >
+      Dß╗» liß╗çu 
+      <strong>
+        data
+      </strong>
+       tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+    </p>
+    <div
+      class="mb-6 grid gap-4 md:grid-cols-2"
+    >
+      <div
+        class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+        data-testid="local-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-green-800"
+        >
+          ≡ƒôü Phi├¬n bß║ún Local
+        </h3>
+        <p
+          class="mb-2 text-sm text-green-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          15:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-green-600"
+        >
+          Version: 
+          5
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          data-testid="local-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Local
+        </button>
+      </div>
+      <div
+        class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+        data-testid="server-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-blue-800"
+        >
+          Γÿü∩╕Å Phi├¬n bß║ún Server
+        </h3>
+        <p
+          class="mb-2 text-sm text-blue-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          17:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-blue-600"
+        >
+          Version: 
+          8
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          data-testid="server-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Server
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex items-center justify-between border-t pt-4"
+    >
+      <button
+        class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        type="button"
+      >
+        Hß╗ºy bß╗Å
+      </button>
+      <div
+        class="flex gap-2"
+      >
+        <button
+          class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          type="button"
+        >
+          Gß╗Öp cß║ú hai (Merge)
+        </button>
+      </div>
+    </div>
+    <div
+      class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+    >
+      <p
+        class="font-medium"
+      >
+        ≡ƒÆí L╞░u ├╜:
+      </p>
+      <ul
+        class="mt-1 list-inside list-disc"
+      >
+        <li>
+          "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+        </li>
+        <li>
+          "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+        </li>
+        <li>
+          "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="conflict-title"
+  aria-modal="true"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+  role="dialog"
+>
+  <div
+    class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+  >
+    <h2
+      class="mb-4 text-xl font-semibold text-gray-900"
+      id="conflict-title"
+    >
+      Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+    </h2>
+    <p
+      class="mb-6 text-gray-600"
+    >
+      Dß╗» liß╗çu 
+      <strong>
+        data
+      </strong>
+       tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+    </p>
+    <div
+      class="mb-6 grid gap-4 md:grid-cols-2"
+    >
+      <div
+        class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+        data-testid="local-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-green-800"
+        >
+          ≡ƒôü Phi├¬n bß║ún Local
+        </h3>
+        <p
+          class="mb-2 text-sm text-green-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          15:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-green-600"
+        >
+          Version: 
+          5
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          data-testid="local-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Local
+        </button>
+      </div>
+      <div
+        class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+        data-testid="server-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-blue-800"
+        >
+          Γÿü∩╕Å Phi├¬n bß║ún Server
+        </h3>
+        <p
+          class="mb-2 text-sm text-blue-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          17:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-blue-600"
+        >
+          Version: 
+          8
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          data-testid="server-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Server
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex items-center justify-between border-t pt-4"
+    >
+      <button
+        class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        type="button"
+      >
+        Hß╗ºy bß╗Å
+      </button>
+      <div
+        class="flex gap-2"
+      >
+        <button
+          class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          type="button"
+        >
+          Gß╗Öp cß║ú hai (Merge)
+        </button>
+      </div>
+    </div>
+    <div
+      class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+    >
+      <p
+        class="font-medium"
+      >
+        ≡ƒÆí L╞░u ├╜:
+      </p>
+      <ul
+        class="mt-1 list-inside list-disc"
+      >
+        <li>
+          "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+        </li>
+        <li>
+          "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+        </li>
+        <li>
+          "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="conflict-title"
+  aria-modal="true"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+  role="dialog"
+>
+  <div
+    class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+  >
+    <h2
+      class="mb-4 text-xl font-semibold text-gray-900"
+      id="conflict-title"
+    >
+      Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+    </h2>
+    <p
+      class="mb-6 text-gray-600"
+    >
+      Dß╗» liß╗çu 
+      <strong>
+        data
+      </strong>
+       tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+    </p>
+    <div
+      class="mb-6 rounded-lg bg-amber-50 p-4"
+    >
+      <h3
+        class="mb-2 font-medium text-amber-800"
+      >
+        C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+      </h3>
+      <ul
+        class="list-inside list-disc text-sm text-amber-700"
+      >
+        <li>
+          name
+          :
+           
+          <span
+            class="text-green-600"
+          >
+            Local Version
+          </span>
+           vs 
+          <span
+            class="text-blue-600"
+          >
+            Server Version
+          </span>
+        </li>
+        <li>
+          version
+          :
+           
+          <span
+            class="text-green-600"
+          >
+            5
+          </span>
+           vs 
+          <span
+            class="text-blue-600"
+          >
+            8
+          </span>
+        </li>
+      </ul>
+    </div>
+    <div
+      class="mb-6 grid gap-4 md:grid-cols-2"
+    >
+      <div
+        class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+        data-testid="local-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-green-800"
+        >
+          ≡ƒôü Phi├¬n bß║ún Local
+        </h3>
+        <p
+          class="mb-2 text-sm text-green-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          15:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-green-600"
+        >
+          Version: 
+          5
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          data-testid="local-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Local
+        </button>
+      </div>
+      <div
+        class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+        data-testid="server-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-blue-800"
+        >
+          Γÿü∩╕Å Phi├¬n bß║ún Server
+        </h3>
+        <p
+          class="mb-2 text-sm text-blue-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          17:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-blue-600"
+        >
+          Version: 
+          8
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          data-testid="server-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Server
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex items-center justify-between border-t pt-4"
+    >
+      <button
+        class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        type="button"
+      >
+        Hß╗ºy bß╗Å
+      </button>
+      <div
+        class="flex gap-2"
+      >
+        <button
+          class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          type="button"
+        >
+          Gß╗Öp cß║ú hai (Merge)
+        </button>
+      </div>
+    </div>
+    <div
+      class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+    >
+      <p
+        class="font-medium"
+      >
+        ≡ƒÆí L╞░u ├╜:
+      </p>
+      <ul
+        class="mt-1 list-inside list-disc"
+      >
+        <li>
+          "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+        </li>
+        <li>
+          "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+        </li>
+        <li>
+          "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="conflict-title"
+  aria-modal="true"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+  role="dialog"
+>
+  <div
+    class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+  >
+    <h2
+      class="mb-4 text-xl font-semibold text-gray-900"
+      id="conflict-title"
+    >
+      Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+    </h2>
+    <p
+      class="mb-6 text-gray-600"
+    >
+      Dß╗» liß╗çu 
+      <strong>
+        data
+      </strong>
+       tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+    </p>
+    <div
+      class="mb-6 grid gap-4 md:grid-cols-2"
+    >
+      <div
+        class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+        data-testid="local-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-green-800"
+        >
+          ≡ƒôü Phi├¬n bß║ún Local
+        </h3>
+        <p
+          class="mb-2 text-sm text-green-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          15:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-green-600"
+        >
+          Version: 
+          5
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          data-testid="local-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Local
+        </button>
+      </div>
+      <div
+        class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+        data-testid="server-card"
+      >
+        <h3
+          class="mb-2 font-semibold text-blue-800"
+        >
+          Γÿü∩╕Å Phi├¬n bß║ún Server
+        </h3>
+        <p
+          class="mb-2 text-sm text-blue-700"
+        >
+          Cß║¡p nhß║¡t l├║c: 
+          17:00:00 29/4/2026
+        </p>
+        <p
+          class="text-xs text-blue-600"
+        >
+          Version: 
+          8
+        </p>
+        <button
+          class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          data-testid="server-wins-button"
+          type="button"
+        >
+          Giß╗» phi├¬n bß║ún Server
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex items-center justify-between border-t pt-4"
+    >
+      <button
+        class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        type="button"
+      >
+        Hß╗ºy bß╗Å
+      </button>
+      <div
+        class="flex gap-2"
+      >
+        <button
+          class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          type="button"
+        >
+          Gß╗Öp cß║ú hai (Merge)
+        </button>
+      </div>
+    </div>
+    <div
+      class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+    >
+      <p
+        class="font-medium"
+      >
+        ≡ƒÆí L╞░u ├╜:
+      </p>
+      <ul
+        class="mt-1 list-inside list-disc"
+      >
+        <li>
+          "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+        </li>
+        <li>
+          "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+        </li>
+        <li>
+          "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+<body>
+  <div />
+  <div>
+    <div
+      aria-labelledby="conflict-title"
+      aria-modal="true"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog"
+    >
+      <div
+        class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2
+          class="mb-4 text-xl font-semibold text-gray-900"
+          id="conflict-title"
+        >
+          Ph├ít hiß╗çn xung ─æß╗Öt dß╗» liß╗çu
+        </h2>
+        <p
+          class="mb-6 text-gray-600"
+        >
+          Dß╗» liß╗çu 
+          <strong>
+            declarations
+          </strong>
+           tr├¬n m├íy chß╗º ─æ├ú thay ─æß╗òi kß╗â tß╗½ lß║ºn ─æß╗ông bß╗Ö cuß╗æi. Bß║ín muß╗æn giß╗» phi├¬n bß║ún n├áo?
+        </p>
+        <div
+          class="mb-6 rounded-lg bg-amber-50 p-4"
+        >
+          <h3
+            class="mb-2 font-medium text-amber-800"
+          >
+            C├íc tr╞░ß╗¥ng bß╗ï xung ─æß╗Öt:
+          </h3>
+          <ul
+            class="list-inside list-disc text-sm text-amber-700"
+          >
+            <li>
+              name
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                Local Version
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                Server Version
+              </span>
+            </li>
+            <li>
+              version
+              :
+               
+              <span
+                class="text-green-600"
+              >
+                5
+              </span>
+               vs 
+              <span
+                class="text-blue-600"
+              >
+                8
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div
+          class="mb-6 grid gap-4 md:grid-cols-2"
+        >
+          <div
+            class="rounded-lg border-2 p-4 border-green-200 bg-green-50"
+            data-testid="local-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-green-800"
+            >
+              ≡ƒôü Phi├¬n bß║ún Local
+            </h3>
+            <p
+              class="mb-2 text-sm text-green-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              15:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-green-600"
+            >
+              Version: 
+              5
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              data-testid="local-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Local
+            </button>
+          </div>
+          <div
+            class="rounded-lg border-2 p-4 border-blue-200 bg-blue-50"
+            data-testid="server-card"
+          >
+            <h3
+              class="mb-2 font-semibold text-blue-800"
+            >
+              Γÿü∩╕Å Phi├¬n bß║ún Server
+            </h3>
+            <p
+              class="mb-2 text-sm text-blue-700"
+            >
+              Cß║¡p nhß║¡t l├║c: 
+              17:00:00 29/4/2026
+            </p>
+            <p
+              class="text-xs text-blue-600"
+            >
+              Version: 
+              8
+            </p>
+            <button
+              class="mt-3 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              data-testid="server-wins-button"
+              type="button"
+            >
+              Giß╗» phi├¬n bß║ún Server
+            </button>
+          </div>
+        </div>
+        <div
+          class="flex items-center justify-between border-t pt-4"
+        >
+          <button
+            class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            type="button"
+          >
+            Hß╗ºy bß╗Å
+          </button>
+          <div
+            class="flex gap-2"
+          >
+            <button
+              class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              type="button"
+            >
+              Gß╗Öp cß║ú hai (Merge)
+            </button>
+          </div>
+        </div>
+        <div
+          class="mt-4 rounded bg-gray-50 p-3 text-xs text-gray-500"
+        >
+          <p
+            class="font-medium"
+          >
+            ≡ƒÆí L╞░u ├╜:
+          </p>
+          <ul
+            class="mt-1 list-inside list-disc"
+          >
+            <li>
+              "Giß╗» phi├¬n bß║ún Server" sß║╜ ghi ─æ├¿ dß╗» liß╗çu local bß║▒ng dß╗» liß╗çu tß╗½ m├íy chß╗º
+            </li>
+            <li>
+              "Giß╗» phi├¬n bß║ún Local" sß║╜ ─æß║⌐y dß╗» liß╗çu local l├¬n m├íy chß╗º
+            </li>
+            <li>
+              "Gß╗Öp cß║ú hai" sß║╜ cß╗æ gß║»ng kß║┐t hß╗úp dß╗» liß╗çu tß╗½ cß║ú hai nguß╗ôn (nß║┐u c├│ thß╗â)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div
+      aria-labelledby...
+ Γ¥» Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ Γ¥» getMultipleElementsFoundError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ Γ¥» node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» tests/ConflictResolutionDialog.test.jsx:155:27
+    153|     );
+    154| 
+    155|     const dialog = screen.getByRole("dialog");
+       |                           ^
+    156|     expect(dialog).toHaveAttribute("aria-modal", "true");
+    157|     expect(dialog).toHaveAttribute("aria-labelledby", "conflict-title"ΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[5/5]ΓÄ»
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 11:32:29
+[2m   Duration [22m 2.14s[2m (transform 124ms, setup 250ms, collect 262ms, tests 138ms, environment 848ms, prepare 151ms)[22m
+

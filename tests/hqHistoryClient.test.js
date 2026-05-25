@@ -8,6 +8,17 @@ vi.mock('@/auth/localAuth.js', () => ({
 
 }));
 
+vi.mock('@/lib/storageClient.js', async () => {
+  const actual = await vi.importActual('@/lib/storageClient.js');
+  return {
+    ...actual,
+    setItem: vi.fn(async (key, value) => {
+      actual.updateCachedItem(key, value);
+      return value;
+    }),
+  };
+});
+
 
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
@@ -152,13 +163,16 @@ describe('hqHistoryClient', () => {
 
     };
 
-    sharedSetItem(HQ_HISTORY_KEY, JSON.stringify([localEntry]));
+    await sharedSetItem(HQ_HISTORY_KEY, JSON.stringify([localEntry]));
 
 
 
     const result = await refreshHQHistoryCache({ limit: 50 });
 
-    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining('/api/hq/history'), expect.any(Object));
+    expect(fetchWithAuth).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v4/hq-agencies/history'),
+      expect.any(Object),
+    );
 
     expect(result).toHaveLength(1);
 

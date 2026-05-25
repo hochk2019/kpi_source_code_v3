@@ -1,109 +1,63 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-const rows = [
-  {
-    mst: "0100000001",
-    company: "Công ty Ánh Dương",
-    person_import: "Lan",
-    person_export: "Hùng",
-    team: "Đội 1",
-    effective_from: "2024-01-01",
-    effective_to: "2024-06-30",
-    status: "Đang xử lý",
-  },
-  {
-    mst: "0100000001",
-    company: "Công ty Ánh Dương",
-    person_import: "Lan",
-    person_export: "Hùng",
-    team: "Đội 1",
-    effective_from: "2024-07-01",
-    effective_to: "",
-    status: "Đã gán",
-  },
-  {
-    mst: "0200000002",
-    company: "Công ty Bình Minh",
-    person_import: "Minh",
-    person_export: "An",
-    team: "Đội 2",
-    effective_from: "2024-02-01",
-    effective_to: "",
-    status: "Đang chờ",
-  },
-];
+import MstAssignmentTimelinePanel from "@/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx";
 
-vi.mock("@/lib/store.js", () => ({
-  MST_ASSIGNMENT_STATUS: {
-    ASSIGNED: "Đã gán",
-    PENDING: "Đang chờ",
-  },
-  getMSTMap: vi.fn(() => rows.map((row) => ({ ...row }))),
-  getMSTHistoryEntries: vi.fn(() => []),
-  upsertMSTRows: vi.fn(() => ({ ok: true })),
-  saveMSTRow: vi.fn(() => ({ ok: true })),
-  getTeamRoster: vi.fn(() => ({ teams: [] })),
-  subscribeTeamRoster: vi.fn(() => () => {}),
-  normalizeStr: (value) => (value == null ? "" : value.toString()),
-  normalizeName: (value) => (value == null ? "" : value.toString().trim().toLowerCase()),
-}));
+afterEach(() => {
+  cleanup();
+});
 
-import MSTAssignment from "@/components/MSTAssignment.jsx";
-
-describe("MSTAssignment – dòng thời gian trong bảng", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    window.localStorage.clear();
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      }
+describe("MSTAssignment timeline", () => {
+  it("shows disabled aggregate action when there is no grouped stage", () => {
+    render(
+      <MstAssignmentTimelinePanel
+        groupedStages={[]}
+        onOpenAllTimelines={vi.fn()}
+        timelineDialogState={{ open: false, title: "", subtitle: "", groups: [] }}
+        onTimelineDialogOpenChange={vi.fn()}
+        formatDate={(value) => value}
+        getStageKey={(stage, index) => `${stage?.mst || "stage"}-${index}`}
+      />
     );
-    vi.stubGlobal("alert", vi.fn());
-    vi.stubGlobal("confirm", vi.fn(() => true));
+
+    expect(screen.getByRole("button", { name: "Mở tổng hợp (0)" })).toBeDisabled();
   });
 
-  afterEach(() => {
-    cleanup();
-    vi.runOnlyPendingTimers();
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-    window.localStorage.clear();
-  });
-
-  it("hiển thị accordion timeline cho từng dòng và mở modal chi tiết", () => {
-    render(<MSTAssignment canEdit={false} currentUser={{ username: "viewer" }} />);
-
-    const toggles = screen.getAllByRole("button", { name: /lịch sử giai đoạn/i });
-    expect(toggles.length).toBeGreaterThan(0);
-
-    fireEvent.click(toggles[0]);
-
-    expect(screen.getByText(/Nhập: Lan/i)).toBeInTheDocument();
-    expect(screen.getByText(/Xuất: Hùng/i)).toBeInTheDocument();
-
-    const fullButton = screen.getByRole("button", { name: /xem toàn màn hình/i });
-    fireEvent.click(fullButton);
+  it("renders grouped stages in dialog timeline", () => {
+    render(
+      <MstAssignmentTimelinePanel
+        groupedStages={[{ mst: "0100000001" }]}
+        onOpenAllTimelines={vi.fn()}
+        timelineDialogState={{
+          open: true,
+          title: "Dòng thời gian — 0100000001",
+          subtitle: "Công ty: Công ty Ánh Dương",
+          groups: [
+            {
+              mst: "0100000001",
+              company: "Công ty Ánh Dương",
+              stages: [
+                {
+                  effective_from: "2024-01-01",
+                  effective_to: "",
+                  person_import: "Lan",
+                  person_export: "Hùng",
+                  status: "Đã gán",
+                },
+              ],
+            },
+          ],
+        }}
+        onTimelineDialogOpenChange={vi.fn()}
+        formatDate={(value) => value}
+        getStageKey={(stage, index) => `${stage?.effective_from || "stage"}-${index}`}
+      />
+    );
 
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/0100000001/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Công ty Ánh Dương/i)).toBeInTheDocument();
-  });
-
-  it("mở dialog tổng hợp khi bấm nút Mở tổng hợp", () => {
-    render(<MSTAssignment canEdit={false} currentUser={{ username: "viewer" }} />);
-
-    const openAll = screen.getByRole("button", { name: /mở tổng hợp/i });
-    expect(openAll).not.toBeDisabled();
-
-    fireEvent.click(openAll);
-
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/0100000001/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/0200000002/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Dòng thời gian — 0100000001/i)).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/0100000001/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/Lan/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Hùng/)).toBeInTheDocument();
   });
 });

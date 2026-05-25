@@ -1,0 +1,116 @@
+import { useCallback } from "react";
+import { useAppDialog } from "@/hooks/useAppDialog";
+
+import { loadXlsx } from "@/lib/loadXlsx.js";
+
+export default function useDataImporterSelectionBulkActions({
+  deleteEnabled,
+  selectionEnabled,
+  selectedKeys,
+  selectedReviewedCount,
+  canReviewAlerts,
+  rawRows,
+  filteredKeys,
+  filteredSelected,
+  shouldUseServerSearch,
+  canEdit,
+  keyOfRow,
+  summarizeLicenseSnapshot,
+  formatDisplayDate,
+  coLabel,
+  coLineCount,
+  xlsx,
+  xlsxLoader = loadXlsx,
+  handleSelectFiltered,
+  handleMarkReviewed,
+  handleUnmarkReviewed,
+  handleDeleteSelected,
+  handleHardDeleteSelected,
+  handleApplyLicenseExclusion,
+  handleClearSelection,
+}) {
+  const { alert } = useAppDialog();
+
+  const canDelete = deleteEnabled && selectedKeys.length > 0;
+  const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
+  const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
+
+  const handleExportSelected = useCallback(async () => {
+    if (selectedKeys.length === 0) {
+      await alert("Hãy chọn tờ khai trước khi xuất Excel.");
+      return;
+    }
+
+    const keySet = new Set(selectedKeys);
+    const rows = rawRows.filter((row) => keySet.has(keyOfRow(row)));
+    if (rows.length === 0) {
+      await alert("Không tìm thấy tờ khai tương ứng để xuất.");
+      return;
+    }
+
+    const data = rows.map((row) => {
+      const licenseInfo = summarizeLicenseSnapshot(row);
+      return {
+        "Ngày": formatDisplayDate(row.date || row.raw_date || ""),
+        "Số tờ khai": row.so_tk_full || row.so_tk || "",
+        MST: row.mst || "",
+        "Công ty": row.cong_ty || "",
+        "Loại hình": row.loai_hinh || "",
+        "Nhân viên": row.nhan_vien || "",
+        "Tổ đội": row.team || "",
+        "Đại lý": row.agency || row.dai_ly || "",
+        "Số lượng GP gốc": licenseInfo.sourceCount,
+        "Số lượng GP (sau loại trừ)": licenseInfo.includedCount,
+        "Mã giấy phép hợp lệ": licenseInfo.includedCodes.join(", "),
+        "Mã giấy phép bị loại trừ": licenseInfo.excludedCodes.join(", "),
+        "C/O": coLabel(row),
+        "Dòng C/O": coLineCount(row),
+      };
+    });
+
+    const activeXlsx = xlsx ?? (await xlsxLoader());
+    const worksheet = activeXlsx.utils.json_to_sheet(data);
+    const workbook = activeXlsx.utils.book_new();
+    activeXlsx.utils.book_append_sheet(workbook, worksheet, "ToKhai");
+    const timestamp = new Date().toISOString().slice(0, 10);
+    activeXlsx.writeFile(workbook, `tokhai_da_chon_${timestamp}.xlsx`);
+  }, [
+    coLabel,
+    coLineCount,
+    formatDisplayDate,
+    keyOfRow,
+    rawRows,
+    selectedKeys,
+    summarizeLicenseSnapshot,
+    xlsx,
+    xlsxLoader,
+    alert,
+  ]);
+
+  const selectionActionsProps = {
+    selectedCount: selectedKeys.length,
+    filteredKeysLength: filteredKeys.length,
+    filteredSelected,
+    shouldUseServerSearch,
+    canReview,
+    canUnreview,
+    canEdit,
+    canDelete,
+    onSelectFiltered: handleSelectFiltered,
+    onMarkReviewed: handleMarkReviewed,
+    onUnmarkReviewed: handleUnmarkReviewed,
+    onDeleteSelected: handleDeleteSelected,
+    onHardDeleteSelected: handleHardDeleteSelected,
+    onApplyLicenseExclusion: handleApplyLicenseExclusion,
+    onExportSelected: handleExportSelected,
+    onClearSelection: handleClearSelection,
+  };
+
+  return {
+    canDelete,
+    canReview,
+    canUnreview,
+    handleExportSelected,
+    selectionActionsProps,
+  };
+}

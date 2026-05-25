@@ -122,9 +122,9 @@ afterEach(() => {
 
 describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
-  it('xem trước và import tờ khai rồi gán MST theo lịch sử', () => {
+  it('xem trước và import tờ khai rồi gán MST theo lịch sử', async () => {
 
-    saveDeclRows([], { overwrite: true, actor: 'tester' });
+    await saveDeclRows([], { overwrite: true, actor: 'tester' });
 
     const preview = previewDeclRows(SAMPLE_DECLS, { actor: 'tester' });
 
@@ -134,7 +134,7 @@ describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
 
 
-    const result = saveDeclRows(SAMPLE_DECLS, { actor: 'tester', detail: 'Import thử nghiệm' });
+    const result = await saveDeclRows(SAMPLE_DECLS, { actor: 'tester', detail: 'Import thử nghiệm' });
 
     expect(result.totalStored).toBe(SAMPLE_DECLS.length);
 
@@ -146,7 +146,7 @@ describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
     expect(stored).toHaveLength(2);
 
-    const mstRow = saveMSTRow(
+    const mstRow = await saveMSTRow(
 
       {
 
@@ -186,9 +186,9 @@ describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
 
 
-  it('đối chiếu giấy phép và tính điểm KPI bổ sung theo rule', () => {
+  it('đối chiếu giấy phép và tính điểm KPI bổ sung theo rule', async () => {
 
-    const rule = saveRules({
+    const rule = await saveRules({
 
       ...DEFAULT_RULES,
 
@@ -234,7 +234,7 @@ describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
 
 
-    saveKpiAdjustmentSettings(
+    await saveKpiAdjustmentSettings(
 
       {
 
@@ -260,7 +260,7 @@ describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
 
 
-    const adjustment = saveKpiAdjustment(
+    const adjustment = await saveKpiAdjustment(
 
       {
 
@@ -302,7 +302,7 @@ describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
         username: 'tester',
 
-        password: '123456',
+        password: '12345678',
 
         role: 'manager',
 

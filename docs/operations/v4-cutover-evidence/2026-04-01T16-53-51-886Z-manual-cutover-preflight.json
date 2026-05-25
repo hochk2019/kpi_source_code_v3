@@ -1,0 +1,715 @@
+{
+  "metadata": {
+    "capturedAt": "2026-04-01T16:53:51.886Z",
+    "label": "manual",
+    "expectedStage": "module-parity",
+    "baseUrl": "http://127.0.0.1:5000"
+  },
+  "status": "pass",
+  "checklist": [
+    {
+      "id": "contract-and-parity-commands-pass",
+      "label": "Contract + parity command gates pass",
+      "ok": true
+    },
+    {
+      "id": "health-readiness-not-blocked",
+      "label": "Health readiness khong blocked",
+      "ok": true
+    },
+    {
+      "id": "rollout-readiness-not-blocked",
+      "label": "Rollout readiness khong blocked",
+      "ok": true
+    },
+    {
+      "id": "migration-checks-no-fail",
+      "label": "Migration verification khong co fail",
+      "ok": true
+    },
+    {
+      "id": "stage-matches-expected",
+      "label": "Current stage khop expected (module-parity)",
+      "ok": true
+    }
+  ],
+  "blockers": [],
+  "commandRun": {
+    "total": 5,
+    "executedCount": 5,
+    "failedCount": 0,
+    "passedCount": 5,
+    "allPassed": true,
+    "results": [
+      {
+        "id": "cutover-governance-gate",
+        "label": "Hard-gate taskboard consistency",
+        "command": "pnpm run cutover:check",
+        "status": 0,
+        "ok": true
+      },
+      {
+        "id": "api-contract-report",
+        "label": "Frontend contract inventory",
+        "command": "pnpm run api:contract:report",
+        "status": 0,
+        "ok": true
+      },
+      {
+        "id": "api-contract-gate",
+        "label": "Frontend legacy route gate",
+        "command": "pnpm run api:contract:gate",
+        "status": 0,
+        "ok": true
+      },
+      {
+        "id": "parity-suite",
+        "label": "Canonical parity suite",
+        "command": "pnpm run verify:v4:parity",
+        "status": 0,
+        "ok": true
+      },
+      {
+        "id": "uat-smoke",
+        "label": "Role-based UAT smoke",
+        "command": "pnpm exec playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/import-flow.spec.js tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1",
+        "status": 0,
+        "ok": true
+      }
+    ]
+  },
+  "rehearsal": {
+    "metadata": {
+      "capturedAt": "2026-04-01T16:53:51.885Z",
+      "label": "manual",
+      "baseUrl": "http://127.0.0.1:5000",
+      "expectedStage": "module-parity"
+    },
+    "endpoints": {
+      "health": "http://127.0.0.1:5000/api/v4/health",
+      "rollout": "http://127.0.0.1:5000/api/v4/meta/rollout"
+    },
+    "assessment": {
+      "status": "pass",
+      "healthReadinessState": "degraded",
+      "rolloutReadinessState": "degraded",
+      "dbFileState": "ready",
+      "currentStage": "module-parity",
+      "expectedStage": "module-parity",
+      "failedChecks": [],
+      "blockers": [],
+      "warnings": [],
+      "checklist": [
+        {
+          "id": "health-readiness-not-blocked",
+          "label": "Health readiness khong blocked",
+          "ok": true
+        },
+        {
+          "id": "rollout-readiness-not-blocked",
+          "label": "Rollout readiness khong blocked",
+          "ok": true
+        },
+        {
+          "id": "migration-checks-no-fail",
+          "label": "Migration verification khong co fail",
+          "ok": true
+        },
+        {
+          "id": "stage-matches-expected",
+          "label": "Current stage khop expected (module-parity)",
+          "ok": true
+        }
+      ]
+    },
+    "snapshot": {
+      "health": {
+        "ok": true,
+        "version": "v4-scaffold",
+        "moduleCount": 14,
+        "modules": [
+          "alerts",
+          "auth",
+          "backup",
+          "data-health",
+          "duplicate-policy",
+          "feedback-training",
+          "filter-presets",
+          "declarations",
+          "mst-assignments",
+          "teams",
+          "hq-agencies",
+          "kpi-rules",
+          "kpi-adjustments",
+          "reporting"
+        ],
+        "db": {
+          "path": "E:\\GPT\\kpi_source_code_v4\\server\\data\\storage.sqlite",
+          "state": "ready",
+          "exists": true,
+          "readable": true,
+          "detail": "Legacy store file is readable by server-v4."
+        },
+        "readiness": {
+          "state": "degraded",
+          "label": "Compatibility verification only",
+          "detail": "server-v4 is usable for compatibility verification, but full rollout readiness remains blocked until relational runtime stores own the hot paths."
+        },
+        "metrics": {
+          "modules": {
+            "total": 14,
+            "implemented": 14,
+            "scaffold": 0,
+            "readOnly": 1,
+            "readWrite": 13
+          },
+          "routes": {
+            "total": 80,
+            "get": 40,
+            "mutation": 40,
+            "implemented": 80,
+            "implementedMutation": 40
+          }
+        }
+      },
+      "rollout": {
+        "ok": true,
+        "generatedAt": "2026-04-01T16:53:51.879Z",
+        "persistence": {
+          "source": "dual-write",
+          "hotPathKeys": [],
+          "hotPathCount": 0,
+          "detail": "Hot business entities have typed runtime snapshots with legacy kv_store retained only as dual-write compatibility."
+        },
+        "metrics": {
+          "modules": {
+            "total": 14,
+            "implemented": 14,
+            "scaffold": 0,
+            "readOnly": 1,
+            "readWrite": 13
+          },
+          "routes": {
+            "total": 80,
+            "get": 40,
+            "mutation": 40,
+            "implemented": 80,
+            "implementedMutation": 40
+          }
+        },
+        "health": {
+          "dbFile": {
+            "path": "E:\\GPT\\kpi_source_code_v4\\server\\data\\storage.sqlite",
+            "state": "ready",
+            "exists": true,
+            "readable": true,
+            "detail": "Legacy store file is readable by server-v4."
+          },
+          "readiness": {
+            "state": "degraded",
+            "label": "Compatibility verification only",
+            "detail": "server-v4 is usable for compatibility verification, but full rollout readiness remains blocked until relational runtime stores own the hot paths."
+          }
+        },
+        "migrationVerification": {
+          "checks": [
+            {
+              "id": "legacy-store-access",
+              "status": "pass",
+              "summary": "Legacy store access",
+              "detail": "Legacy store file is readable by server-v4."
+            },
+            {
+              "id": "hot-path-persistence-source",
+              "status": "warn",
+              "summary": "Hot-path persistence source",
+              "detail": "Hot business entities have typed runtime snapshots with legacy kv_store retained only as dual-write compatibility."
+            },
+            {
+              "id": "importer-compat-traffic",
+              "status": "pass",
+              "summary": "Importer compat traffic",
+              "detail": "No legacy importer compat traffic has been observed since process start."
+            },
+            {
+              "id": "implemented-module-coverage",
+              "status": "pass",
+              "summary": "Implemented module coverage",
+              "detail": "14/14 catalog modules have runtime routers mounted."
+            },
+            {
+              "id": "scaffold-module-gap",
+              "status": "pass",
+              "summary": "Scaffold module gap",
+              "detail": "No metadata-only modules remain in the catalog."
+            },
+            {
+              "id": "write-path-coverage",
+              "status": "pass",
+              "summary": "Write-path coverage",
+              "detail": "13 implemented modules expose mutation routes for staged rollout verification."
+            },
+            {
+              "id": "declarations-write-cutover-policy",
+              "status": "warn",
+              "summary": "Declarations write cutover policy",
+              "detail": "Compat guard mode must be `block-migrated` before declarations write cutover."
+            },
+            {
+              "id": "declarations-shadow-ecus-preview-commit",
+              "status": "pass",
+              "summary": "Declarations ECUS preview/commit shadow",
+              "detail": "Canonical routes are mounted and compat telemetry is wired for ecus-preview, ecus-run with no legacy hits observed since process start."
+            },
+            {
+              "id": "declarations-shadow-alerts",
+              "status": "pass",
+              "summary": "Declarations alerts config/review shadow",
+              "detail": "Canonical routes are mounted and compat telemetry is wired for alerts-list, alerts-config-read, alerts-config-write, alerts-review, alerts-unreview with no legacy hits observed since process start."
+            },
+            {
+              "id": "declarations-shadow-co-discrepancy",
+              "status": "pass",
+              "summary": "Declarations C/O discrepancy shadow",
+              "detail": "Canonical routes are mounted and compat telemetry is wired for co-codes-read, co-codes-write, co-discrepancy-read, co-discrepancy-run, co-discrepancy-config-write with no legacy hits observed since process start."
+            },
+            {
+              "id": "declarations-shadow-history-edit",
+              "status": "pass",
+              "summary": "Declarations history/edit parity",
+              "detail": "Canonical declaration edit/history routes are mounted behind the v4 surface with no remaining compat alias to observe."
+            }
+          ]
+        },
+        "compatibility": {
+          "importerTraffic": {
+            "guardMode": "off",
+            "totals": {
+              "hits": 0,
+              "migratedHits": 0,
+              "legacyOnlyHits": 0,
+              "blockedHits": 0
+            },
+            "routes": [
+              {
+                "id": "ecus-preview",
+                "method": "POST",
+                "legacyPath": "/api/import/ecus/preview",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/ecus-preview",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "ecus-run",
+                "method": "POST",
+                "legacyPath": "/api/import/ecus/run",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/ecus-commit",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "alerts-list",
+                "method": "GET",
+                "legacyPath": "/api/import/alerts",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/alerts",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "alerts-config-read",
+                "method": "GET",
+                "legacyPath": "/api/import/alerts/config",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/alerts/config",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "alerts-config-write",
+                "method": "PUT",
+                "legacyPath": "/api/import/alerts/config",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/alerts/config",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "alerts-review",
+                "method": "POST",
+                "legacyPath": "/api/import/alerts/review",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/alerts/review",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "alerts-unreview",
+                "method": "POST",
+                "legacyPath": "/api/import/alerts/unreview",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/alerts/unreview",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "co-codes-read",
+                "method": "GET",
+                "legacyPath": "/api/import/co-codes",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/co-codes",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "co-codes-write",
+                "method": "PUT",
+                "legacyPath": "/api/import/co-codes",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/co-codes",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "co-discrepancy-read",
+                "method": "GET",
+                "legacyPath": "/api/import/co-discrepancy",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/co-discrepancy",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "co-discrepancy-run",
+                "method": "POST",
+                "legacyPath": "/api/import/co-discrepancy/run",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/co-discrepancy/run",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              },
+              {
+                "id": "co-discrepancy-config-write",
+                "method": "PUT",
+                "legacyPath": "/api/import/co-discrepancy/config",
+                "kind": "migrated",
+                "canonicalPath": "/api/v4/declarations/imports/co-discrepancy/config",
+                "hitCount": 0,
+                "blockedCount": 0,
+                "lastHitAt": null
+              }
+            ],
+            "summary": "No legacy importer compat traffic has been observed since process start."
+          },
+          "declarationShadow": {
+            "summary": "Declarations shadow rollout gate is green for ECUS preview/commit, alerts workflows, C/O discrepancy, and declaration history/edit parity.",
+            "groups": [
+              {
+                "id": "declarations-shadow-ecus-preview-commit",
+                "label": "Declarations ECUS preview/commit shadow",
+                "status": "pass",
+                "detail": "Canonical routes are mounted and compat telemetry is wired for ecus-preview, ecus-run with no legacy hits observed since process start.",
+                "canonicalRoutes": [
+                  "POST /imports/ecus-preview",
+                  "POST /imports/ecus-commit"
+                ],
+                "compatRouteIds": [
+                  "ecus-preview",
+                  "ecus-run"
+                ],
+                "observedCompatHits": 0,
+                "blockedCompatHits": 0
+              },
+              {
+                "id": "declarations-shadow-alerts",
+                "label": "Declarations alerts config/review shadow",
+                "status": "pass",
+                "detail": "Canonical routes are mounted and compat telemetry is wired for alerts-list, alerts-config-read, alerts-config-write, alerts-review, alerts-unreview with no legacy hits observed since process start.",
+                "canonicalRoutes": [
+                  "GET /imports/alerts",
+                  "GET /imports/alerts/config",
+                  "PUT /imports/alerts/config",
+                  "POST /imports/alerts/review",
+                  "POST /imports/alerts/unreview"
+                ],
+                "compatRouteIds": [
+                  "alerts-list",
+                  "alerts-config-read",
+                  "alerts-config-write",
+                  "alerts-review",
+                  "alerts-unreview"
+                ],
+                "observedCompatHits": 0,
+                "blockedCompatHits": 0
+              },
+              {
+                "id": "declarations-shadow-co-discrepancy",
+                "label": "Declarations C/O discrepancy shadow",
+                "status": "pass",
+                "detail": "Canonical routes are mounted and compat telemetry is wired for co-codes-read, co-codes-write, co-discrepancy-read, co-discrepancy-run, co-discrepancy-config-write with no legacy hits observed since process start.",
+                "canonicalRoutes": [
+                  "GET /imports/co-codes",
+                  "PUT /imports/co-codes",
+                  "GET /imports/co-discrepancy",
+                  "POST /imports/co-discrepancy/run",
+                  "PUT /imports/co-discrepancy/config"
+                ],
+                "compatRouteIds": [
+                  "co-codes-read",
+                  "co-codes-write",
+                  "co-discrepancy-read",
+                  "co-discrepancy-run",
+                  "co-discrepancy-config-write"
+                ],
+                "observedCompatHits": 0,
+                "blockedCompatHits": 0
+              },
+              {
+                "id": "declarations-shadow-history-edit",
+                "label": "Declarations history/edit parity",
+                "status": "pass",
+                "detail": "Canonical declaration edit/history routes are mounted behind the v4 surface with no remaining compat alias to observe.",
+                "canonicalRoutes": [
+                  "PATCH /:declarationId",
+                  "GET /:declarationId/events"
+                ],
+                "compatRouteIds": [],
+                "observedCompatHits": 0,
+                "blockedCompatHits": 0
+              }
+            ]
+          },
+          "declarationCutover": {
+            "readiness": "hold",
+            "summary": "Declarations write cutover is on hold pending compat guard and clean canonical QA.",
+            "detail": "Compat guard mode must be `block-migrated` before declarations write cutover.",
+            "blockers": [
+              "Compat guard mode must be `block-migrated` before declarations write cutover."
+            ],
+            "recommendedWritePath": "monolith-legacy",
+            "operatorAction": "Keep declarations/importer operators on the monolith `/api/*` write flows until compat guard is `block-migrated` and canonical QA completes with zero migrated compat hits.",
+            "rollbackSteps": [
+              "Set `KPI_API_IMPORTER_COMPAT_GUARD_MODE=off` and restart server-v4 to reopen migrated legacy importer routes.",
+              "Route declarations/importer operators back to the monolith `/api/*` write flows until canonical parity is green again.",
+              "Rerun the declarations QA matrix and confirm `v4RolloutStatus` is green before re-enabling the cutover."
+            ],
+            "verificationGates": [
+              "postgresDeclarationsRoute",
+              "legacyCompatRoutes",
+              "importerCompatTraffic",
+              "runtimeRoutes",
+              "v4RolloutStatus"
+            ],
+            "requiredGuardMode": "block-migrated",
+            "observedGuardMode": "off",
+            "observedMigratedCompatHits": 0,
+            "observedBlockedCompatHits": 0,
+            "shadowGateStatus": "pass",
+            "shadowGroups": [
+              {
+                "id": "declarations-shadow-ecus-preview-commit",
+                "label": "Declarations ECUS preview/commit shadow",
+                "status": "pass"
+              },
+              {
+                "id": "declarations-shadow-alerts",
+                "label": "Declarations alerts config/review shadow",
+                "status": "pass"
+              },
+              {
+                "id": "declarations-shadow-co-discrepancy",
+                "label": "Declarations C/O discrepancy shadow",
+                "status": "pass"
+              },
+              {
+                "id": "declarations-shadow-history-edit",
+                "label": "Declarations history/edit parity",
+                "status": "pass"
+              }
+            ]
+          }
+        },
+        "rollout": {
+          "currentStage": "module-parity",
+          "recommendedNextStage": "cutover-ready",
+          "stages": [
+            {
+              "id": "baseline-health",
+              "label": "Compatibility baseline",
+              "status": "ready",
+              "gate": "Configured compatibility storage is readable by server-v4 for baseline validation."
+            },
+            {
+              "id": "internal-qa",
+              "label": "Internal QA ready",
+              "status": "ready",
+              "gate": "At least one runtime module is mounted and ready for internal QA parity checks."
+            },
+            {
+              "id": "module-parity",
+              "label": "Catalog parity ready",
+              "status": "ready",
+              "gate": "No metadata-only modules remain in the published catalog, even if compatibility mode is still active."
+            },
+            {
+              "id": "cutover-ready",
+              "label": "Production cutover ready",
+              "status": "hold",
+              "gate": "Relational runtime stores own hot paths, write-capable routes are available, and declarations cutover policy is green."
+            }
+          ],
+          "declarationCutover": {
+            "writePath": "monolith-legacy",
+            "operatorAction": "Keep declarations/importer operators on the monolith `/api/*` write flows until compat guard is `block-migrated` and canonical QA completes with zero migrated compat hits.",
+            "verificationGates": [
+              "postgresDeclarationsRoute",
+              "legacyCompatRoutes",
+              "importerCompatTraffic",
+              "runtimeRoutes",
+              "v4RolloutStatus"
+            ],
+            "rollbackSteps": [
+              "Set `KPI_API_IMPORTER_COMPAT_GUARD_MODE=off` and restart server-v4 to reopen migrated legacy importer routes.",
+              "Route declarations/importer operators back to the monolith `/api/*` write flows until canonical parity is green again.",
+              "Rerun the declarations QA matrix and confirm `v4RolloutStatus` is green before re-enabling the cutover."
+            ]
+          },
+          "fallback": [
+            "Keep monolith `/api/*` routes as the production write path until the next gate is green.",
+            "Re-run the QA matrix before enabling any additional `/api/v4/*` write traffic.",
+            "Set `KPI_API_IMPORTER_COMPAT_GUARD_MODE=off` and restart server-v4 to reopen migrated legacy importer routes.",
+            "Route declarations/importer operators back to the monolith `/api/*` write flows until canonical parity is green again.",
+            "Rerun the declarations QA matrix and confirm `v4RolloutStatus` is green before re-enabling the cutover."
+          ]
+        },
+        "modules": [
+          {
+            "id": "alerts",
+            "basePath": "/api/v4/alerts",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 7,
+            "mutationRouteCount": 3
+          },
+          {
+            "id": "auth",
+            "basePath": "/api/v4/auth",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 6,
+            "mutationRouteCount": 4
+          },
+          {
+            "id": "backup",
+            "basePath": "/api/v4/backups",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 5,
+            "mutationRouteCount": 3
+          },
+          {
+            "id": "data-health",
+            "basePath": "/api/v4/data-health",
+            "runtimeMode": "read-only",
+            "implemented": true,
+            "routeCount": 1,
+            "mutationRouteCount": 0
+          },
+          {
+            "id": "duplicate-policy",
+            "basePath": "/api/v4/duplicate-policy",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 2,
+            "mutationRouteCount": 1
+          },
+          {
+            "id": "feedback-training",
+            "basePath": "/api/v4/feedback-training",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 4,
+            "mutationRouteCount": 1
+          },
+          {
+            "id": "filter-presets",
+            "basePath": "/api/v4/filter-presets",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 4,
+            "mutationRouteCount": 3
+          },
+          {
+            "id": "declarations",
+            "basePath": "/api/v4/declarations",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 17,
+            "mutationRouteCount": 9
+          },
+          {
+            "id": "mst-assignments",
+            "basePath": "/api/v4/mst-assignments",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 5,
+            "mutationRouteCount": 2
+          },
+          {
+            "id": "teams",
+            "basePath": "/api/v4/teams",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 7,
+            "mutationRouteCount": 5
+          },
+          {
+            "id": "hq-agencies",
+            "basePath": "/api/v4/hq-agencies",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 4,
+            "mutationRouteCount": 2
+          },
+          {
+            "id": "kpi-rules",
+            "basePath": "/api/v4/kpi-rules",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 4,
+            "mutationRouteCount": 2
+          },
+          {
+            "id": "kpi-adjustments",
+            "basePath": "/api/v4/kpi-adjustments",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 5,
+            "mutationRouteCount": 3
+          },
+          {
+            "id": "reporting",
+            "basePath": "/api/v4/reporting",
+            "runtimeMode": "read-write",
+            "implemented": true,
+            "routeCount": 9,
+            "mutationRouteCount": 2
+          }
+        ]
+      }
+    }
+  }
+}

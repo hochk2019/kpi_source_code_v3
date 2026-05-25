@@ -23,12 +23,22 @@ export default defineConfig({
   server: {
 
     host: true,
+    watch: {
+      ignored: [
+        '**/data/**',
+        '**/*.sqlite*',
+        '**/backend-log.txt'
+      ]
+    },
 
     proxy: {
 
       '/api': {
 
-        target: process.env.VITE_API_BASE || 'http://localhost:5000',
+        target:
+          process.env.VITE_API_PROXY_TARGET ||
+          process.env.VITE_API_BASE ||
+          'http://localhost:5000',
 
         changeOrigin: true,
 
@@ -38,7 +48,18 @@ export default defineConfig({
 
   },
 
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'strip-shebang',
+      transform(code, _id) {
+        if (code.startsWith('#!')) {
+          return { code: code.replace(/^#!.*/, ''), map: null };
+        }
+      },
+    },
+  ],
 
   resolve: {
 
@@ -66,34 +87,24 @@ export default defineConfig({
 
             }
 
-            if (id.includes('/react/')) {
-
-              return 'vendor-react';
-
+            if (id.includes('lucide-react')) {
+              return 'vendor-lucide';
             }
 
-            if (id.includes('@radix-ui')) {
-
+            if (id.includes('radix-ui')) {
               return 'vendor-radix';
-
             }
 
             if (id.includes('recharts')) {
-
-              return 'vendor-charts';
-
+              return 'vendor-recharts';
             }
 
-            if (id.includes('date-fns')) {
-
-              return 'vendor-date';
-
+            if (id.includes('zod') || id.includes('hookform')) {
+              return 'vendor-form';
             }
 
-            if (id.includes('xlsx')) {
-
-              return 'vendor-xlsx';
-
+            if (id.includes('framer-motion')) {
+              return 'vendor-motion';
             }
 
           }
@@ -114,15 +125,25 @@ export default defineConfig({
 
     environment: 'jsdom',
 
+    pool: 'forks',
+
+    testTimeout: 15000,
+
     setupFiles: './vitest.setup.js',
 
     environmentMatchGlobs: [
-
       ['tests/server.*.test.js', 'node'],
-
+      ['tests/server-v4/**', 'node'],
+      ['tests/scripts/**', 'node'],
+      ['tests/apps*', 'node'],
+      ['tests/backendEntrypointPlan*', 'node'],
+      ['tests/bootstrapAccountPasswords*', 'node'],
+      ['tests/businessSnapshotSqlite*', 'node'],
+      ['tests/check-server*', 'node'],
+      ['tests/checkServerRetirement*', 'node'],
     ],
 
-    exclude: ['tests/playwright/**', 'node_modules/**', 'dist/**'],
+    exclude: ['tests/playwright/**', 'node_modules/**', 'dist/**', '.codex_tmp/**'],
 
   },
 

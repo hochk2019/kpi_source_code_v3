@@ -14,7 +14,7 @@ import {
 
   getPermissionTemplate,
 
-} from '@/shared/accountRoles.js';
+} from '../packages/domain/src/accountRoles.js';
 
 
 

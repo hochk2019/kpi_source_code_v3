@@ -1,0 +1,20 @@
+services:
+  kpi-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kpi-app:latest
+    container_name: kpi-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      KPI_LISTEN_HOST: 0.0.0.0
+    volumes:
+      - ./server/data:/app/server/data
+    networks:
+      - proxy_net
+
+networks:
+  proxy_net:
+    external: true

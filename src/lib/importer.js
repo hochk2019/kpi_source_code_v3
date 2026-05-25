@@ -18,7 +18,7 @@ import {
 
 import { loadRules, countLicenseTypesFromRowObj, extractLicenseCodesFromRowObj } from "./rules.js";
 
-import { deriveCOStatus, parseCoLineCount } from "../shared/co.js";
+import { deriveCOStatus, parseCoLineCount } from "../../packages/domain/src/co.js";
 
 
 

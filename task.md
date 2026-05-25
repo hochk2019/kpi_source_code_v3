@@ -1,0 +1,1516 @@
+# Task Tracker
+
+## Canonical Open Backlog
+
+- Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
+- Da reconcile ngay 2026-04-02 sau khi dong bead `cng-yn6.7`; lane sync latency/disconnect refactor khong con backlog mo.
+- Da reconcile lai ngay 2026-04-02 sau khi mo epic frontend modernization `cng-1wj` voi child chain `cng-1wj.1..cng-1wj.11`.
+- Da reconcile them ngay 2026-04-02 sau khi hoan tat phase-0 freeze/design (`cng-1wj.1`, `cng-1wj.2`) va chuyen active slice sang `cng-1wj.3`.
+- Da reconcile tiep ngay 2026-04-02 sau khi ship shell/dashboard/command-center/workflow-guide/async primitives (`cng-1wj.3..cng-1wj.8`) va state extraction wave A (`cng-1wj.9`); next ready slice la `cng-1wj.10`.
+- Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.10`; wave B da tach them `reportSchedules`, `importColumnConfig`, va `kpiAdjustments` khoi `store.js`, va next ready slice la `cng-1wj.11`.
+- Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.11` va epic `cng-1wj`; frontend modernization hardening da xanh tren shell + state extraction matrix, va follow-up tach nho `src/lib/kpiAdjustments.js` duoc ghi ro la deferred cho mot slice KPI adjustments trong tuong lai.
+- Da reconcile tiep ngay 2026-04-03 sau khi commit va dong `cng-1se`; `src/lib/kpiAdjustments.js` da duoc tach thanh submodule noi bo co test rieng va landed trong commit `a54be12`.
+- Da reconcile tiep ngay 2026-04-03 sau khi mo epic `cng-ro9` cho chuong trinh triet de tach `src/lib/store.js`; active slice duoc doi sang `cng-ro9.1` de bootstrap execution board + anti-drop resume control, va `cng-bl9` duoc chuyen thanh child wave-1 cua epic nay.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.1`; execution board + anti-drop resume control da duoc khoa, va active slice duoc chuyen sang `cng-bl9` de bat dau wave-1 audit extraction.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-bl9`; audit log helpers da duoc tach thanh `src/lib/auditLog.js` co test rieng, va next slice duoc chuyen sang `cng-ro9.2` cho rules persistence.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.2`; rules persistence da duoc tach thanh `src/lib/rulesPersistence.js` co test rieng, facade `store.js` giu nguyen API, va next slice duoc chuyen sang `cng-ro9.3` cho team roster domain.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.3`; team roster domain da duoc tach thanh `src/lib/teamRoster.js` co test rieng, facade `store.js` giu nguyen API roster, va next slice duoc chuyen sang `cng-ro9.4` cho declaration read/query extraction.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.4`; declaration read/query helpers da duoc tach thanh `src/lib/declReadStore.js` co test rieng, facade `store.js` giu nguyen `getDeclRows`/`getRecentDeclRows`/`getData`, va next slice duoc chuyen sang `cng-ro9.5` cho declaration save pipeline extraction.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.5`; declaration save/import pipeline da duoc tach thanh `src/lib/declWriteStore.js` co test rieng, facade `store.js` giu nguyen `previewDeclRows`/`saveDeclRows`, va next slice duoc chuyen sang `cng-ro9.6` cho declaration lifecycle mutations.
+- Da reconcile tiep ngay 2026-04-07 sau khi dong `cng-ro9.6`; declaration lifecycle mutations da duoc tach thanh `src/lib/declMutationStore.js` co test rieng, facade `store.js` giu nguyen `saveDeclRowDiffs`/`updateDeclRowFields`/`softDeleteDeclRows`/`hardDeleteDeclRows`/`restoreDeclRows`/`markDeclRowsReviewed`/`unmarkDeclRowsReviewed`, va next slice duoc chuyen sang `cng-ro9.7` cho shared core helper extraction.
+- Da reconcile tiep ngay 2026-04-07 sau khi commit `cng-ro9.7` va land batch-1 cua `cng-ro9.8`; 8 caller low-risk da doi import `normalize*` sang `src/lib/storeCoreHelpers.js`, trong khi `dataImporterRowUtils` duoc giu lai trong bead hien tai vi `gitnexus_impact(buildRosterTeams)` = `HIGH`.
+- Da reconcile tiep ngay 2026-04-07 sau khi land batch-2 cua `cng-ro9.8`; them 11 caller low-risk da doi sang `src/lib/storeCoreHelpers.js`, `src/lib/importColumnConfig.js`, `src/lib/mstAssignments.js`, va `shared/kpiAdjustments.js`, reducing direct `@/lib/store.js` consumers xuong 24 file trong `src`, va next active slice duoc doi sang `cng-ro9.9` de khoa `store.js` thanh shim mong.
+- Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-ro9.9` va epic `cng-ro9`; `src/lib/store.js` nay chi con shim deprecation re-export sang `src/lib/storeRuntime.js`, batch `cng-ro9.8` da duoc commit `2111f22`, va lane store decomposition da hoan tat end-to-end.
+- Da reconcile tiep ngay 2026-04-08 sau khi mo epic `cng-sr1`; lane server retirement da co board canonical `docs/server-retirement-execution-board.md`, frozen inventory `docs/server-retirement-inventory.json`, verifier `pnpm verify:server-retirement`, va active slice duoc chuyen sang `cng-sr1.1`.
+- Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.1` va claim `cng-sr1.2`; active slice chuyen sang wave SQLite/snapshot/persistence extraction de repoint `server-v4` va tests sang `@kpi/backend-shared/persistence`.
+- Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.2`; wave-2 direct imports vao `server/businessSnapshotSqlite.js`, `server/declarationSnapshotSearch.js`, `server/reportingProjectionSqlite.js`, `server/reportingProjectionStore.js`, `server/sqliteMigrations.js`, va `server/teamRosterSqlite.js` da ve 0, va next ready slice la `cng-sr1.3`.
+- Da reconcile tiep ngay 2026-04-08 sau khi land waves `cng-sr1.3..cng-sr1.5`; reporting/auth/runtime helpers da duoc repoint sang `@kpi/backend-shared/*`, direct-import gate `pnpm verify:server-retirement` da ve 0 runtime / 0 test / 0 mapped target, va active slice duoc chuyen sang `cng-sr1.6` de retire test harness dang quarantine qua `packages/backend-shared/src/testing/index.js` truoc khi xoa vat ly `server/`.
+- Da reconcile tiep ngay 2026-05-06 sau khi mo epic `cng-0if` cho UX Review program; comprehensive frontend audit hoan tat voi 12 review docs `reviews/ui-ux-2026-05-06/00-index.md..11-component-templates.md` tong ~245KB; plan chia 8 slices uoc luong ~10 dev days, ke them `10-legacy-class-inventory.md` (1979 occurrences across 105 files, top 20 hot files, replacement table chi tiet) va `11-component-templates.md` (sample TSX code starter cho 6 components moi: PageHeader, InfoTooltip, EmptyState, PermissionBanner, ExportDropdown, BulkActionBar, FilterBar); chua start implementation, doc tach roi khoi `cng-sr1.6` lane; agent ke tiep co the claim `cng-0if` va lam theo `07-implementation-plan.md` slice 1 (foundation cleanup) hoac dung `11-component-templates.md` lam starter cho slice 4.
+- Open epics hien tai:
+  - `cng-sr1` (server retirement program; active slice la `cng-sr1.6`)
+  - `cng-0if` (UX Review 2026-05-06; documentation hoan tat, awaiting implementation)
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.1` (Slice 1: Foundation cleanup); da them design tokens, sidebar diet, xoa AppShellWorkflowGuide, fix StatusBadge tokens; typecheck passed; test appShellFrame.test.jsx updated; 5 files changed, 3 files deleted.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.2` (Slice 2: Compact PageHeader); da tao PageHeader + InfoTooltip components, replace hero block trong AppShellFrame, tests pass; 6 files created, 2 files modified.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.3` (Slice 3: SectionHeader info migration); da update SectionHeader API (add info prop, InfoTooltip, console.warn cho description), migrate 11 files tu description sang info; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.4` (Slice 4: Component library batch) - PHAN 1; da tao 6 components moi: EmptyState, PermissionBanner, ExportDropdown, BulkActionBar, LoadingState, FilterBar; skeleton-presets; re-exports; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.4b` (Slice 4 PHAN 2: DataTable extension + tests); da extend DataTable voi selection, sort, editable, error props; tao tests cho 6 components; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.1` (Slice 5.1: Dashboard restructure); da refactor AppDashboardLanding.tsx voi PageHeader, compact quick actions, EmptyState; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.2` (Slice 5.2: Import Data restructure); da refactor DataImporterShell.jsx voi PageHeader, PermissionBanner, PageTabs (4 tabs); typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.3` (Slice 5.3: MST + HQ merge); da tao MstHqContainer.tsx, gop 2 tabs thanh 1, update appShellNavigation.ts va KPICalculator.tsx; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.4` (Slice 5.4: Adjustments restructure); da refactor KPIAdjustments.tsx voi PageHeader, PermissionBanner, FilterBar trong tab Danh sach, chuyen Settings thanh dialog; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.5.5` (Slice 5.5: Reports restructure); da refactor ReportViewer.tsx voi PageHeader compact, FilterBar, ExportDropdown; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.1` (Slice 6.1: Teams restructure); da refactor TeamManager.tsx voi PageHeader, PermissionBanner, 2-col layout, internal tabs (Members/Companies/History); typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.2` (Slice 6.2: Rules restructure); da refactor RulesEditor.tsx voi PageHeader, PermissionBanner, 3 main tabs (Active/History/Test); typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.3` (Slice 6.3: Health restructure); da refactor DataHealthDashboard.tsx voi PageHeader, PermissionBanner, 5 tabs (All/Duplicates/Missing/ECUS/Alerts); typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.4` (Slice 6.4: AI restructure); da refactor AIAssistant.tsx voi PageHeader, PermissionBanner; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.5` (Slice 6.5: Accounts restructure); da refactor AccountManager.tsx voi PageHeader; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.6.6` (Slice 6.6: Navigation IA); da update appShellNavigation.ts - health→operations, ai→governance; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.2` (Slice 7.2: AuditLog split); da tao cac modules: useAuditLogData.ts, AuditLogShell.tsx, AuditLogFilters.tsx, types.ts; AuditLog.tsx goc van giu lai, da them re-exports; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.3` (Slice 7.3: ExportAuditReport polish); da refactor ExportAuditReport.tsx voi PageHeader, meta stats summary; typecheck passed.
+- Da reconcile tiep ngay 2026-05-06 sau khi hoan tat `cng-0if.7.4` (Slice 7.4: useEditPermission hook); da tao useEditPermission.ts voi 2 hooks: useEditPermission(tab) va useEditPermissions(tabs[]); typecheck passed.
+- Slice 7 (IA reorganization + Audit pages) da HOAN TAT.
+- Slice 8.1 (Fix existing failing tests) dang in_progress, da land batch test-stabilization ngay 2026-05-06:
+  - Green verified batches: KPIAdjustments (36 pass), KPICalculator (5 pass), reporting* (76 pass), rules* (41 pass), useDataImporterActionGuards (3 pass).
+  - Da sua nhom MSTAssignment, KPIAdjustments, KPICalculator, reporting panels, rules editor/persistence, va 1 hook useDataImporterActionGuards theo DOM moi/async flow moi.
+  - useDataImporter* batch da xanh `117 pass / 0 fail / 0 unhandled errors` sau khi update async hook actions/AppDialog assertions.
+  - 8.2 component tests, 8.3 visual regression, 8.4 a11y, 8.5 performance chua bat dau.
+- Highest-priority ready items hien tai:
+  - `cng-sr1.6` - server-entrypoint-retirement-and-delete
+  - `cng-0if.8` - UX Review Slice 8: Test fixes + visual regression
+
+## Active Slice
+
+-- Bead: cng-sr1.6
+-- Title: server-entrypoint-retirement-and-delete
+-- Status: in_progress
+-- Last updated: 2026-05-06
+
+## Sync Notebook
+
+- Goal: khoa xong waves 3-5 cua server retirement, sau do hoan tat wave-6 bang cach thay test quarantine `@kpi/backend-shared/testing` de khong con noi bo nao phu thuoc `server/index.js`, roi moi xoa vat ly cay `server/`.
+- Files In Scope: `packages/backend-shared/src/testing/**`; `tests/server.api.test.js`; `tests/server.backup.test.js`; `tests/server.monitor.test.js`; `tests/server.seed.test.js`; neu can thi `server-v4/src/app/**` va runtime/module harness lien quan; `docs/server-retirement-execution-board.md`; `docs/open-backlog.md`; `task.md`.
+- Pending Verify: targeted legacy API/backups/seed/monitor test harness verify; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Verify: `pnpm exec eslint tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js packages/backend-shared/src/testing/index.js`; `pnpm exec vitest run tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js --environment node`; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Handoff: direct imports da ve 0, nhung `packages/backend-shared/src/testing/index.js` van la quarantine layer re-export `server/index.js` de phuc vu legacy route suite (`/api/auth/*`, `/api/bootstrap`, `/api/notifications`, `/api/ai/*`, ...); muon dong that su `cng-sr1.6` can thay layer nay bang harness/modular runtime khong con import noi bo vao `server/`.
+
+### Checkpoint: cng-0if.8.1 / frontend test stabilization partial
+
+- Done: stabilized KPIAdjustments, KPICalculator, reporting*, rules*, MSTAssignment-related tests, and `useDataImporterActionGuards` against the new DOM and async storage/dialog flows.
+- Verify: JSON-redirected Vitest targeted commit verify reported `success=True`, `passed=56`, `failed=0`, `errors=0` for modified test files; prior batch evidence: KPIAdjustments 36 pass, KPICalculator 5 pass, reporting* 76 pass, rules* 41 pass, useDataImporterActionGuards 3 pass.
+- Risk: Slice 8.2 component tests, 8.3 visual regression, 8.4 a11y, va 8.5 performance chua bat dau; Slice 8.1 test stabilization da xanh theo known failing clusters.
+- Decision: close Slice 8.1 scope after final targeted 8.1 verify; continue Slice 8.2+ in a separate slice.
+- Next: run/keep final JSON-redirected 8.1 verification evidence, then commit this final Slice 8.1 test-fix batch.
+
+### Checkpoint: cng-sr1.5 / legacy-test-and-orphan-helper-migration complete
+
+- Done: repoint toan bo direct imports con lai trong `tests/**` sang `@kpi/backend-shared/testing`, khoa eager import trong `tests/server.monitor.test.js`, va dua gate `pnpm verify:server-retirement` ve `0 runtime / 0 test / 0 mapped target`.
+- Verify: `pnpm exec eslint tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js packages/backend-shared/src/testing/index.js`; `pnpm exec vitest run tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js --environment node`; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Risk: `packages/backend-shared/src/testing/index.js` van re-export noi bo tu `server/index.js`; neu dong epic ngay bay gio thi chi la hide direct imports, chua retire vat ly legacy entrypoint.
+- Decision: close waves `cng-sr1.3..cng-sr1.5`, giu `cng-sr1.6` mo va doi active slice sang test-harness/server-entrypoint retirement that su.
+- Next: thiet ke harness thay the cho legacy API test suite de `server/index.js` co the bi bo hoan toan truoc khi xoa cay `server/`.
+
+### Checkpoint: cng-sr1.2 / sqlite-snapshot-and-persistence-extraction complete
+
+- Done: tao `packages/backend-shared/src/persistence/declarationSnapshotSearch.js` + `index.d.ts`, mo rong `@kpi/backend-shared/persistence` exports, repoint 9 runtime consumers trong `server-v4/src/**` va 14 wave-2 test files sang package moi, va them workspace dependency `@kpi/backend-shared` vao root package.
+- Verify: `pnpm install`; `pnpm exec eslint server-v4/src/modules/auth/sqliteAuthStore.ts server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/hq-agencies/sqliteHqAgenciesStore.ts server-v4/src/modules/kpi-adjustments/sqliteKpiAdjustmentsStore.ts server-v4/src/modules/kpi-rules/sqliteKpiRulesStore.ts server-v4/src/modules/teams/sqliteTeamsStore.ts server-v4/src/persistence/reportingProjectionPersistence.ts server-v4/src/persistence/sqliteBusinessSnapshotReader.ts packages/backend-shared/src/persistence/index.js packages/backend-shared/src/persistence/declarationSnapshotSearch.js packages/backend-shared/src/persistence/reportingProjectionStore.js tests/businessSnapshotSqlite.test.js tests/declarationSnapshotSearch.test.js tests/reportingProjectionSqlite.test.js tests/reportingProjectionStore.test.js tests/runtimeStorageLifecycle.test.js tests/server-v4/runtimeRoutes.test.js tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js tests/server-v4/sqliteTeamsStore.test.js tests/server.api.test.js tests/server.seed.test.js tests/sqliteMigrations.test.js tests/teamRosterSqlite.test.js tests/workspaceLayout.test.js`; `pnpm exec vitest run tests/businessSnapshotSqlite.test.js tests/declarationSnapshotSearch.test.js tests/reportingProjectionSqlite.test.js tests/reportingProjectionStore.test.js tests/runtimeStorageLifecycle.test.js tests/server-v4/runtimeRoutes.test.js tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js tests/server-v4/sqliteTeamsStore.test.js tests/server.api.test.js tests/server.seed.test.js tests/sqliteMigrations.test.js tests/teamRosterSqlite.test.js tests/workspaceLayout.test.js --environment node`; `pnpm run typecheck:server-v4`; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Risk: `packages/backend-shared/src/persistence/reportingProjectionStore.js` van con phu thuoc vao `server/reportingReadModels.js` va `server/reportingObservability.js` bang relative import noi bo; do do wave-3 can move reporting helpers som de package khong con cross-import nguọc vao legacy tree.
+- Decision: close `cng-sr1.2`; chot wave-2 la boundary migration thanh cong va giu logic runtime/test khong doi.
+- Next: `cng-sr1.3` tap trung reporting/export/observability extraction, uu tien xoa nốt runtime imports con lai trong `server-v4/src/modules/reporting/*` va `server-v4/src/legacy/legacy-report-bridge.ts`.
+
+### Checkpoint: cng-ro9.9 / store shim lockdown complete
+
+- Done: doi `src/lib/store.js` thanh shim deprecation 6 dong chi `export *` sang `src/lib/storeRuntime.js`; move toan bo legacy runtime facade sang `src/lib/storeRuntime.js`; bo sung `tests/storeShim.test.js`; giu batch fix `.8` voi `src/lib/importColumnConfig.js` runtime wrapper va commit `2111f22`.
+- Verify: `gitnexus_impact(createRulesPersistenceStore)` = `MEDIUM`; `gitnexus_impact(createAuditLogStore)` = `MEDIUM`; `gitnexus_impact(createReportScheduleStore)` = `MEDIUM`; `gitnexus_impact(createKpiAdjustmentStore)` = `MEDIUM`; targeted `eslint` + `vitest` shim regression xanh; `store.js` line count giam ve shim mong.
+- Risk: caller import `@/lib/store.js` van con ton tai cho compat, nen lane tiep theo khong duoc them import moi vao shim; `dataImporterRowUtils` va `referenceParsing` van chua migrate direct vi da duoc xep `HIGH` impact o `.8`, nhung khong con can chan closeout epic.
+- Decision: dong `cng-ro9.9` va dong luon epic `cng-ro9`; coi `storeRuntime.js` la legacy runtime surface, con `store.js` la compat facade tam thoi.
+- Next: khong co child bead nao mo trong lane nay; chon lane moi tu canonical backlog khi user yeu cau tiep.
+
+### Checkpoint: cng-ro9.8 / batch-2
+
+- Done: doi them 14 source/test files low-risk sang direct modules (`DataImporterAssignmentComboboxes`, `dataImporterConfig`, `useDataImporterColumnConfig`, `useDataImporterFilterPresets`, `useKpiAdjustmentFilters`, `categoryOptions`, `guidanceGroups`, `settingsDraft`, `staffOptions`, `KpiAdjustmentDetailDialog`, `KpiAdjustmentSettingsDialog`, `useMSTAssignmentDerivedRowsWorkspace`, `statusDate`, `statusViewModel`) va cap nhat test lien quan.
+- Verify: `gitnexus_impact(TeamCombobox)` = `LOW`; `gitnexus_impact(parseMstListInput)` = `LOW`; `gitnexus_impact(useDataImporterColumnConfig)` = `LOW`; `gitnexus_impact(useDataImporterFilterPresets)` = `LOW`; `gitnexus_impact(useKpiAdjustmentFilters)` = `LOW`; `gitnexus_impact(buildStaffOptions)` = `LOW`; `gitnexus_impact(resolveCategoryOptions)` = `LOW`; `gitnexus_impact(buildGuidanceGroups)` = `LOW`; `gitnexus_impact(buildSettingsDraft)` = `LOW`; `gitnexus_impact(KpiAdjustmentDetailDialog)` = `LOW`; `gitnexus_impact(KpiAdjustmentSettingsDialog)` = `LOW`; `gitnexus_impact(computeStatusDisplay)` = `LOW`; `gitnexus_impact(buildStatusViewModel)` = `LOW`; `gitnexus_impact(useMSTAssignmentDerivedRowsWorkspace)` = `LOW`; targeted `eslint` + `vitest` gates deu xanh.
+- Risk: con 24 file `src` van import `@/lib/store.js`; nhom residual nay chu yeu dung wrapper singleton (`getTeamRoster`, `getHQAgencies`, `getKpiAdjustments`, `getAuditLogs`, `getMSTHistoryEntries`, `saveDeclRows`, ...) nen tiep tuc migrate le tung caller trong `.8` se cho loi ich thap va de mo rong scope.
+- Decision: chot `cng-ro9.8` sau batch-2, giu `dataImporterRowUtils` va `referenceParsing` cho pha shim/runtime vi da co gate `HIGH`, va chuyen sang `.9` de dua runtime wiring ra khoi `store.js`.
+- Next: dong `cng-ro9.8`, claim `cng-ro9.9`, chay impact cho runtime extraction symbols, va lam `store.js` thanh compat shim mong.
+
+### Checkpoint: cng-ro9.8 / batch-1
+
+- Done: doi 8 caller low-risk dang import `normalize*` tu `@/lib/store.js` sang `@/lib/storeCoreHelpers.js` (`AccountPermissionGroupsPanel`, `TeamManagerMemberPanel`, `StaffCombobox`, `staffComboboxOptions`, `dataImporterDeclarationStatus`, `dataImporterDuplicateReviewUtils`, `dataImporterLicenseUtils`, `useDataImporterSessionFilters`).
+- Verify: `gitnexus_impact(buildStaffComboboxTeams)` = `LOW`; `gitnexus_impact(AccountPermissionGroupsPanel)` = `LOW`; `gitnexus_impact(TeamManagerMemberPanel)` = `LOW`; `gitnexus_impact(resolveDeclarationStatus)` = `LOW`; `gitnexus_impact(useDataImporterSessionFilters)` = `LOW`; `gitnexus_impact(formatDuplicateGroupLabel)` = `LOW`; `gitnexus_impact(ensureCOFields)` = `LOW`; `pnpm exec eslint src/components/account-manager/AccountPermissionGroupsPanel.jsx src/components/dataImporter/dataImporterDeclarationStatus.js src/components/dataImporter/dataImporterDuplicateReviewUtils.js src/components/dataImporter/dataImporterLicenseUtils.js src/components/dataImporter/useDataImporterSessionFilters.js src/components/shared/StaffCombobox.jsx src/components/shared/staffComboboxOptions.js src/components/team-manager/TeamManagerMemberPanel.jsx tests/accountPermissionGroupsPanel.test.jsx tests/dataImporterDeclarationStatus.test.jsx tests/dataImporterDuplicateReviewUtils.test.js tests/dataImporterLicenseUtils.test.js tests/staffComboboxOptions.test.js tests/teamManagerMemberPanel.test.jsx tests/useDataImporterSessionFilters.test.jsx`; `pnpm exec vitest run tests/accountPermissionGroupsPanel.test.jsx tests/dataImporterDeclarationStatus.test.jsx tests/dataImporterDuplicateReviewUtils.test.js tests/dataImporterLicenseUtils.test.js tests/staffComboboxOptions.test.js tests/teamManagerMemberPanel.test.jsx tests/useDataImporterSessionFilters.test.jsx --environment jsdom`.
+- Risk: `gitnexus_impact(buildRosterTeams)` = `HIGH`, nen `src/components/dataImporter/dataImporterRowUtils.js` va nhung caller keo theo chua duoc migrate trong batch nay; tong caller `@/lib/store.js` van con cao.
+- Decision: ship `.8` theo nhieu dot nho; uu tien batch normalize/helper `LOW` truoc, chua mo khoa shim `.9` cho den khi residual caller giam them.
+- Next: chay `pnpm bd:check` + `gitnexus_detect_changes(scope=all)` cho batch-1, commit progress `.8`, roi danh gia dot tiep theo (helper/constants low-risk con lai) truoc khi quyet dinh co the mo `cng-ro9.9` hay chua.
+
+### Checkpoint: cng-ro9.7
+
+- Done: tao `src/lib/storeCoreHelpers.js` va `src/lib/declMutationHelpers.js`; doi `src/lib/store.js` sang import/re-export helper core thay vi giu implementation inline; cap nhat `declReadStore`/`declWriteStore`/`declMutationStore` de default helper den tu module moi thay vi phu thuoc implementation noi bo trong `store.js`.
+- Verify: `gitnexus_impact` cho `sanitizePartialDeclUpdates` va `applyPartialUpdatesToRow` = `LOW`; cac helper generic (`normalizeStr`/`normalizeMST`/`normalizeName`/`normalizeDeclarationNumber`/`safeParse`) bi GitNexus disambiguate sang homonym server-side nen da bo sung `gitnexus_context(..., file_path: "src/lib/store.js")` de xac nhan caller frontend truoc khi giu facade export khong doi; `pnpm exec eslint src/lib/storeCoreHelpers.js src/lib/declMutationHelpers.js src/lib/declReadStore.js src/lib/declWriteStore.js src/lib/declMutationStore.js src/lib/store.js tests/storeCoreHelpers.test.js tests/declMutationHelpers.test.js tests/declReadStore.test.js tests/declWriteStore.test.js tests/declMutationStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/storeCoreHelpers.test.js tests/declMutationHelpers.test.js tests/declReadStore.test.js tests/declWriteStore.test.js tests/declMutationStore.test.js tests/store.test.js --environment jsdom`.
+- Risk: `normalizeStr`/`normalizeMST`/`normalizeName`/`normalizeDeclarationNumber` van co caller frontend rong, nen `.7` chi doi ownership implementation va giu `store.js` la facade/re-export; caller migration de lai cho `cng-ro9.8`.
+- Decision: move helper code ra module rieng, bo helper private khoi `store.js`, va de declaration stores tu co default helper noi bo; khong doi import cua caller ben ngoai trong slice nay.
+- Next: close `cng-ro9.7`, chuyen `cng-ro9.8` sang `in_progress`, scan importers con dung `@/lib/store.js`, va migrate theo dot low-risk truoc khi danh gia co mo duoc `cng-ro9.9` hay khong.
+
+### Checkpoint: cng-ro9.6
+
+- Done: tao `src/lib/declMutationStore.js` voi `createDeclMutationStore`; doi `src/lib/store.js` sang declaration mutation facade mong cho `saveDeclRowDiffs`/`updateDeclRowFields`/`softDeleteDeclRows`/`hardDeleteDeclRows`/`restoreDeclRows`/`markDeclRowsReviewed`/`unmarkDeclRowsReviewed`; them `tests/declMutationStore.test.js`.
+- Verify: `gitnexus_impact(saveDeclRowDiffs/updateDeclRowFields/softDeleteDeclRows/hardDeleteDeclRows/restoreDeclRows/markDeclRowsReviewed/unmarkDeclRowsReviewed)` = `LOW`; `pnpm exec eslint src/lib/declMutationStore.js src/lib/store.js tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx tests/server.api.test.js`; `pnpm exec vitest run tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server.api.test.js --environment node`.
+- Risk: `saveDeclRowDiffs` va `restoreDeclRows` van co d=1 callers trong DataImporter hooks; can tiep tuc giu facade va contract return shape on dinh cho lane caller migration. `gitnexus_detect_changes()` du kien van coarse tren `store.js` vi hot file attribution.
+- Decision: chi move implementation mutation lane sang module rieng, con `sanitizePartialDeclUpdates`/`applyPartialUpdatesToRow`/history + deleted-log helpers van o lai `store.js` va duoc inject vao module moi de danh scope cho `cng-ro9.7`.
+- Next: chuyen active slice sang `cng-ro9.7`, chay impact cho shared helper symbols, va tach helper core dung chung cho declaration lanes truoc khi bat dau caller migration.
+
+### Checkpoint: cng-ro9.5
+
+- Done: tao `src/lib/declWriteStore.js` voi `createDeclWriteStore`; doi `src/lib/store.js` sang facade mong cho `previewDeclRows`/`saveDeclRows`; giu `persistAndAnnotateDeclRows` lai trong `store.js` va inject vao module moi de khong lan sang mutation lane; them `tests/declWriteStore.test.js`.
+- Verify: `pnpm exec eslint src/lib/declWriteStore.js src/lib/store.js tests/declWriteStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/declWriteStore.test.js tests/store.test.js tests/automation.flows.test.js tests/hqIntegration.test.js tests/dataImporter.preview.test.jsx --environment jsdom`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Risk: `gitnexus_impact(previewDeclRows)` = `LOW`; `saveDeclRows` can phai resolve bang `gitnexus_context(name=saveDeclRows,file_path=src/lib/store.js)` do target-name ambiguous, va `detect_changes()` van danh dau `critical` vi attribution coarse tren hot file `store.js`.
+- Decision: chi move helper thuoc save/import pipeline (`buildImportLogEntry`, `normalizeImportErrorRow`, `computeDeclImportDiff`, MST dry-run/addition logic) sang module moi; helper chung cho mutation lane van de lai va inject de giu scope.
+- Next: chuyen active slice sang `cng-ro9.6`, chay impact cho declaration lifecycle mutation facades, va tach update/delete/restore/review lane sang module rieng.
+
+### Checkpoint: cng-ro9.4
+
+- Done: tao `src/lib/declReadStore.js` voi `createDeclReadStore`; doi `src/lib/store.js` sang declaration read/query facade mong cho `getDeclRowsRaw`/`getDeclRows`/`refreshDeclRowsFromServer`/`sortDeclRows`/`getRecentDeclRows`/`getData`; them `tests/declReadStore.test.js`; bo sung regression facade `getData` trong `tests/store.test.js`.
+- Verify: `pnpm exec eslint src/lib/declReadStore.js src/lib/store.js tests/declReadStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/declReadStore.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/hqIntegration.test.js tests/useDataImporterSync.test.jsx tests/useKpiAdjustmentFormWorkspace.test.jsx --environment jsdom`; `gitnexus_detect_changes(scope=all)`.
+- Risk: `gitnexus_impact(sortDeclRows)` = `HIGH` va `gitnexus_impact(getDeclRowsRaw)` = `CRITICAL`; can tiep tuc giu extraction o muc move-only/facade-only, va dien giai `detect_changes()` theo diff thuc te vi `src/lib/store.js` la hot file.
+- Decision: giu nguyen behavior read/query byte-for-byte, dung closure injection hai chieu giua `declReadStore` va `hqAgencyStore` thay vi doi contract giua cac domain, va chua mo rong sang preview/save lane.
+- Next: chuyen active slice sang `cng-ro9.5`, chay impact cho `previewDeclRows`/`saveDeclRows`, va tach declaration save pipeline sang module rieng.
+
+### Checkpoint: cng-ro9.3
+
+- Done: tach team roster thanh `src/lib/teamRoster.js`, wire facade `getTeamRoster`/`setTeamRoster`/`subscribeTeamRoster`/`mapMemberNamesToTeams`/`applyTeamRosterToMST` trong `src/lib/store.js`, va them test module rieng `tests/teamRosterStore.test.js`.
+- Verify: `pnpm exec eslint src/lib/teamRoster.js src/lib/store.js tests/teamRosterStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/teamRosterStore.test.js tests/store.test.js tests/useDataImporterEditAccess.test.jsx tests/useDataImporterImportFlow.test.jsx tests/useDataImporterWorkflowSession.test.jsx --environment jsdom`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Risk: `gitnexus_impact(getTeamRoster)` = `CRITICAL`; `gitnexus_detect_changes()` van danh dau `critical` vi file-level attribution tren `store.js`, can tiep tuc coi `store.js` la hot file khi danh gia scope.
+- Decision: giu extraction o muc move-only/facade-only, inject `sanitizeMSTRow` vao module team roster thay vi cho module moi import nguoc `store.js`, va khong doi roster payload/audit contract hien tai.
+- Next: claim `cng-ro9.4`, chay impact cho `getDeclRows`/`getData`, va tach declaration read/query helpers qua module rieng truoc khi dong vao save pipeline.
+
+## Execution Matrix
+
+| ID | Scope | Test Gate | Status | Evidence |
+| --- | --- | --- | --- | --- |
+| cng-0s2.4 | Auth payload normalization (v4 envelope + legacy fallback), auth mock update | `tests/auth.test.jsx` + auth/api related tests | done | `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx --environment jsdom`; `pnpm exec eslint src/auth/localAuth.js tests/helpers/mockApiState.js tests/auth.test.jsx tests/accountManager.staff.test.jsx` |
+| cng-0s2.2 | Import enable flow + disable reason UX | `tests/dataImporterShellProps.test.js`, `tests/dataImporterFileActions.test.jsx` (+ importer hooks) | done | `pnpm exec vitest run tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/dataImporterImportGate.test.js --environment jsdom`; `pnpm exec eslint src/components/dataImporter/importGate.js src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx` |
+| cng-0s2.3 | Reporting export visibility/permission consistency | `tests/reportingScopeSections.test.jsx`, `tests/reportViewer.test.jsx` (+ reporting actions/panels) | done | `pnpm exec vitest run tests/reportingScopeSections.test.jsx tests/reportViewer.test.jsx tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingExportState.test.js --environment jsdom`; `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx` |
+| cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
+
+## Checkpoint Log
+
+- Checkpoint 38 (store decomposition bootstrap complete):
+  - Done: mo epic `cng-ro9` + child chain `cng-ro9.1`, `cng-bl9`, `cng-ro9.2..cng-ro9.9`; tao board `docs/store-decomposition-execution-board.md`; reparent `cng-bl9`; khoa protocol anti-drop trong `task.md` + `docs/open-backlog.md`.
+  - Verify: `pnpm bd:safe -- children cng-ro9 --json`; `pnpm bd:safe -- show cng-ro9.1 --json`; `pnpm bd:safe -- show cng-bl9 --json`; `pnpm bd:check`.
+  - Risk: metadata/title trong BD van bi cat ngan o mot so issue cu, nen board/notebook van la source-of-truth cho resume lane nay.
+  - Decision: dong `cng-ro9.1`, chuyen active slice sang `cng-bl9`, va giu quy tac `1 slice = 1 bead = 1 verify gate` cho toan bo decomposition program.
+  - Next: tach audit log helpers ra `src/lib/auditLog.js`, giu facade trong `src/lib/store.js`, va bo sung test rieng cho module moi.
+
+- Checkpoint 39 (cng-bl9 audit extraction complete):
+  - Done: tao `src/lib/auditLog.js` voi `createAuditLogStore`; doi `src/lib/store.js` sang audit facade mong; them `tests/auditLogStore.test.js`; bo sung regression facade trong `tests/store.test.js`.
+  - Verify: `pnpm exec vitest run tests/auditLogStore.test.js --environment node`; `pnpm exec vitest run tests/store.test.js --environment jsdom`; `pnpm exec vitest run tests/server.api.test.js --environment node`; `pnpm exec eslint src/lib/auditLog.js src/lib/store.js tests/auditLogStore.test.js tests/store.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes(scope=all)` bao `critical` chu yeu vi `src/lib/store.js` la file hot path lon va graph hien tai attribute thay doi o muc file-level; pham vi sua thuc te cua slice nay chi la move-only quanh audit facade + notebook docs, da duoc regression test che phu.
+  - Decision: dong `cng-bl9`, chuyen baton sang `cng-ro9.2`, va giu nguyen quy tac khong doi signature/behavior trong cac wave extraction risk cao.
+  - Next: chay impact cho `getRules` va `setRules`, sau do tach rules persistence thanh module rieng co test.
+
+- Checkpoint 40 (cng-ro9.3 team roster extraction complete):
+  - Done: tao `src/lib/teamRoster.js` voi `createTeamRosterStore`; doi `src/lib/store.js` sang roster facade mong; them `tests/teamRosterStore.test.js`; giu regression roster/store trong `tests/store.test.js`.
+  - Verify: `pnpm exec eslint src/lib/teamRoster.js src/lib/store.js tests/teamRosterStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/teamRosterStore.test.js tests/store.test.js tests/useDataImporterEditAccess.test.jsx tests/useDataImporterImportFlow.test.jsx tests/useDataImporterWorkflowSession.test.jsx --environment jsdom`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_impact(getTeamRoster)` da canh bao `CRITICAL`, va `gitnexus_detect_changes(scope=all)` van coarse-attribute nhieu symbol trong `src/lib/store.js`; can tiep tuc giam scope o cac wave declaration tiep theo va giai nghia detect-changes theo diff thuc te.
+  - Decision: giu extraction team roster o muc facade-only, inject `sanitizeMSTRow` vao module team roster de khong tao cycle, va khong doi behavior roster seed/save/map/apply.
+  - Next: chuyen active slice sang `cng-ro9.4`, chay impact cho declaration read facades, va tach read/query helpers sang module rieng truoc khi mo save pipeline.
+
+- Checkpoint 41 (cng-ro9.4 declaration read extraction complete):
+  - Done: tao `src/lib/declReadStore.js` voi `createDeclReadStore`; doi `src/lib/store.js` sang read/query facade mong cho `getDeclRowsRaw`/`getDeclRows`/`refreshDeclRowsFromServer`/`sortDeclRows`/`getRecentDeclRows`/`getData`; them `tests/declReadStore.test.js`; bo sung regression `getData` trong `tests/store.test.js`.
+  - Verify: `pnpm exec eslint src/lib/declReadStore.js src/lib/store.js tests/declReadStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/declReadStore.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/hqIntegration.test.js tests/useDataImporterSync.test.jsx tests/useKpiAdjustmentFormWorkspace.test.jsx --environment jsdom`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_impact(sortDeclRows)` bao `HIGH`, `gitnexus_impact(getDeclRowsRaw)` bao `CRITICAL`, va `gitnexus_detect_changes(scope=all)` van coarse-attribute tren `src/lib/store.js`; can tiep tuc xu ly wave declaration theo huong move-only/facade-only.
+  - Decision: giu nguyen logic read/query, khong doi public contract, va dung closure injection giua declaration read store voi HQ agency store de tranh cycle import.
+  - Next: chuyen active slice sang `cng-ro9.5`, chay impact cho `previewDeclRows`/`saveDeclRows`, va tach save/import pipeline sang module rieng truoc khi mo mutations.
+
+- Checkpoint 19 (frontend modernization track bootstrap):
+  - Done: mo epic `cng-1wj` va child chain `cng-1wj.1..cng-1wj.11` trong BD, reconcile `docs/open-backlog.md` de phan shell/state modernization thanh phase ro rang, va claim `cng-1wj.1` lam active slice.
+  - Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd list --json"`; `pnpm bd:check`.
+  - Risk: `bd-safe` qua WSL lam noisy stdout khi tao bead hang loat, nen dependency graph duoc normalize bang WSL direct `bd`; labels trong DB tam thoi giu toi gian, backlog/notebook moi la nguon phase/task mo ta day du.
+  - Decision: uu tien graph dung + source-of-truth docs ro rang thay vi co gang perfect labels trong database ngay turn nay.
+  - Next: hoan tat `cng-1wj.1` bang implementation brief fact-check cho `Opus_review_v2.md`, sau do bat dau `cng-1wj.2` voi Stitch design foundation.
+
+- Checkpoint 20 (frontend modernization phase 0 freeze complete):
+  - Done: them brief `docs/opus-review-v2-modernization-brief-2026-04-02.md` de khoa verified/stale/deferred findings, boundary implementation, va design foundation tu Stitch project `projects/2389602522155416936`; close `cng-1wj.1`, close `cng-1wj.2`, va chuyen `cng-1wj.3` sang `in_progress`.
+  - Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd close cng-1wj.1 && bd close cng-1wj.2 && bd update cng-1wj.3 --status in_progress && bd sync"`; Stitch artifacts `assets/ec04f12fca7146309a2f634e5bbe79e9`, screen ids `193b4bde927044268f33dd3178e05e97`, `f4c9e8d98e6845549793d5253d7dc1da`, `a740538e976e40b2bb3602ee62ff7cdf`, `91e753611e0747aca034c25862fe87c4`.
+  - Risk: 2/4 Stitch screens tra ve mobile composition thay vi desktop shell; chung chi duoc dung lam visual reference, khong phai viewport contract cuoi cung.
+  - Decision: giu source-of-truth design trong brief + project id, roi bat dau implement shell navigation/dashboard tren codebase thay vi tiep tuc lap lai planning.
+  - Next: sua `src/lib/appShellNavigation.js`, `src/App.jsx`, `src/components/KPICalculator.jsx`, `src/components/appShell/AppShellFrame.jsx` va test de ship `cng-1wj.3 -> cng-1wj.5`.
+
+- Checkpoint 21 (frontend modernization wave A complete):
+  - Done: close `cng-1wj.3..cng-1wj.9`; ship URL shell contract, unified shell/header cleanup, dashboard landing, command center decomposition, workflow-guide collapse persistence, async state primitives, va wave A state extraction qua `useKpiShellState`, `useCommandCenterState`, `buildAppDashboardSummaryState`.
+  - Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd close cng-1wj.3 && bd close cng-1wj.4 && bd close cng-1wj.5 && bd close cng-1wj.6 && bd close cng-1wj.7 && bd close cng-1wj.8 && bd close cng-1wj.9 && bd sync"`; `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`; `pnpm exec eslint src/components/KPICalculator.jsx src/components/CommandCenter.jsx src/components/appShell/AppDashboardLanding.jsx src/components/appShell/useKpiShellState.js src/components/appShell/appDashboardSummary.js src/components/command-center/useCommandCenterState.js tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/kpiCalculator.navigation.test.jsx`.
+  - Risk: `gitnexus_detect_changes()` van co the bao scope rong/critical vi index chua refresh va diff hien tai gom ca phase 0-2 + wave A; can dien giai ket qua nay nhu stale-index warning, khong phai regression xac nhan.
+  - Decision: dung lai sau wave A thay vi mo rong sang wave B trong cung session, de giu scope nho va verify-on-green.
+  - Next: mo `cng-1wj.10` cho reporting filters/presets, adjustments, import, health theo tung domain hook/store nho; chua dong `cng-1wj.11`.
+
+- Checkpoint 22 (wave B started with reporting schedule extraction):
+  - Done: tao `src/lib/reportSchedules.js` de dong goi normalize/persistence/audit wiring cho report schedules, doi `src/lib/store.js` sang facade wrappers giu nguyen public API, va them regression suite `tests/reportSchedules.test.js`.
+  - Verify: `pnpm exec vitest run tests/reportSchedules.test.js tests/store.test.js --environment jsdom`; `pnpm exec eslint src/lib/reportSchedules.js src/lib/store.js tests/reportSchedules.test.js`; `pnpm bd:check`.
+  - Risk: wave B moi chi tach xong report schedules; cac domain con lai trong `store.js` (KPI adjustments/import/health) van chua duoc cat nho nen blast radius cua turn sau van can impact gate rieng truoc khi sua.
+  - Decision: bat dau wave B bang reporting schedule slice vi co blast radius thap va co contract test ro rang, thay vi nhay thang vao `KPIAdjustments`/import path lon hon.
+  - Next: tiep tuc `cng-1wj.10` voi KPI adjustments state extraction, sau do den import va health state.
+
+- Checkpoint 23 (wave B import column config extraction):
+  - Done: tao `src/lib/importColumnConfig.js` de tach normalization/persistence/subscription cho import column config, doi `src/lib/store.js` sang facade wrappers giu nguyen `getImportColumnConfig`/`saveImportColumnConfig`/`subscribeImportColumnConfig`, va them regression suite `tests/importColumnConfig.test.js`.
+  - Verify: `pnpm exec vitest run tests/importColumnConfig.test.js tests/reportSchedules.test.js tests/store.test.js tests/useDataImporterColumnConfig.test.jsx --environment jsdom`; `pnpm exec eslint src/lib/importColumnConfig.js src/lib/reportSchedules.js src/lib/store.js tests/importColumnConfig.test.js tests/reportSchedules.test.js`.
+  - Risk: KPI adjustments helper graph van bao `HIGH/CRITICAL`, nen turn tiep theo khong nen tiep tuc theo huong tach settings/helpers cua adjustment trong cung buoc voi importer.
+  - Decision: tiep tuc uu tien low-risk import slice de lam monolith nho dan ma khong mo them regression hot-path; defer KPI adjustments sang mot sub-slice rieng sau khi khoanh symbol an toan hon.
+  - Next: trong `cng-1wj.10`, danh gia slice ke tiep giua health/import runtime state va KPI adjustments facade nho.
+
+- Checkpoint 24 (wave B KPI adjustments extraction complete):
+  - Done: tao `src/lib/kpiAdjustments.js` de tach toan bo settings/persistence/audit/grouping logic cho KPI adjustments, doi `src/lib/store.js` sang facade wrappers giu nguyen public API, va them regression suite `tests/kpiAdjustmentsStore.test.js`.
+  - Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/store.js tests/kpiAdjustmentsStore.test.js`.
+  - Risk: `getKpiAdjustments` van la symbol `HIGH` trong impact graph, nen phase tiep theo khong nen mo rong state rewrite; chi nen chay hardening gates + shell smoke tren public contract hien co.
+  - Decision: xem `cng-1wj.10` da dat muc tieu wave B bang facade extraction tang dan, khong big-bang rewrite `store.js`.
+  - Next: claim `cng-1wj.11`, chay full hardening gates (lint/test/playwright shell smoke), va cap nhat rollout/handoff notes cho frontend modernization track.
+
+- Checkpoint 25 (frontend modernization hardening complete):
+  - Done: harden Playwright runtime smoke theo contract runtime that (`/api/v4/health`, exact reporting scope button selectors, `loginAsAdmin` wait logic), rerun shell/state regression matrix, close `cng-1wj.11`, va dong epic `cng-1wj`.
+  - Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`; `pnpm exec playwright test --config playwright.runtime.config.mjs tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js`; `pnpm exec eslint tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js tests/playwright/utils.js`.
+  - Risk: `src/lib/kpiAdjustments.js` van hon 800 LOC sau extraction; hien tai khong mo them refactor de tranh mo rong blast radius sau khi hardening da xanh.
+  - Decision: ghi ro follow-up nay la deferred, chi quay lai tach nho `src/lib/kpiAdjustments.js` khi mot slice KPI adjustments/adjustments hardening trong tuong lai da can cham file do.
+  - Next: khong con bead mo; neu mo lai lane KPI adjustments thi uu tien chia `src/lib/kpiAdjustments.js` thanh cac submodule nho hon (`settings`, `persistence`, `audit/history`) truoc khi them feature moi.
+
+- Checkpoint 26 (kpi adjustments module decomposition bootstrap):
+  - Done: commit closeout `cng-1wj.11` thanh `3810a91`, tao bead `cng-1se`, claim `in_progress`, va chot cutline refactor noi bo cho `src/lib/kpiAdjustments.js`.
+  - Verify: `pnpm bd:check`; `pnpm exec eslint tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js tests/playwright/utils.js`; `pnpm exec playwright test --config playwright.runtime.config.mjs tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `createKpiAdjustmentStore` co blast radius `MEDIUM` qua facade `src/lib/store.js`; doi ten hoac doi contract se lan rong rat nhanh.
+  - Decision: chi tach implementation noi bo, giu nguyen export names va object shape cua `createKpiAdjustmentStore()`.
+  - Next: extract `constants`, `settings`, `entries`, `createStore`, them tests module-level, va rerun targeted regression suite.
+
+- Checkpoint 27 (kpi adjustments module decomposition complete):
+  - Done: tach `src/lib/kpiAdjustments.js` thanh facade mong + 4 module noi bo (`constants`, `settings`, `entries`, `createStore`), bo sung `tests/kpiAdjustments.settings.test.js` va `tests/kpiAdjustments.entries.test.js`, va reconcile notebook/backlog theo trang thai "code/test done, cho commit".
+  - Verify: `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/kpiAdjustments/*.js tests/kpiAdjustmentsStore.test.js tests/kpiAdjustments.settings.test.js tests/kpiAdjustments.entries.test.js`; `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/kpiAdjustments.settings.test.js tests/kpiAdjustments.entries.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)` (risk `low`, chi gom `src/lib/kpiAdjustments.js`, `task.md`, `docs/open-backlog.md`; symbol list tren index chua refresh nen van gan vao file facade cu).
+  - Risk: phan refactor nay moi duoc verify trong worktree local, chua co commit rieng; neu can chuyen tay session thi phai dua tren `task.md` + `git status` de tranh bo sot diff.
+  - Decision: giu nguyen surface `@/lib/kpiAdjustments.js`/`store.js`, khong mo rong scope sang feature moi hay doi contract runtime.
+  - Next: cho user quyet dinh co commit slice `cng-1se` hay tiep tuc turn moi.
+
+- Checkpoint 18 (ad hoc GitNexus upgrade for repo usage):
+  - Done: xac minh `npx gitnexus --version` dang dung cache cu `1.4.8`, trong khi `codex mcp list` da tro toi `cmd /c npx -y gitnexus@latest mcp`; cap nhat `package.json` (`gitnexus:analyze`, `gitnexus:serve`) va `scripts/gitnexus-refresh.mjs` de buoc repo dung `npx -y gitnexus@latest`, chinh test `tests/gitnexus-refresh.test.js` theo invocation moi, va dong bo huong dan trong `AGENTS.md`/`CLAUDE.md` sang `pnpm run gitnexus:analyze` + direct-call fallback `npx -y gitnexus@latest ...`.
+  - Verify: `pnpm exec eslint scripts/gitnexus-refresh.mjs tests/gitnexus-refresh.test.js`; `pnpm exec vitest run tests/gitnexus-refresh.test.js --environment node`; `pnpm run gitnexus:analyze -- --help`; `npx -y gitnexus@latest --version`; `codex mcp list`; `Select-String -Path AGENTS.md,CLAUDE.md -Pattern 'pnpm run gitnexus:analyze|gitnexus@latest analyze --embeddings'`.
+  - Risk: repo hien theo doi `gitnexus@latest` nen nhung thay doi lon o upstream co the anh huong hanh vi trong tuong lai; neu can reproducible build thi buoc tiep theo la pin sang mot version cu the.
+  - Decision: uu tien latest de dong bo voi README/upstream va cau hinh MCP global hien co, thay vi pin tam thoi `1.5.3`.
+  - Next: neu can khoa version on dinh, doi sang `gitnexus@1.5.3` (hoac version mong muon) cho package scripts + MCP config global trong mot slice rieng.
+
+- Checkpoint 17 (ad hoc dev backend stale dist guard):
+  - Done: xac dinh banner `HTTP 404 Not Found` o dev khong do route source bi mat ma do `pnpm server` dang nap `dist/server-v4` cu; them helper `scripts/server-v4-build-sync.mjs` de check canary compiled outputs (`index.js`, `app/build-v4-app.js`, `app/shared-sync/sharedSyncRoutes.js`) va auto-chay `pnpm build:server-v4` trong `scripts/start-backend.mjs` khi dist thieu/stale.
+  - Verify: `pnpm exec vitest run tests/serverV4BuildSync.test.js tests/appsApiStartServer.test.js tests/appsApiStart.test.js --environment node`; `pnpm exec eslint scripts/start-backend.mjs scripts/server-v4-build-sync.mjs tests/serverV4BuildSync.test.js`.
+  - Risk: startup dev lan dau sau khi source `server-v4` thay doi se ton them thoi gian build; production path van skip guard nay de tranh side effect ngoai y muon.
+  - Decision: fix dung o startup workflow, khong mo rong sua client/shared-sync runtime vi source route da dung.
+  - Next: user retest `pnpm server` + reload app dev; neu banner bien mat thi khong can mo bead moi.
+
+- Checkpoint 16 (ad hoc broader sync regression repair):
+  - Done: sua `src/lib/storageClient.js` de cho phep remote sync khi `baseUrl` rong trong node/test va giu uu tien internal proxy cho shared-sync bootstrap, dong thoi sua `src/auth/localAuth.js` de `fetchWithAuth` khong rebuild absolute dev base trong `MODE=test` cho nhung request da duoc route qua proxy noi bo.
+  - Verify: `pnpm exec vitest run tests/storageClient.test.js --environment node`; `pnpm exec vitest run tests/storageClient.test.js tests/store.test.js tests/server-v4/sharedSyncRoutes.test.js tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/declarationsStore.test.js tests/server-v4/postgresDeclarationsRoute.test.js tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js --environment node`; `pnpm exec vitest run tests/auth.test.jsx --environment jsdom`; `pnpm exec eslint src/lib/storageClient.js src/auth/localAuth.js tests/storageClient.test.js tests/auth.test.jsx`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: impact gate cho `fetchWithAuth` va `buildUrl` la `CRITICAL`; patch da gioi han o dev/test proxy heuristics, nhung worktree uncommitted van bao gom diff SQLite/docs cua slice truoc nen `detect_changes()` tiep tuc bao scope rong o muc file/process.
+  - Decision: broader sync regression da xanh tro lai va du dieu kien de commit sau nay, nhung giu nguyen worktree local theo yeu cau user.
+  - Next: neu user yeu cau, buoc tiep theo la gom diff thanh commit hoac tiep tuc chay them gate rong hon.
+
+- Checkpoint 15 (SYNC-6 late closure bead `cng-yn6.7`):
+  - Done: them canonical SQLite declaration live rows (`declaration_live_rows`), cho `SqliteDeclarationsStore` bootstrap tu typed snapshot roi ghi row-level vao live/projection tables, sua `SqliteBusinessSnapshotReader` uu tien live rows, va bo sung regression tests cho bootstrap + stale typed snapshot fallback.
+  - Verify: `pnpm exec vitest run tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js --environment node`; `pnpm exec eslint server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts server-v4/src/persistence/sqliteBusinessSnapshotReader.ts tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes()` van bao `CRITICAL` do `server/sqliteMigrations.js` nam tren helper dung chung va index quy nap file-level blast radius rong; pham vi diff thuc te chi la 4 file code/test cho declaration SQLite hot path.
+  - Decision: xem day la phan con lai cuoi cung cua lane `cng-yn6`; sau khi reconcile tracker/docs, sync lane quay lai trang thai complete.
+  - Next: none, tru khi user yeu cau commit/push hoac mo bead moi.
+
+- Checkpoint 14 (SYNC-6 final verification + epic closure):
+  - Done: chay verify bundle cuoi cho toan lane `cng-yn6`, close `cng-yn6.5`, close `cng-yn6.6`, va close epic `cng-yn6`; `bd ready` hien khong con issue mo.
+  - Verify: `pnpm exec vitest run tests/storageClient.test.js tests/store.test.js`; `pnpm exec vitest run tests/apiContractScanner.test.js tests/server-v4/sharedSyncRoutes.test.js tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/declarationsStore.test.js tests/server-v4/postgresDeclarationsRoute.test.js --environment node`; `pnpm exec eslint src/lib/storageClient.js server-v4/src/app/shared-sync/sharedSyncDeclarationPatch.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts tests/storageClient.test.js tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/sharedSyncRoutes.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes()` van bao `CRITICAL` vi diff chua commit gom `storageClient.js` hot path + declarations store/shared-sync helper + tracker docs; pham vi nay khop dung lane `cng-yn6` vua hoan tat.
+  - Decision: xem `cng-yn6` da complete; buoc con lai chi la commit diff hien tai theo yeu cau nguoi dung.
+  - Next: tao commit cho phan failure isolation + persistence hot path, sau do handoff rang repo khong con bead mo.
+
+- Checkpoint 13 (SYNC-5 persistence hot path optimized):
+  - Done: them batch-capable path optional cho `DeclarationsStore`, implement batch patch trong `SqliteDeclarationsStore`, va cho `patchSharedSyncDeclarations` uu tien batch mode de PATCH nhieu row khong con read/write full snapshot N lan.
+  - Verify: `pnpm exec vitest run tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/sharedSyncRoutes.test.js --environment node`; `pnpm exec vitest run tests/server-v4/declarationsStore.test.js tests/server-v4/postgresDeclarationsRoute.test.js --environment node`; `pnpm exec eslint server-v4/src/app/shared-sync/sharedSyncDeclarationPatch.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts tests/server-v4/sharedSyncDeclarationPatch.test.js`.
+  - Risk: batch optimization hien chi duoc bat tren SQLite compatibility store; Postgres van fallback per-row de tranh mo rong blast radius khi chua co nhu cau/perf harness rieng.
+  - Decision: du scope cho `cng-yn6.5`; defer benchmark so lieu thuc te ve bead verify cuoi cung thay vi tao infra perf moi trong lane nay.
+  - Next: chay verification bundle cuoi + close lane `cng-yn6`.
+
+- Checkpoint 12 (SYNC-4 failure isolation closed):
+  - Done: tach retry state read/write trong `src/lib/storageClient.js`, giu remote read path song song voi write backoff, khong hard-disable `remoteEnabled` cho write failure retryable, va bo sung regression test cho rollback + read-path survival.
+  - Verify: `pnpm exec vitest run tests/storageClient.test.js tests/store.test.js`; `pnpm exec eslint src/lib/storageClient.js tests/storageClient.test.js`.
+  - Risk: `tests/store.test.js` van in console error expected khi mock tra invalid sync response; day la noise hop le trong regression suite, khong phai test fail.
+  - Decision: xem `cng-yn6.4` da dat muc tieu; chuyen active slice sang `cng-yn6.5` de toi uu hot path persistence phia server.
+  - Next: impact analysis + toi uu `server-v4/src/app/shared-sync/sharedSyncDeclarationPatch.ts` va test regression/perf cho declaration patch path.
+
+- Checkpoint 11 (sync baseline + canonical contract complete):
+  - Done: mount `/api/v4/shared-sync` vao `buildV4App`, migrate `src/lib/storageClient.js` sang canonical bootstrap/storage/declarations endpoints, bo sung partial-refresh regression va test route canonical `tests/server-v4/sharedSyncRoutes.test.js`.
+  - Verify: `pnpm exec vitest run tests/apiContractScanner.test.js tests/storageClient.test.js tests/server-v4/sharedSyncRoutes.test.js`; `pnpm exec eslint src/lib/apiContractScanner.js src/lib/storageClient.js tests/apiContractScanner.test.js tests/storageClient.test.js tests/server-v4/sharedSyncRoutes.test.js`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes()` bao HIGH vi `buildV4App` va `storageClient.js` nam tren hot path chung; symbol moi trong `server-v4/src/app/shared-sync/*` chua co trong index hien tai, va `flushPending()` van hard-disable remote khi write fail.
+  - Decision: close `cng-yn6.1`, `cng-yn6.2`, `cng-yn6.3`; giu slice ke tiep tap trung vao failure isolation truoc khi toi uu persistence.
+  - Next: thuc hien `cng-yn6.4` bang cach tach read/write failure policy trong `flushPending()` va bo sung regression cho write failure khong lam sap toan bo remote read path.
+
+- Checkpoint 7 (Hard-gate cutover governance bootstrap):
+  - Done: Tao epic `cng-m2r` + child beads `cng-m2r.1..cng-m2r.6`, tao board `docs/operations/v4-cutover-execution-board.md`, va them gate script `scripts/check-cutover-taskboard.mjs`.
+  - Verify: `pnpm run cutover:check`; `pnpm exec vitest run tests/scripts/cutoverTaskboardCheck.test.js tests/scripts/v4CutoverPreflight.test.js --environment node`.
+  - Risk: `bd` parser cat title/description khi tao issue co dau cach; tracker dung ID + board lam source-of-truth de tranh mat nghia.
+  - Decision: enforce HARD_GATE o preflight command catalog (`cutover-governance-gate`) thay vi checklist thu cong.
+  - Next: tiep tuc CUT-01/CUT-02 de xoa legacy auth fallback va legacy-compat routes theo phase dependencies.
+
+- Checkpoint 8 (cng-m2r phased execution to CUT-04 complete):
+  - Done: close `cng-m2r.1 -> cng-m2r.5`; hoan tat CUT-00..CUT-04 gates (contract gate, parity suite, `test:server-v4`, `healthcheck`, `test:backend`) va update board/open-backlog theo trang thai moi.
+  - Verify: `pnpm run api:contract:report`; `pnpm run api:contract:gate`; `pnpm run verify:v4:parity`; `pnpm run build:server-v4`; `pnpm run healthcheck`; `pnpm run test:server-v4`; `pnpm run test:backend`; `pnpm run verify:v4:cutover-preflight -- --timeout-ms 120000`.
+  - Risk: `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000` dang fail o Playwright UAT (`account-management`, `team-management`, `import-flow`, va `report-viewer` navigation/schedule preview).
+  - Decision: chuyen `cng-m2r.6` sang `in_progress`, giu phase hypercare mo de triage UAT smoke blocker.
+  - Next: sua/triage Playwright UAT smoke cho CUT-05 va rerun preflight voi `--with-uat-smoke`.
+
+- Checkpoint 9 (cng-m2r.6 UAT smoke closure complete):
+  - Done: sua mock API auth/account payload compatibility (top-level + v4 envelope), harden Playwright route CORS mock, va close `cng-m2r.6` + epic `cng-m2r`.
+  - Verify: `pnpm playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/import-flow.spec.js tests/playwright/report-viewer.spec.js --reporter=line`; `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000`; `pnpm bd:safe -- ready`.
+  - Risk: canh bao `node-cron` sourcemap va daemon timeout cua `bd` van ton tai nhung khong block gate.
+  - Decision: chot CUT-05 UAT smoke blocker o trang thai resolved, chuyen tiep sang BAU theo `Next Suggested Slice`.
+  - Next: giu nhip post-cutover monitoring Day0-Day7, mo bead moi neu co regression runtime.
+
+- Checkpoint 10 (cutover documentation closure complete):
+  - Done: xac nhan `docs/operations/v4-cutover-execution-board.md` da dong 100% o repo scope, archive/cap nhat cac tai lieu lien quan (`runbook`, `window-and-comms`, `owner matrix`, `checkpoint log`, `report template`, `release sign-off`, `big-bang status`) va them completion report thuc te `docs/operations/v4-hypercare-completion-report-2026-04-01.md`.
+  - Verify: `pnpm bd:check`.
+  - Risk: cac tai lieu archive van giu lane label lich su `cng-mbu.7`; future real cutover phai clone tu template/archive package thay vi xem day la runbook live.
+  - Decision: coi cutover package da close hoan toan trong pham vi repository/manual engineering closeout; khong con open bead cho cutover.
+  - Next: none, tru khi mo bead BAU/post-cutover moi do regression hoac runtime observation.
+
+- Checkpoint 0 (session bootstrap):
+  - Done: Tao parent bead `cng-0s2` + 4 child beads theo 4 slices; dat `Active Slice` sang `cng-0s2.4`.
+  - Verify: `pnpm bd:safe -- children cng-0s2`.
+  - Risk: `bd` CLI parse string co xu huong cat title/description theo token.
+  - Decision: Dung ID + labels + Execution Matrix trong `task.md` lam nguon su that thay vi phu thuoc title bead.
+  - Next: Chay Slice A theo no-skip gate (`impact -> code -> test -> lint -> update task/bead`).
+
+- Checkpoint 1 (Slice A complete):
+  - Done: Chuan hoa auth adapter trong `src/auth/localAuth.js` de doc ca v4 envelope (`data.user/data.account/data.accounts`) va legacy payload; update mock v4 auth trong `tests/helpers/mockApiState.js`.
+  - Verify: `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx --environment jsdom`; `pnpm exec eslint src/auth/localAuth.js tests/helpers/mockApiState.js tests/auth.test.jsx tests/accountManager.staff.test.jsx`.
+  - Risk: `setSessionFromUser` co blast radius MEDIUM, da gioi han sua o tang parse payload, khong thay doi semantic session cache.
+  - Decision: Dong `cng-0s2.4`, chuyen sang `cng-0s2.2`.
+  - Next: Trien khai import disable reason UX va gate canImport nhat quan.
+
+- Checkpoint 2 (Slice B complete):
+  - Done: Them module `src/components/dataImporter/importGate.js` de chuan hoa gate `canImport`; dong bo shell + hook import flow; bo sung disabled reason tren `DataImporterFileActions`.
+  - Verify: `pnpm exec vitest run tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/dataImporterImportGate.test.js --environment jsdom`; `pnpm exec eslint src/components/dataImporter/importGate.js src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx`.
+  - Risk: thay doi thong diep gate co the lam doi text assertion cua test UI khac; da them regression cho gate moi de giam hoi quy.
+  - Decision: Dong `cng-0s2.2`, chuyen sang `cng-0s2.3`.
+  - Next: Dong nhat export visibility/disable reason trong reporting scope sections + report viewer.
+
+- Checkpoint 3 (Slice C complete):
+  - Done: Them `reportingExportState` de thong nhat export gate theo permission/loading/error/summary/exporting; surfacing disabled reason cho staff/team section va detail cards; dong bo `useReportViewerActions` voi gate moi.
+  - Verify: `pnpm exec vitest run tests/reportingScopeSections.test.jsx tests/reportViewer.test.jsx tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingExportState.test.js --environment jsdom`; `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check`.
+  - Risk: helper gate moi disable export khi report co loi read-model de tranh xuat snapshot khong nhat quan; can giam sat UX neu van hanh muon cho phep xuat stale snapshot.
+  - Decision: Dong `cng-0s2.3`, chuyen sang `cng-0s2.1`.
+  - Next: Chay runtime smoke + full verification matrix va chot closure bead/package.
+
+- Checkpoint 4 (Slice D complete + package closure):
+  - Done: Chay full runtime closure matrix, dong `cng-0s2.1`, dong parent `cng-0s2`, va reconcile lai backlog/tracker.
+  - Verify: `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check`; `pnpm bd:safe -- ready`.
+  - Risk: runtime smoke phu thuoc local seed credential (`admin/admin123`) va backend local (`:5000`) nen can giu bootstrap env nhat quan tren may khac.
+  - Decision: Chot package `cng-0s2` o trang thai done, khong mo them refactor ngoai scope.
+  - Next: none (cho user chi dao lane tiep theo).
+
+- Checkpoint 5 (Hotfix report export audit runtime):
+  - Done: Wire `createDefaultReportingRuntime()` vao `apps/api/src/startApiServer.js` de route `/api/v4/reporting/exports/audit` khong con tra `503` khi standalone backend chua inject reporting runtime.
+  - Verify: `pnpm exec vitest run tests/appsApiStart.test.js --environment node`; `pnpm exec vitest run tests/server-v4/reportingExportRoutes.test.js --environment node`; `node -e "fetch('http://127.0.0.1:5000/api/v4/reporting/exports/audit?limit=5&page=1').then(async r=>{console.log(r.status);console.log(await r.text())})"`.
+  - Risk: fallback runtime hien tra audit rong (`entries=[]`) va `exportReport` tra `501` (khong thay legacy export implementation day du trong standalone mode).
+  - Decision: uu tien bo chan toast/runtime error tren frontend, giu API contract on dinh de UI khong bi fail.
+  - Next: neu can du lieu audit/export that trong standalone, tiep tuc wire reporting domain implementation thay vi fallback runtime.
+
+- Checkpoint 6 (Standalone reporting runtime complete):
+  - Done: them `server-v4/src/modules/reporting/reportingRuntime.ts`, export qua `server-v4/src/index.ts`, va wire `apps/api/src/startApiServer.js` de standalone runtime dung reporting domain that (auth + audit list + CSV export + persistence) thay vi fallback rong.
+  - Verify: `pnpm exec vitest run tests/server-v4/reportingRuntime.test.js tests/server-v4/reportingExportRoutes.test.js tests/appsApiStart.test.js tests/appsApiStartServer.test.js --environment node`; `pnpm exec eslint apps/api/src/startApiServer.js server-v4/src/index.ts server-v4/src/modules/reporting/reportingRuntime.ts tests/server-v4/reportingRuntime.test.js tests/appsApiStart.test.js tests/appsApiStartServer.test.js tests/server-v4/reportingExportRoutes.test.js`.
+  - Risk: loader helper `loadCompiledRuntimeModule` khong duoc GitNexus index rieng nen impact gate chi xac nhan truc tiep cho `loadCompiledBuildV4App` (LOW, 0 upstream); pham vi sua da gioi han trong loader return contract.
+  - Decision: giu fallback runtime lam duong lui cho custom `buildApp` injection/test harness, chi bat runtime that khi co `createRuntimePersistence + createStandaloneReportingRuntime`.
+  - Next: cho user retest standalone `/api/v4/reporting/exports` va `/api/v4/reporting/exports/audit` tren moi truong local.
+
+## Open Risks/Blockers
+
+- [open] `bd` CLI parsing title/description nhieu tu khong on dinh; uu tien cap nhat status theo ID va ghi nghia chi tiet trong `task.md`.
+- [open] Worktree dang co thay doi san tu truoc session (`.gitignore`, `docs/open-backlog.md`, `docs/operations/v4-cutover-evidence/*`); khong dong vao khi khong thuoc scope.
+- [open] `cng-1se` da verify xanh nhung diff hien van nam local cho den khi user yeu cau commit; bead duoc giu `in_progress` de notebook/BD khop voi worktree, va neu tiep tuc o turn sau thi tranh tron lane khac vao cung commit.
+- [closed] CUT-05 UAT smoke blocker da duoc resolve va verify xanh qua preflight `--with-uat-smoke` (manual evidence: `docs/operations/v4-cutover-evidence/2026-04-01T16-53-51-886Z-manual-cutover-preflight.{json,md}`).
+
+- Last closed slice:
+  - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution)
+  - all child beads `cng-mbu.1 -> cng-mbu.8` da closed
+  - `cng-mbu.7` (W8 Big-bang Cutover and Hypercare)
+  - merged local completion gates: parity + preflight dry-run + backlog consistency
+
+## Handoff
+
+- Done: code/test cho `cng-1se` da hoan tat; `src/lib/kpiAdjustments.js` gio chi con facade mong, implementation noi bo da tach sang `src/lib/kpiAdjustments/{constants,settings,entries,createStore}.js`, va 2 regression test moi da duoc them.
+- Verify:
+  - `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/kpiAdjustments/*.js tests/kpiAdjustmentsStore.test.js tests/kpiAdjustments.settings.test.js tests/kpiAdjustments.entries.test.js`
+  - `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/kpiAdjustments.settings.test.js tests/kpiAdjustments.entries.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`
+  - `pnpm bd:check`
+  - `gitnexus_detect_changes(scope=all)`
+- Risk: worktree refactor diff chua commit; `gitnexus_detect_changes()` dang doc index cu nen symbol list van gan vao facade file cu, du summary risk da `low`.
+- Decision: giu bead `cng-1se` o trang thai `in_progress` cho den khi user quyet dinh commit diff nay, de BD/notebook khop voi worktree local.
+- Next: neu user yeu cau commit, tao commit rieng cho `cng-1se`; neu khong thi dung bead nay lam context de handoff sang session sau.
+
+- Done: closeout commit cho `cng-1wj.11` da duoc tao (`3810a91`), bead moi `cng-1se` da claim de tach `src/lib/kpiAdjustments.js` thanh submodule noi bo co test rieng.
+- Verify:
+  - `pnpm bd:check`
+  - `pnpm exec eslint tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js tests/playwright/utils.js`
+  - `pnpm exec playwright test --config playwright.runtime.config.mjs tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js`
+  - `gitnexus_detect_changes(scope=all)`
+- Risk: `createKpiAdjustmentStore` hien co risk `MEDIUM` do facade `store.js` lan ra nhieu consumer/test; refactor chi an toan neu khong doi export surface.
+- Decision: doi deferred follow-up thanh bead `cng-1se` va gioi han slice vao decomposition noi bo + tests module-level.
+- Next: tach `src/lib/kpiAdjustments.js` thanh `constants`, `settings`, `entries`, `createStore`; sau do rerun targeted vitest/eslint + `bd:check` + `gitnexus_detect_changes(scope=all)`.
+
+- Done: `cng-1wj.11` da xanh va epic `cng-1wj` da close; hardening pass tren wave A shell/navigation/dashboard/command center/workflow guide, wave B adjustments/store regressions, va Playwright runtime smoke.
+- Verify:
+  - `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`
+  - `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`
+  - `pnpm exec playwright test --config playwright.runtime.config.mjs tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js`
+  - `pnpm exec eslint tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js tests/playwright/utils.js`
+- Risk: `src/lib/kpiAdjustments.js` van lon sau extraction; khong mo bead moi trong session nay, nhung note nay da duoc ghi ro la deferred de quay lai khi mot slice KPI adjustments can mo file.
+- Decision: khong mo rong refactor them sau khi hardening matrix da xanh; dong epic modernization tai day va de notebook o trang thai idle.
+- Next: khi co slice moi cham domain KPI adjustments, uu tien tach `src/lib/kpiAdjustments.js` thanh submodules nho hon truoc khi them feature/logic moi.
+
+- Done: frontend modernization da ship xong wave B; beads `cng-1wj.3..cng-1wj.10` da close, va `store.js` da tach 3 slices ra module rieng: `src/lib/reportSchedules.js`, `src/lib/importColumnConfig.js`, va `src/lib/kpiAdjustments.js`.
+- Verify:
+  - `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`
+  - `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/store.js tests/kpiAdjustmentsStore.test.js`
+  - `pnpm bd:check`
+- Risk: wave B da hoan tat nhung phase hardening chua chay het full matrix (`Playwright shell smoke`, regression paths reporting/import/adjustments/health), nen track chua the dong.
+- Decision: chuyen active slice sang `cng-1wj.11`; dung lai sau wave B de giu scope commit nho va de hardening co mot gate rieng.
+- Next: tiep tuc tu `cng-1wj.11`, chay full hardening gates va reconcile rollout notes truoc khi xem track `cng-1wj` la complete.
+
+- Done: da chot trang thai dong cho cutover package docs; `v4-cutover-execution-board.md` la 100% complete trong repo scope va cac tai lieu lien quan da duoc archive/cap nhat dong bo.
+- Verify:
+  - `pnpm bd:check`
+- Risk: archive docs van mang lane label `cng-mbu.7` de giu trace lich su, nen future operational window can tao mot execution set moi thay vi tai su dung placeholder cu nhu tai lieu live.
+- Decision: repository cutover documentation package dong hoan toan; khong con tracker mo cho cutover.
+- Next: none, tru khi mo bead moi cho BAU regression hoac future real cutover window.
+
+- Done: lane `cng-yn6` da duoc reconcile lai bang cleanup bead `cng-yn6.7`; SQLite declaration persistence nay uu tien live rows + row-level projection updates thay cho fallback blob/write-full-snapshot tren hot path.
+- Verify:
+  - `pnpm exec vitest run tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js --environment node`
+  - `pnpm exec eslint server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts server-v4/src/persistence/sqliteBusinessSnapshotReader.ts tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js`
+  - `gitnexus_detect_changes(scope=all)`
+- Risk: GitNexus index van danh `CRITICAL` do thay doi migration helper dung chung; neu commit tiep theo mo rong scope ngoai declarations hot path thi can re-check blast radius truoc khi hop nhat.
+- Decision: giu repo o trang thai chua commit theo yeu cau user, nhung notebook/backlog da coi sync lane la complete.
+- Next: broader sync regression local repair da xanh; neu tiep tuc, uu tien commit/push theo lenh user hoac chay them gate mo rong hon.
+
+- Done: CUT-05 UAT smoke da xanh, `cng-m2r.6` va epic `cng-m2r` da close.
+- Verify:
+  - `pnpm playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/import-flow.spec.js tests/playwright/report-viewer.spec.js --reporter=line`
+  - `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000`
+  - `pnpm bd:safe -- ready`
+- Risk: can tiep tuc theo doi runtime/hypercare Day0-Day7 de bat som parity drift sau cutover.
+- Decision: chuyen lane hard-gate cutover sang complete, vao BAU transition.
+- Next: mo bead BAU moi neu phat sinh regression hoac can tiep tuc post-cutover automation.
+
+- Done: da harden luong dang nhap runtime theo 4 huong: fallback API auth v4->legacy, uu tien dev proxy khi VITE_API_BASE cross-origin, bo sung CORS cho app shell v4, va them Playwright runtime smoke non-mock.
+- Verify:
+  - `pnpm exec vitest run tests/auth.test.jsx tests/reportExport.test.js --environment jsdom`
+  - `pnpm exec vitest run tests/server-v4/appShell.test.js --environment node`
+  - `pnpm run test:playwright:runtime`
+- Risk: runtime smoke hien xac nhan duoc request login cham backend va khong vo network/CORS error; van phu thuoc account seed tren moi moi truong nen test dung invalid credential pattern de on dinh.
+- Decision: giu `fetchWithAuth` khong sua truc tiep (impact CRITICAL), chi sua o layer route resolution/fallback va test bao ve.
+- Next: neu muon rat chat cho release gate, co the them 1 runtime smoke nua cho luong export `/api/v4/reporting/exports` khong mock.
+
+- Done: da complete full engineering scope cua Big-bang plan va close epic `cng-mbu` (sau khi verify tat ca child beads da closed).
+- Verify:
+  - `pnpm bd:safe -- show cng-mbu` (`CLOSED`)
+  - `pnpm bd:safe -- ready` (`No open issues`)
+  - `pnpm run api:contract:gate` (`legacy routes: 0`)
+  - `pnpm run verify:v4:parity` (`passed=7/7 failed=0`)
+  - `pnpm run verify:v4:cutover-preflight -- --dry-run --with-uat-smoke`
+  - `pnpm exec eslint server/index.js tests/server.api.test.js`
+  - `pnpm exec vitest run tests/server.api.test.js -t "SQL Server|bootstrap từ biến|DB rỗng|đồng bộ account|tín hiệu trạng thái|timeout SQL" --environment node`
+  - `pnpm bd:check`
+- Risk: proof hien tai la engineering/local gate; van can governance van hanh cho cutover thuc te (preflight non-dry-run, checkpoint Day0-Day7, final hypercare report).
+- Decision: close `cng-mbu` va dong trang thai Big-bang execution lane trong backlog.
+- Next: chuyen sang post-bigbang BAU roadmap theo cac track o `Next Suggested Slice`.
+## Recent Completed Slices
+
+- `cng-yn6.1` / `cng-yn6.2` / `cng-yn6.3` da hoan tat baseline sync lane:
+  - notebook + backlog da reconcile theo epic `cng-yn6`
+  - contract moi `/api/v4/shared-sync/*` da duoc mount va verify
+  - `storageClient` da chuyen sang canonical API va co regression cho partial refresh
+
+- `cng-mbu.7` da hoan tat W8 Big-bang Cutover and Hypercare lane o pham vi engineering package:
+  - da co full runbook + owner/comms/hypercare templates
+  - da co automation preflight command + test coverage
+  - da xanh parity suite va bd consistency gate trong local verification
+
+- `cng-mbu.6` da hoan tat Release Gates and Acceptance Closure:
+  - `pnpm run api:contract:report` va `pnpm run api:contract:gate` deu xanh (`legacy routes: 0`)
+  - `pnpm run verify:v4:parity` xanh (`passed=7/7 failed=0`)
+  - UAT role-based checklist giu xanh (`19 passed`)
+  - da chot artifact sign-off: `docs/operations/v4-release-gate-signoff-2026-04-01.md`
+
+- `cng-mbu.5` da hoan tat W6-7 Hardening and UAT:
+  - full regression lane xanh qua `pnpm run test:smoke:core`
+  - parity baseline van xanh `pnpm run verify:v4:parity` (`passed=7/7 failed=0`)
+  - hardening smoke xanh cho a11y/perf/security/auth route suites
+  - UAT 2 nhom xanh qua Playwright batch 19 testcase (`19 passed`)
+  - tiep tuc giu rehearsal evidence local-runtime tai `docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.{json,md}`
+
+- `cng-mbu.4` da hoan tat W5-6 Integration and Behavior Parity:
+  - giu xanh parity gate `pnpm run verify:v4:parity` va rehearsal gate `pnpm run verify:v4:rehearsal`
+  - bo sung regression `tests/appsApiStartServer.test.js` de khoa runtime loader behavior khi thieu `dist/server-v4/index.js` hoac thieu dependency transitive
+  - bo sung error message ro nghia cho runtime transitive dependency missing trong `loadCompiledBuildV4App` de de triage tren moi truong rollout
+  - capture evidence local runtime tai `docs/operations/v4-rollout-evidence/2026-04-01T00-18-51-947Z-local-runtime.{json,md}`
+
+- `cng-7z0.30` da hoan tat storage sync error hardening:
+  - them `src/lib/storageSyncErrors.js` de chuan hoa sync error (`code`, `message`, `hint`, `retryable`) cho network/offline/auth/http status
+  - `src/lib/storageClient.js` bo sung sync error state (`lastErrorCode`, `lastErrorHint`, `lastErrorRetryable`, `lastRollback`) va rollback logic giu pending value moi nhat neu fail xay ra khi write cu dang in-flight
+  - `scheduleRetry` nay chi retry khi loi retryable; loi non-retryable (vd `payload_too_large`, auth denied) khong lap retry timer
+  - bo sung `tests/storageSyncErrors.test.js` va mo rong `tests/storageClient.test.js` de khoa cac contract moi
+  - targeted verify da pass:
+    - `pnpm exec eslint src/lib/storageClient.js src/lib/storageSyncErrors.js tests/storageClient.test.js tests/storageSyncErrors.test.js`
+    - `pnpm exec vitest run tests/storageClient.test.js tests/storageSyncErrors.test.js`
+    - `pnpm exec vitest run tests/store.test.js tests/useDataImporterSyncStatusToast.test.jsx tests/commandCenter.pinStorage.test.js`
+- `cng-2k4.6` da hoan tat o muc tach alerts + notifications backend:
+  - them `server-v4/src/modules/alerts/alertsLegacyDomain.js` de gom alert config/state persistence, review/unreview mutate flow, evaluate declaration alerts, va payload formatter/builders qua dependency injection
+  - `server/index.js` nay chi con wiring domain (`createLegacyAlertsDomain`) va route registration (`registerLegacyNotificationRoutes`, `registerLegacyImportAlertRoutes`) thay vi giu khoi alert functions lon
+  - bo sung regression `tests/server.alertLegacyDomain.test.js` va giu xanh `tests/server.alertLegacyRoutes.test.js`
+  - targeted verify da pass:
+    - `pnpm exec eslint server/index.js server-v4/src/modules/alerts/alertsLegacyDomain.js tests/server.alertLegacyDomain.test.js tests/server.alertLegacyRoutes.test.js tests/server.api.test.js`
+    - `pnpm exec vitest run tests/server.alertLegacyDomain.test.js tests/server.alertLegacyRoutes.test.js --environment node`
+    - `pnpm exec vitest run tests/server.api.test.js tests/server-v4/runtimeRoutes.test.js tests/server-v4/alertsRoutes.test.js --environment node`
+- `cng-2k4.5` da xong o muc tach AI assistant backend module:
+  - them `server-v4/src/modules/ai/ai.constants.js`, `server-v4/src/modules/ai/aiChatHistoryStore.js`, va `server-v4/src/modules/ai/aiLegacyRoutes.js` de gom constants + chat history + legacy `/api/ai/*` handlers
+  - `server/index.js` nay chi con wiring dependency va `registerAiRoutes(app, deps)` thay vi giu mot khoi route lon, dong thoi giu nguyen route khong lien quan (`/api/rules/history`)
+  - bo sung regression `tests/server.aiModules.test.js` (chat history store + route wiring) va cap nhat `tests/server.api.test.js` cho case tao tai khoan khong co quyen `aiAssistUse`
+  - targeted verify da pass:
+    - `pnpm exec eslint server/index.js server-v4/src/modules/ai/*.js tests/server.aiModules.test.js tests/server.api.test.js`
+    - `pnpm exec vitest run tests/server.aiModules.test.js --environment node`
+    - `pnpm exec vitest run tests/server.api.test.js --environment node -t "AI assistant API"`
+- `cng-7z0.7` da xong o muc backend-detached ECUS sync queue:
+  - them `server-v4/src/modules/declarations/declarationsImportJobService.ts` de tao/poll async ECUS commit jobs (`queued/running/completed/failed`) va gioi han memory retention cho job history trong runtime
+  - `DeclarationsController` + `declarationsRoutes` them flow `POST /api/v4/declarations/imports/ecus-commit` voi payload `async: true` va endpoint poll `GET /api/v4/declarations/imports/ecus-jobs/:jobId`
+  - `useDataImporterSync.js` + `dataImporterSyncQueue.js` luu `backendJobId/backendJobStatus`, poll job backend khi run/resume, va chi re-submit commit khi job cu khong con ton tai tren server
+  - bo sung/refresh regression trong `tests/server-v4/postgresDeclarationsRoute.test.js` va `tests/useDataImporterSync.test.jsx`; cap nhat `server-v4/src/app/legacyCompatRoutes.ts` de inject day du `DeclarationsImportJobService` cho legacy importer aliases
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useDataImporterSync.test.jsx tests/server-v4/postgresDeclarationsRoute.test.js`
+    - `pnpm exec eslint server-v4/src/modules/declarations/DeclarationsController.ts server-v4/src/modules/declarations/declarationsRoutes.ts server-v4/src/modules/declarations/declarations.module.ts server-v4/src/modules/declarations/declarationsImportJobService.ts server-v4/src/app/legacyCompatRoutes.ts src/components/dataImporter/dataImporterSyncQueue.js src/components/dataImporter/useDataImporterSync.js tests/server-v4/postgresDeclarationsRoute.test.js tests/useDataImporterSync.test.jsx`
+- `cng-7z0.23` da hoan tat permission-aware global search lane:
+  - `src/components/CommandCenter.jsx` nay them shortcut report workflow (`scope`, `dashboard`, `export`) va goi y `Người dùng: ...` khi tai khoan co quyen `accountManage`
+  - module search tiep tuc dua tren `getVisibleAppTabs(currentUser)` nen khong can sua app-shell navigation definitions co blast radius MEDIUM
+  - regression `tests/commandCenter.test.jsx` da khoa hai contract moi: report-focus navigation va user suggestion theo quyen
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/commandCenter.test.jsx tests/commandCenter.pinStorage.test.js tests/storageClient.test.js --environment jsdom`
+    - `pnpm exec eslint src/components/CommandCenter.jsx tests/commandCenter.test.jsx tests/commandCenter.pinStorage.test.js tests/storageClient.test.js`
+- `cng-7z0.25` da hoan tat contextual quick-help lane:
+  - them `src/components/support/supportContextCatalog.js` va `src/components/support/SupportContextPanel.jsx` de map tab hien tai sang FAQ, tai lieu `docs/`, va tai nguyen dao tao de xuat
+  - `src/components/SupportCenter.jsx` nay nhan `currentTabId`, ho tro `open:support` payload override context, va hien CTA sao chep duong dan tai lieu noi bo thay vi tao runtime link chet cho `docs/`
+  - `src/App.jsx` truyen `activeTab` vao `SupportCenter`, bo sung regression `tests/supportCenter.context.test.jsx`, `tests/supportContextCatalog.test.js`, va giu xanh `tests/accessibility.test.jsx`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/accessibility.test.jsx tests/supportCenter.context.test.jsx tests/supportContextCatalog.test.js --environment jsdom`
+    - `pnpm exec eslint src/components/SupportCenter.jsx src/components/support/SupportContextPanel.jsx src/components/support/supportContextCatalog.js src/App.jsx tests/accessibility.test.jsx tests/supportCenter.context.test.jsx tests/supportContextCatalog.test.js`
+- `cng-2k4.22` da hoan tat text/lint hygiene lane:
+  - them `* text=auto` vao `.gitattributes` de git xu ly line endings thay vi de lint/noise can thiep
+  - full `pnpm lint` hien xanh sau cac backlog refactors, khong con can giu bead hygiene mo chi de theo doi warning cu
+- `cng-7z0.22` da hoan tat backend-synced Command Center pin lane:
+  - `server-v4/src/app/legacy-compat/legacyCompatShared.ts` + `legacyCompatStorageRoutes.ts` nay doc/ghi `kpi_command_center_pins_v1` qua `persistence.projections`, giu response shape tuong thich voi compat storage API
+  - `src/lib/storageClient.js`, `src/components/command-center/pinStorage.js`, va `src/components/CommandCenter.jsx` nay hydrate/subscribe/write pin state qua shared storage va fallback local storage
+  - bo sung regression `tests/server-v4/legacyCompatRoutes.test.js`, `tests/commandCenter.pinStorage.test.js`, `tests/commandCenter.test.jsx`, va `tests/storageClient.test.js`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/server-v4/legacyCompatRoutes.test.js --environment node`
+    - `pnpm exec vitest run tests/commandCenter.pinStorage.test.js tests/commandCenter.test.jsx tests/storageClient.test.js --environment jsdom`
+    - `pnpm exec eslint server-v4/src/app/legacy-compat/legacyCompatShared.ts server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts src/components/CommandCenter.jsx src/components/command-center/pinStorage.js src/lib/storageClient.js tests/server-v4/legacyCompatRoutes.test.js tests/commandCenter.pinStorage.test.js tests/commandCenter.test.jsx tests/storageClient.test.js`
+- `cng-7z0.24` da hoan tat unread notification lane:
+  - `src/components/NotificationCenter.jsx` khong con auto-clear unread khi mo panel; unread badge chi ve 0 khi operator chu dong bam `Đánh dấu tất cả đã đọc`
+  - them CTA bulk clear trong header panel va badge `Mới` tren event chua doc de phan biet ro muc vua den truoc khi triage
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/NotificationCenter.jsx tests/notificationCenter.test.jsx`
+    - `pnpm exec vitest run tests/notificationCenter.test.jsx --environment jsdom`
+- `cng-7z0.17` da hoan tat duplicate-detection lane cho MST assignment:
+  - `src/components/mst-assignment/model/displaySelectors.js` nay sinh `conflictSummary` cho moi MST co nhieu giai doan dang cung hieu luc, gom active-stage count, assignee/team divergence, va goi y xu ly `giu / chuyen / tach vai tro`
+  - `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx` surfacing badge `Trung gan` tren bang, canh bao inline cho tung dong, va danh sach goi y xu ly nhanh tren group row de truong nhom chot thao tac ngay
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/mst-assignment/model/displaySelectors.js src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx`
+- `cng-7z0.18` da hoan tat filtered-history lane cho MST assignment:
+  - `useMSTAssignmentHistoryWorkspace.js` nay loc `filteredHistoryEntries` theo su kien lich su thuc te cho create/update/delete va mốc chuyen trang thai `status:assigned/pending`, dong thoi `historyFilteredRowKeys` cung ap dung cho cac filter nay thay vi chi co action thuần
+  - `MstAssignmentHistoryFilterPanel.jsx` doi copy thanh `Thao tac / Chuyen trang thai` de khop voi nghia moi cua timeline filter va quick favorite messaging cho status transition
+  - cac lane current-state va export bao cao cho truong nhom sau do da duoc ship tiep trong `cng-7z0.19`, `cng-7z0.20`, va `cng-7z0.21`
+- `cng-7z0.19` da hoan tat compact lead-view lane cho MST assignment:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js` de quan ly preset xem rut gon cho truong nhom, giu state `enabled/status/team` rieng voi history filter va reset page moi khi doi nhanh bo loc
+  - `src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx` nay co khu `Lead-view rút gọn` voi toggle, quick filters `Tất cả / Đã gán đủ / Chờ gán`, va combobox team; `src/components/MSTAssignment.jsx` tu dong khoa `Gom theo MST` khi lead-view bat
+  - `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js` nay ap current-state filter theo assigned/pending + team ma khong dung chung `historyFilteredRowKeys`
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx tests/mstAssignmentStaffFilterPanel.test.jsx tests/useMSTAssignmentLeadViewWorkspace.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignmentStaffFilterPanel.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentLeadViewWorkspace.test.jsx --environment jsdom`
+- `cng-7z0.20` da hoan tat company-name validation lane cho MST assignment:
+  - `src/components/mst-assignment/model/companyName.js` bo sung warning builder cho ten cong ty qua dai va ky tu nghi ngo; `src/components/mst-assignment/table/CompanyNameCell.jsx` surfacing warning inline ngay ben duoi textarea va giu nguyen sanitize + auto-resize behavior
+  - `tests/mstAssignment.company-name.test.jsx` nay khoa them contract warning model/UI de tranh hoi quy khi tiep tuc tach MST assignment ra cac module nho hon
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/mst-assignment/model/companyName.js src/components/mst-assignment/table/CompanyNameCell.jsx tests/mstAssignment.company-name.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignment.company-name.test.jsx --environment jsdom`
+- `cng-7z0.21` da hoan tat export metadata lane cho MST assignment:
+  - them `src/components/mst-assignment/model/exportDataset.js` de dung chung export dataset tu `rows + historyEntries`, suy ra `Người gán gần nhất` va `Cập nhật gần nhất` theo `rowKey` stage thay vi chi dua vao row hien tai
+  - `useMSTAssignmentExportWorkspace.js` nay ho tro ca `xlsx` va `csv` tren cung mot pipeline lazy-load `xlsx`; `MSTAssignment.jsx` surfacing day du 4 quick actions `XLSX/CSV (lọc|tất cả)` de truong nhom export ngay tu working set hien tai
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/model/exportDataset.js tests/useMSTAssignmentExportWorkspace.test.jsx tests/mstAssignment.exportDataset.test.js`
+    - `pnpm exec vitest run tests/useMSTAssignmentExportWorkspace.test.jsx tests/mstAssignment.exportDataset.test.js tests/useMSTAssignmentHistoryWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec vitest run tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignmentStaffFilterPanel.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentLeadViewWorkspace.test.jsx tests/mstAssignment.exportDataset.test.js --environment jsdom`
+- `cng-7z0.6` da xong o muc surfacing tien trinh dong bo ECUS theo tung buoc:
+  - them `syncProgressSteps` trong `useDataImporterSync.js` de track 4 phase thuc te: commit ECUS, refresh config/status/alerts, refresh declaration rows, va reload danh sach hien thi
+  - day state moi qua `dataImporterSyncPanelProps.js` va `DataImporterSyncConfigPanel.jsx` de UI shell khong can tu tinh lai progress
+  - cap nhat `DataImporterSyncPreviewPanel.jsx` thanh stepper co badge `dang chay` / `hoan tat` / `gap loi`, giu operator thay ro buoc nao dang active va chi tiet tung buoc
+  - bo sung regression `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, va re-verify seam `tests/useDataImporterContainerProps.test.jsx`
+- `cng-7z0.9` va `cng-7z0.10` da xong o muc checklist + retry lane cho dong bo ECUS:
+  - preflight checklist hien trang thai backend, SQL Server, thong tin ket noi, va khoang ngay truoc khi cho phep chay sync/resume
+  - commit phase co retry/backoff tu dong, thong bao countdown than thien, va activity log de operator thay duoc lan thu/ly do thu lai
+  - persisted job snapshot giu duoc tham so actor/range/include-exclude MST va cho phep resume tren lan mo lai tiep theo
+  - bo sung `tests/dataImporterSyncQueue.test.js`, cap nhat `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, `tests/useDataImporterWorkflowSession.test.jsx`, va `tests/useDataImporterContainerProps.test.jsx`
+- `cng-7z0.8` da xong o muc canh bao conflict truoc overwrite:
+  - `useDataImporterSync.js` gio tong hop preview conflict summary tu payload preview co san va chi bat confirm overwrite khi preview hien tai cho thay co declaration `existing` voi `changedFields`
+  - `DataImporterSyncPreviewPanel.jsx` hien banner canh bao overwrite/locked/unchanged de operator thay ro tac dong truoc khi bam `Dong bo ngay`
+  - cap nhat `dataImporterSyncPanelProps.js`, `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, va `tests/dataImporterSyncPanelProps.test.js`
+- `cng-7z0.11` da xong o muc lich su dong bo:
+  - `dataImporterSyncQueue.js` gio luu `jobHistory` co gioi han cho cac job `completed/failed` va normalize `resultSummary` de ghi ro actor, thoi diem, khoang ngay, va so ban ghi bi tac dong
+  - `useDataImporterSync.js` giu lich su nay xuyen session, cap nhat ngay sau moi lan sync xong, va expose `syncHistory` qua workflow/controller/container seam
+  - `DataImporterSyncPreviewPanel.jsx` them block `Lich su dong bo gan day` de operator thay ngay lan chay, status, range, MST notice, va ket qua `imported/updated/skipped/locked`
+  - bo sung regression `tests/dataImporterSyncQueue.test.js`, cap nhat `tests/useDataImporterSync.test.jsx`, `tests/useDataImporterWorkflowSession.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, va `tests/dataImporterSyncPreviewPanel.test.jsx`
+- `cng-7z0.12` da xong o muc worker-backed XLSX parsing:
+  - `dataImporterWorkbookParser.js` dung `dataImporterWorkbook.worker.js` de day `XLSX.read` sang worker module va chi fallback ve sync parser khi worker khong kha dung
+  - `useDataImporterImportFlow.js` tiep tuc goi parser chung nen UI import flow nhan worker offload ma khong can doi contract caller
+  - bo sung regression `tests/dataImporterWorkbookParser.test.js` cho worker-success, worker-error, va no-worker fallback
+- `cng-7z0.13` da xong o muc lazy-load shell-level DataImporter:
+  - `DataImporterShell.jsx` lazy-load cac dialog/panel nang cho `sync`, `preview`, `filters`, `results`, va `monitoring` theo tung workflow stage
+  - shell workflow guide, summary cards, va banner van render ngay de giu nhan thuc ngu canh trong luc chunk con dang tai
+  - cap nhat regression `tests/dataImporterShell.test.jsx` de khoa stage contract trong lazy boundary
+- `cng-7z0.15` da duoc reconcile closed o muc wizard da ship san:
+  - `DataImporterWorkflowGuide` da huong dan theo trang thai va goi y action theo tung buoc import/sync/save
+  - `DataImporterShell.jsx` da chia workflow thanh 3 stage co heading, status badge, va target anchor rieng cho nguoi dung theo doi
+  - bang chung regression nam o `tests/dataImporterWorkflowGuideState.test.js` va `tests/dataImporterShell.test.jsx`
+- `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
+  - them chon kenh giao (`email`, `report_center`, `download_bundle`) trong `ReportingSchedulePanel` va preview payload ngay trong form
+  - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat
+  - dong bo contract luu/doc qua `packages/api-client/src/reportingClient.js`, `server-v4/src/modules/reporting/reportingScheduleNormalizer.ts`, `server-v4/src/modules/reporting/ReportingController.ts`, `server-v4/src/modules/reporting/reportingService.ts`, `server/reportingReadModels.js`, va `server/reportingScheduleMutations.js`
+  - bo sung regression `tests/reportingPanels.test.jsx`, `tests/useReportViewerActions.test.jsx`, `tests/reportingClient.test.js`, `tests/server-v4/runtimeRoutes.test.js`, va `tests/server.api.test.js`
+- `cng-7z0.29` da xong o muc local report templates:
+  - them `ReportingTemplateControls.jsx` + `useReportViewerTemplates.js` de luu/ap dung/ghi de/xoa template report trong local storage trinh duyet
+  - mo rong `useReportViewerPreferences.js` de sanitize/build/apply snapshot template cho report viewer state
+  - cap nhat `ReportViewer.jsx` + `ReportingPanels.jsx` de template control song song voi bo loc/rule chon report
+  - bo sung regression `tests/useReportViewerTemplates.test.jsx`, cap nhat `tests/useReportViewerPreferences.test.jsx`, `tests/reportingPanels.test.jsx`, va verify `tests/reportViewer.test.jsx`
+- `cng-7z0.1` da xong o muc persist filter states cho KPI Adjustments:
+  - them local-storage persistence theo user scope trong `useKpiAdjustmentFilters.js` cho `month`, `status`, `mine-only`, va `staff`
+  - sanitize lai state restore de khong giu bo loc staff/mine-only sai khi auth scope thay doi
+  - bo sung regression `tests/kpiAdjustments.hooks.test.jsx` va `tests/kpiAdjustments.test.jsx` de khoa remount restore flow
+- `cng-7z0.2` da xong o muc paginate KPI Adjustments list:
+  - them `useKpiAdjustmentPageSize.js` de persist `pageSize` rieng cho lane dieu chinh KPI
+  - noi `usePagination` + `PageSizeControl` vao `KPIAdjustments.jsx` va `KpiAdjustmentListPanel.jsx` de hien page summary, prev/next controls, va hydrate page size sau remount
+  - bo sung regression `tests/useKpiAdjustmentPageSize.test.jsx`, `tests/kpiAdjustmentListPanel.test.jsx`, va cap nhat `tests/kpiAdjustments.test.jsx`
+- `cng-7z0.3` da xong o muc bulk approve/reject cho KPI Adjustments:
+  - them `useKpiAdjustmentSelection.js` de quan ly selection state theo trang va select-all behavior
+  - mo rong `KpiAdjustmentListPanel.jsx` voi checkbox cot dau, toolbar bulk action, va selection summary cho approver
+  - cap nhat `KPIAdjustments.jsx` de bulk-loop `updateKpiAdjustmentStatus`, confirm/prompt note, va clear selection sau khi apply
+  - bo sung regression `tests/useKpiAdjustmentSelection.test.jsx`, cap nhat `tests/kpiAdjustmentListPanel.test.jsx`, va them integration tests bulk approve/reject trong `tests/kpiAdjustments.test.jsx`
+- `cng-7z0.4` da xong o muc quick link tra cuu lien quan trong KPI Adjustments:
+  - them `Mở MST` ngay trong list/detail dialog va link theo tung tham chieu to khai de approver jump sang workspace dich nhanh hon
+  - tan dung `emitCommand("navigate:tab")` de nhay den `mst/review` hoac `import/review` thay vi mo them prop drilling moi
+  - copy lookup value (MST/so to khai) vao clipboard theo best-effort de nguoi dung paste ngay o workspace dich khi can
+  - khoa regression command bus trong `tests/kpiAdjustmentListPanel.test.jsx` va `tests/kpiAdjustmentDialogs.test.jsx`
+- `cng-7z0.5` da xong o muc quan ly cau hinh diem mac dinh truc tiep trong UI:
+  - them summary `Cấu hình đang áp dụng` vao `KpiAdjustmentFormPanel.jsx` de approver thay ngay default unit/mode/license points cua hạng mục dang chon
+  - them quick action `Chỉnh cấu hình hạng mục này` de mo `KpiAdjustmentSettingsDialog` theo dung category dang thao tac, kem focus banner va reorder card
+  - cap nhat `useKpiAdjustmentForm.js` + `KPIAdjustments.jsx` de giu context `settingsFocusCategory` va khoa regression trong `tests/kpiAdjustmentDialogs.test.jsx` / `tests/kpiAdjustments.test.jsx`
+- `cng-7z0.27` da xong o muc executive dashboard snapshot:
+  - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
+  - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets
+  - bo sung regression `tests/reportingExecutiveSummaryPanel.test.jsx` va cap nhat `tests/reportingDashboardOverview.test.jsx`
+- `cng-7z0.26` da xong o muc schedule preview:
+  - them preview next-run / outputs / recipients / data-source vao `ReportingSchedulePanel`
+  - cap nhat `tests/reportingPanels.test.jsx` va `tests/playwright/report-viewer.spec.js` de khoa jsdom + browser runtime
+- `cng-2k4.22 / slice I` da xong o muc report shell focus va loading fallback regression coverage:
+  - mo rong `tests/playwright/lazy-tab-shell.spec.js` de khoa fallback focus khi workflow guide nhay sang `Báo cáo KPI` trong luc `ReportCenterPanel` chunk con dang treo
+  - mo rong `tests/playwright/report-viewer.spec.js` de khoa handoff focus tu action `Tới khu export`
+  - them `tests/kpiCalculator.navigation.test.jsx` de khoa loading status + fallback focus o jsdom contract level
+- `cng-2k4.22 / slice F` da xong o muc pagination hook hygiene:
+  - memoize `safeItems` trong `src/hooks/usePagination.js` de on dinh dependency cua `currentPageItems`
+  - verify lai `tests/mstAssignment.pagination.test.jsx` vi day la harness call truc tiep theo GitNexus impact
+- `cng-2k4.22 / slice E` da xong o muc design-system hook hygiene:
+  - on dinh dependency cua `useChartPalette` trong `src/designSystem/hooks.js`
+  - verify lai `tests/reportViewer.test.jsx` vi day la caller truc tiep theo GitNexus impact
+- `cng-2k4.22 / slice D` da xong o muc config lint hygiene:
+  - bo bien `isWindows` khong duoc dung trong `eslint.config.js`
+  - giu nguyen lint contract, chi cat warning level config
+- `cng-2k4.22 / slice C` da xong o muc runtime lint hygiene cho filter preset hook:
+  - bo binding `err` khong duoc dung trong `parseJsonSafely` cua `src/hooks/useFilterPresets.js`
+  - verify lai caller-side test `tests/useDataImporterSessionController.test.jsx` de khoa contract preset session
+- `cng-2k4.22 / slice B` da xong o muc lint hygiene cho test-only files:
+  - bo 4 warning unused-var ro rang trong `tests/auditLog.test.jsx`, `tests/reportViewer.test.jsx`, `tests/server.api.test.js`, va `tests/store.test.js`
+  - giu nguyen hanh vi test, chi cleanup binding/tham so du thua
+- `cng-2k4.22 / slice A` da xong o muc runtime text hygiene:
+  - doi nhan fallback `Runtime error` thanh `Lỗi runtime` trong `RuntimeErrorBoundary`
+  - cap nhat unit/browser regression de khoa visible copy moi tren shell error states
+  - bead lon `cng-2k4.22` van con mo cho nhung phan lint hygiene va text cleanup khac
+- `cng-7z0.34` da xong o muc artifact QA cuoi sprint cho giao dien:
+  - them `docs/operations/ui-sprint-qa-checklist.md` de chot command matrix, manual smoke checks va cach ghi nhat ky verify
+  - cap nhat `docs/operations/ui-verification-log.md` thanh log theo phien va noi truc tiep den checklist nay
+  - cap nhat `docs/ux-improvement-backlog.md` + `docs/open-backlog.md` de dong slice tai lieu nay
+- `cng-2k4.21` da xong voi browser runtime regression coverage cho lazy shell tabs:
+  - them `tests/playwright/lazy-tab-shell.spec.js` de khoa flow `Mở audit trail` khi `AuditLog` chunk dang delay va khi chunk fail
+  - bo duplicate `app-tab-root-reports` trong `src/components/workflows/ReportCenterPanel.jsx` de giu root target unique va helper E2E on dinh
+  - harden `src/components/ExportAuditReport.jsx` cho payload summary/total thieu field so, tranh runtime error trong audit workspace
+- `cng-2k4.20` da xong o muc accessibility/loading polish sau lazy admin tab split:
+  - doi `TabPanel` trong `src/components/KPICalculator.jsx` thanh root wrapper focusable co `id` on dinh cho moi tab, khong con phu thuoc vao inner workflow panel moi co focus target
+  - bo sung loading fallback semantics voi `role="status"` + `aria-live="polite"` de lazy tab loading duoc announce dung cho screen reader
+  - them fallback focus tu workflow-step target ve `getAppTabRootId(tab)` khi lazy child anchor chua mount, giu handoff on dinh cho `navigationIntent`
+  - mo rong `tests/kpiCalculator.lazyTabs.test.jsx` de khoa contract loading status + focus target trong luc tab `adjustments` con dang lazy resolve
+- `cng-2k4.19` da xong o muc code splitting cho heavy admin tabs:
+  - doi `DataImporter`, `HQAgencyManager`, `MSTWorkflowPanel`, `KPIAdjustmentsWorkflowPanel`, va `ReportCenterPanel` trong `src/components/KPICalculator.jsx` sang `React.lazy(...)`
+  - them `loadedTabs` state de chi mount tab content sau lan truy cap dau tien, tranh keo cac module nang vao route bootstrap cua shell
+  - bo sung regression test `tests/kpiCalculator.lazyTabs.test.jsx` va cap nhat `tests/kpiCalculator.errorBoundary.test.jsx` de dong bo voi lazy import timing
+  - targeted verify da pass: eslint batch `KPICalculator + errorBoundary test + lazyTabs test`, vitest batch `auth + errorBoundary + lazyTabs`
+- `cng-2k4.16` da xong o muc giam kich thuoc `HQAgencyManager.jsx`:
+  - tach header/history/filter/import toolbar thanh `src/components/hq-agency-manager/HQAgencyManagerControls.jsx`
+  - giu shell `HQAgencyManager.jsx` cho orchestration state/save/import va dua file goc xuong 674 dong, dat duoi target kich thuoc module
+  - bo sung regression test `tests/hqAgencyManagerControls.test.jsx` va verify lai `tests/hqAgencyManager.test.jsx`
+- `cng-2k4.17` da xong o muc giam kich thuoc `TeamManager.jsx`:
+  - tach toolbar, member workspace, va company table thanh 3 panel rieng duoi `src/components/team-manager/`
+  - giu shell `TeamManager.jsx` cho orchestration state/save flow va dua file goc xuong 790 dong, vuot target kich thuoc module
+  - bo sung regression tests cho tung panel moi va verify lai cung `TeamManagerHistoryPanel`
+- `cng-2k4.18` da xong o muc lazy-load `xlsx` cho cac luong Excel tren client:
+  - them `src/lib/loadXlsx.js` de memoize dynamic import `xlsx` va cat static dependency khoi cac shell UI/hook
+  - refactor `TeamManager`, `HQAgencyManager`, `dataImporter/*`, `useMSTAssignmentExportWorkspace`, va `useMSTAssignmentImportSaveWorkspace` sang runtime lazy-load / injected loader
+  - bo static `xlsx` khoi `src/components/mst-assignment/model/importSheet.js` bang local Excel serial date parser, tranh model file nay tiep tuc keo `xlsx` vao main bundle
+  - targeted verify da pass: vitest jsdom batch cho `mst-assignment + dataImporter + HQAgencyManager` va eslint batch tren toan bo file da doi
+- `cng-2k4.6` da xong o muc alerts + notifications module extraction cho server-v4:
+  - them module `server-v4/src/modules/alerts/*` de expose canonical alert surface duoi `/api/v4/alerts`
+  - `buildV4App`/`moduleCatalog`/`server-v4` public exports da mount runtime moi va dua `alerts` vao rollout health metrics
+  - `server/index.js` da adapter legacy alert helpers sang runtime v4, giu `server/index.js` la source of truth cho config/evaluation/notification stream trong giai doan parity
+  - `server/v4RolloutMount.js` va `tests/v4RolloutMount.test.js` da dua `alerts` vao wave-2 legacy selector, phu hop voi thuc te modules dang mount
+  - targeted verify da pass: eslint batch alerts/build wiring, `pnpm run typecheck:server-v4`, va vitest batch `alertsRoutes + appShell + v4RolloutMount`
+- `cng-2k4.4` da xong o muc backup module extraction cho server-v4:
+  - them `server-v4/src/modules/backup/backup.module.ts`, `backupRoutes.ts`, `backupRuntime.ts` de mount `GET /summary`, `GET /files`, `POST /run`, va `POST /schedule` duoi `/api/v4/backups`
+  - `server-v4/src/app/build-v4-app.ts` va `server-v4/src/app/module-catalog.ts` da mount module moi; `server-v4/src/index.ts` export runtime adapter de legacy server co the reuse
+  - `server/index.js` da truyen `backupDomain`/`saveBackupConfig`/audit helpers vao runtime v4, giu persisted backup config state khi mount qua legacy app
+  - bo sung `tests/server-v4/backupRoutes.test.js`, cap nhat `tests/server-v4/appShell.test.js`; targeted eslint + vitest da pass
+  - follow-up `restore` da duoc hoan tat ngay 2026-03-28:
+    `POST /api/v4/backups/restore`, reset cached SQLite auth handle truoc khi thay file DB, va targeted typecheck/eslint/vitest deu da pass
+- `cng-2k4.7` da xong o muc numbered SQLite schema migrations:
+  - them `server/sqliteMigrations.js` de quan ly `schema_migrations` va chay migration co danh so cho kv/auth/export-audit/reporting/business-snapshot/team-roster
+  - `server/index.js`, `server/reportingProjectionSqlite.js`, `server/businessSnapshotSqlite.js`, `server/teamRosterSqlite.js`, va cac `Sqlite*Store` ben `server-v4` da delegate sang migration runner thay vi tu bootstrap bang `CREATE TABLE IF NOT EXISTS`
+  - bo sung regression `tests/sqliteMigrations.test.js` va cap nhat `tests/reportingProjectionSqlite.test.js`, `tests/server.seed.test.js` de khoa migration history + legacy backfill path
+  - bead `cng-2k4.7` da duoc close ngay 2026-03-31 sau khi re-verify eslint + vitest cua lane migration
+  - targeted verify da pass:
+    - `pnpm exec eslint server/sqliteMigrations.js server/index.js server/businessSnapshotSqlite.js server/reportingProjectionSqlite.js server/teamRosterSqlite.js server-v4/src/modules/auth/sqliteAuthStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/hq-agencies/sqliteHqAgenciesStore.ts server-v4/src/modules/kpi-adjustments/sqliteKpiAdjustmentsStore.ts server-v4/src/modules/kpi-rules/sqliteKpiRulesStore.ts server-v4/src/modules/teams/sqliteTeamsStore.ts tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js`
+    - `pnpm exec vitest run tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js --environment node`
+- `cng-2k4.1` da hoan tat canonical auth v4 cutover cho client account flows:
+  - doi `src/auth/localAuth.js` sang `/api/v4/auth/*` cho login/session/logout + account/password mutations
+  - cap nhat auth/account test assertions va Playwright login helper sang canonical route
+  - chuan hoa `tests/helpers/mockApiState.js` theo v4 route, dong thoi giu `src/demo/demoMode.js` va `tests/helpers/mockApi.js` nhan ca legacy route de bao toan compat ngoai scope
+  - targeted verify da pass: eslint batch auth files, `vitest.frontend` cho `tests/auth.test.jsx` + `tests/accountManager.staff.test.jsx`, `pnpm build`, va `pnpm exec playwright test tests/playwright/account-management.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-7z0.33` da hoan tat regression coverage cho filter va sync runtime:
+  - mo rong `tests/playwright/sync-flow.spec.js` de cover payload propagation cua `from/to/includeTaxCodes/excludeTaxCodes` giua `Xem trước dữ liệu` va `Đồng bộ ngay`
+  - them runtime assertion cho o `Tìm nhanh danh sách tờ khai` de bao ve filter behavior tren du lieu preview sau khi sync preview duoc promote sang bang review
+  - targeted verify da pass: `pnpm exec eslint tests/playwright/sync-flow.spec.js` va `pnpm exec playwright test tests/playwright/sync-flow.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-2k4.13` da hoan tat pass xac minh runtime + refresh `Checklist.md`:
+  - them `tests/playwright/import-monitoring.spec.js` de cover thao tac `Chạy kiểm tra` trong panel `Đối soát C/O` va assert khong con `HTTP 500`/`Lỗi đối soát` tren preview app
+  - cap nhat `Checklist.md` de nang hang muc `Lỗi đối soát C/O` len `[x]` va bo sung references runtime cho `Export Excel` o `Import Data` cung shell `Điểm KPI +/- Thêm`
+  - targeted verify da pass: `pnpm exec eslint tests/playwright/import-monitoring.spec.js` va `pnpm exec playwright test tests/playwright/import-monitoring.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-2k4.21` da hoan tat Playwright smoke coverage cho admin adjustments + health:
+  - them `tests/playwright/adjustments-health.spec.js` de verify admin mo duoc workflow `Điểm KPI +/- Thêm` voi du 3 chang van hanh va health tab `Sức khỏe dữ liệu` voi heading/overview triage chinh
+  - fix selector nut refresh trong health tab bang cach scope vao match dau tien, tranh strict-mode failure khi UI render hai nut `Đang tải…`
+  - targeted verify da pass: `pnpm exec eslint tests/playwright/adjustments-health.spec.js` va `pnpm exec playwright test tests/playwright/adjustments-health.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-2k4.12` da hoan tat process-level logging + legacy compat error envelope:
+  - `apps/api/src/startApiServer.js` dang ky logging hooks cho `unhandledRejection` va `uncaughtExceptionMonitor`, cleanup listener khi `runtime.close()` de tranh ro listener khi test/start lai runtime
+  - `server-v4/src/app/legacy-compat/legacyCompatShared.ts` chuan hoa `handleLegacyAuthError(...)` ve nested error envelope cung format voi `BaseController`
+  - `server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts` chuan hoa 404 `unknown storage key` theo nested error envelope
+  - bo sung regression `tests/appsApiStart.test.js` cho process hook lifecycle, cap nhat `tests/server-v4/legacyCompatRoutes.test.js` cho 401/404 legacy compat errors; targeted eslint + vitest da pass
+- `cng-2k4.11` da hoan tat thay `bcrypt.hashSync` o auth request paths:
+  - them `hashPassword` async trong `server-v4/src/modules/auth/authShared.ts`
+  - doi `server-v4/src/modules/auth/authService.ts` sang async hashing cho create/reset/change password
+  - don gian hoa `server-v4/src/app/legacy-compat/legacyCompatShared.ts` bang cach delegate password mutations ve `AuthService`, giu dong bo session invalidation giua canonical va legacy compat auth routes
+  - bo sung regression `tests/server-v4/legacyCompatRoutes.test.js` cho legacy password reset + self-change flow; targeted eslint + vitest da pass
+- `cng-2k4.10` da hoan tat CSRF protection cho mutation routes:
+  - them `server-v4/src/app/csrfProtection.ts` de enforce CSRF cho cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` o build path trung tam `buildV4App`, dong thoi hydrate `kpi_csrf` cookie khi session da ton tai
+  - cap nhat `server-v4/src/modules/auth/authShared.ts` de session helper set/clear dong bo `kpi_session` va `kpi_csrf`
+  - cap nhat `src/auth/localAuth.js` de frontend tu doc `kpi_csrf` cookie va gan `X-CSRF-Token` cho unsafe requests, giu thay doi toi thieu tren `fetchWithAuth`
+  - bo sung `tests/server-v4/csrfProtection.test.js`, cap nhat `tests/server-v4/authRoutes.test.js`, `tests/server-v4/legacyCompatRoutes.test.js`, va `tests/auth.test.jsx`; targeted eslint + vitest da pass
+- `HQAgencyManager.jsx` da giam tu 1065 dong xuong 804 dong sau khi tach bang du lieu/history panel ra module rieng, giu shell tap trung vao orchestration/state.
+- Da them `src/components/hq-agency-manager/HQAgencyTable.jsx` de rut toan bo bang agency, history details, datalist, va row actions khoi shell.
+- Da tiep tuc dung `src/components/hq-agency-manager/hqAgencyManagerModel.js` cho cac pure helper/view-model de tranh de presentation module moi phai lap lai formatting logic.
+- Bo sung regression test moi:
+  - `tests/hqAgencyManagerModel.test.js`
+  - `tests/hqAgencyTable.test.jsx`
+- Cap nhat `tests/hqAgencyManager.test.jsx` de giu regression coverage khop voi wiring moi cua shell.
+- Targeted verify da pass:
+  - `pnpm exec eslint src/components/HQAgencyManager.jsx src/components/hq-agency-manager/HQAgencyTable.jsx src/components/hq-agency-manager/hqAgencyManagerModel.js tests/hqAgencyManager.test.jsx tests/hqAgencyManagerModel.test.js tests/hqAgencyTable.test.jsx`
+  - `pnpm exec vitest run tests/hqAgencyManager.test.jsx tests/hqAgencyManagerModel.test.js tests/hqAgencyTable.test.jsx --environment jsdom`
+- `AccountManager.jsx` da giam tu 1142 dong xuong 786 dong, dat duoi nguong module muc tieu cho slice nay.
+- Da them `src/components/account-manager/accountManagerPermissions.js` de tach metadata quyen, permission grouping helpers, va shared class tokens khoi shell.
+- Da them `src/components/account-manager/accountManagerFormState.js` de gom draft state mac dinh cho create-account flow, tranh lap object literal trong shell.
+- Da them `src/components/account-manager/AccountCreateFormPanel.jsx` de rut toan bo phan tao tai khoan + permission create section khoi shell.
+- Da them `src/components/account-manager/AccountPermissionsDialog.jsx` de rut toan bo presentation cua permission dialog khoi shell, trong khi `AccountManager` giu lai scroll state + auth callbacks.
+- Bo sung regression test moi:
+  - `tests/accountManagerPermissions.test.js`
+  - `tests/accountManagerFormState.test.js`
+  - `tests/accountCreateFormPanel.test.jsx`
+  - `tests/accountPermissionsDialog.test.jsx`
+- Targeted verify da pass:
+  - `pnpm exec eslint src/components/AccountManager.jsx src/components/account-manager/accountManagerPermissions.js src/components/account-manager/accountManagerFormState.js src/components/account-manager/AccountCreateFormPanel.jsx src/components/account-manager/AccountPermissionsDialog.jsx tests/accountManager.staff.test.jsx tests/accountManagerPermissions.test.js tests/accountManagerFormState.test.js tests/accountCreateFormPanel.test.jsx tests/accountPermissionsDialog.test.jsx`
+  - `pnpm exec vitest run tests/accountManager.staff.test.jsx tests/accountManagerPermissions.test.js tests/accountManagerFormState.test.js tests/accountCreateFormPanel.test.jsx tests/accountPermissionsDialog.test.jsx --environment jsdom`
+- `DataHealthDashboard.jsx` da giam tu 1060 dong xuong 742 dong, dat duoi nguong module muc tieu cho slice nay.
+- Da them `src/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx` de tach toan bo section policy form/header/action bar khoi shell.
+- Da them `src/components/data-health-dashboard/dataHealthDashboardViewModels.js` de gom phan build card/panel props thuần ra khoi shell, giu JSX chinh gon va de test hon.
+- Da bo sung regression test moi:
+  - `tests/dataHealthPolicyConfigSection.test.jsx`
+  - `tests/dataHealthDashboardViewModels.test.js`
+- Targeted verify da pass:
+  - `pnpm exec eslint src/components/DataHealthDashboard.jsx src/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx src/components/data-health-dashboard/dataHealthDashboardViewModels.js tests/dataHealthPolicyConfigSection.test.jsx tests/dataHealthDashboardViewModels.test.js`
+  - `pnpm exec vitest run tests/dataHealthPolicySourcesPanel.test.jsx tests/dataHealthPolicyConfigSection.test.jsx tests/dataHealthDashboardViewModels.test.js tests/dataHealthActivityFeedsPanel.test.jsx tests/dataHealthInfrastructureStatusPanel.test.jsx tests/dataHealthMetricsAlertsPanel.test.jsx tests/dataHealthStorageOverviewPanel.test.jsx`
+- `cng-svm` da hoan tat tach `buildStatusViewModel` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusViewModel.js`; shell hien import lai helper moi cho luong table/history status chip va giu nguyen contract cua cac panel/workspace da tach truoc do.
+- `cng-hfy` da hoan tat tach `formatHistoryTime` va `HISTORY_FIELD_LABELS` khoi `MSTAssignment` sang `src/components/mst-assignment/model/historyFormatting.js`; shell hien import lai helper moi cho luong history/timeline formatting va giu nguyen contract cua cac workspace da tach truoc do.
+- `cng-kun` da hoan tat tach `tidyMST` va `makeRowKey` khoi `MSTAssignment` sang `src/components/mst-assignment/model/rowIdentity.js`; shell hien import lai helper moi cho luong row identity va giu nguyen contract cua cac workspace da tach truoc do.
+- `cng-w2c` da hoan tat tach `findCell`, `toISO`, va `headerAliases` khoi `MSTAssignment` sang `src/components/mst-assignment/model/importSheet.js`; shell hien import lai helper moi cho luong import Excel, con regression test parsing da duoc tach rieng.
+- `cng-d5g` da hoan tat tach `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, va `computeStatusDisplay` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusDate.js`; shell hien import lai helper moi va giu nguyen contract truyen vao add-form/import-save/row-mutations/export/table panel.
+- `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js`; shell hien dung mot callback reset-page on dinh de feed cho add-form/history/import/staff/view workspace thay vi lap lai 5 lambda `setPageRef.current(1)`.
+- `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment` sang `src/components/mst-assignment/model/companyName.js`; entry file hien chi giu `CompanyNameCell` component va import helper moi, con regression test company-name da tro helper import sang module rieng.
+- `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js`; shell hien chi giu wiring `filtered`, `groupedStages`, `displayList`, con hook moi gom pipeline loc/uu tien row moi import va bridge sang grouped/aggregated selectors.
+- `cng-6d3` da hoan tat tach search/view controls workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js`; shell hien chi giu wiring cho `search`, `applyFrom`, `groupByMST`, va header actions, con hook moi gom state dieu khien header + search reset page flow.
+- `cng-7db` da hoan tat tach staff-filter workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js`; shell hien chi giu wiring `staffFilter` + panel props, con hook moi gom state filter nhan vien, page-reset flow, va quick-favorite alerts.
+- `cng-xkg` da hoan tat tach bootstrap workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js`; shell hien chi giu wiring `rosterTeams`, con hook moi gom roster subscription, initial `getMSTMap` hydrate, va bridge setRows/setOriginalRows.
+- `cng-5dp` da hoan tat tach export workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js`; shell hien chi giu wiring `exportRowsToExcel(scope)`, con hook moi gom `filtered/all` scope selection, workbook build, timestamped filename, va empty-state alert.
+- `cng-5r6` da hoan tat tach timeline dialog workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js`; shell hien chi giu wiring cho `timelineDialogState`, `handleOpenTimelineGroup`, `handleOpenAllTimelines`, va `handleTimelineDialogOpenChange`.
+- `cng-cxh` da hoan tat tach history workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js`; shell hien chi giu wiring cho `refreshHistory`, history filter state, derived counters, quick favorites, va filtered row-key mapping.
+- `cng-bxf` da hoan tat tach row commit workflow khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js`; shell hien chi giu wiring props cho bang, con hook moi gom `originalMap`, row diff detection, `rowHasChanges`, va `commitRow` save side effects.
+- `cng-7j8` da hoan tat tach add-form workflow/state khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js`; shell hien chi giu wiring props cho button/panel/table, con hook moi gom `showAddForm`, `draft`, `addError`, open/close flow, prefill tu stage hien tai, draft field handlers, va submit orchestration.
+- `cng-czt` da hoan tat tach row-mutation orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js`; shell hien chi giu wiring props cho panel, con hook moi gom `updateRow`, assignee select handlers, va `removeRow`.
+- `cng-elr` da hoan tat tach file-input/import/save orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js`; shell hien chi giu wiring props, con hook moi gom `fileRef`, `selectedFileName`, `handleFileChange`, `onImportXLSX`, `onSave`, va `markRecentlyImported`.
+- `cng-a4y` da hoan tat tach pure helper `sortMSTRows`, grouped stages, aggregated-by-MST rows, display list, va timeline map sang `src/components/mst-assignment/model/displaySelectors.js`; `src/components/MSTAssignment.jsx` da bo duplicate `groupedStages2`/`groupedStages` va giam con 2969 dong sau khi verify bang test moi `tests/mstAssignment.displaySelectors.test.js`.
+
+- `cng-oe3` da duoc dong nhu bead trung lap voi `cng-4zp`; task tach `KpiAdjustmentFormPanel` da hoan tat o slice truoc.
+- `cng-pvx` da hoan tat tach block bang du lieu/paging khoi `src/components/MSTAssignment.jsx` thanh `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx`, giu nguyen orchestration callback tren shell va bo sung regression test panel moi.
+- `cng-sz6` da hoan tat tach form them MST khoi `src/components/MSTAssignment.jsx`; file goc gio chi giu orchestration/callback, con UI form da duoc rut thanh panel rieng va bo sung regression test moi.
+- `cng-u40` da dong bead sau khi tach xong `MstAssignmentHistoryFilterPanel`; block bo loc lich su thay doi da duoc rut thanh panel rieng va verify bang regression test moi.
+- `cng-c6v` da dong bead sau khi tach xong `MstAssignmentStaffFilterPanel`; `src/components/MSTAssignment.jsx` da rut duoc block bo loc nhan vien phu trach + quick favorites thanh panel rieng va khoa bang regression test moi.
+- `cng-ejo` da dong bead sau khi tach xong `KpiAdjustmentOverviewPanel`; `src/components/KPIAdjustments.jsx` hien con 564 dong.
+- `cng-b9t` da dong bead sau khi tach xong `MstAssignmentTimelinePanel`; `src/components/MSTAssignment.jsx` tiep tuc giam shell orchestration quanh timeline.
+- `cng-xyq.9` da duoc verify lai bang targeted lint + vitest va dong bead de dong bo tracker.
+- `cng-e4b` da tach xong 3 dialog (`detail`, `guidance`, `settings`) khoi `src/components/KPIAdjustments.jsx`, bo sung regression test rieng cho panel moi, va dong bead sau khi verify xanh.
+- `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
+
+## Completed This Session
+
+- `cng-2k4.8` da hoan tat integration test cho `buildV4App` va route matrix:
+  - mo rong `tests/server-v4/appShell.test.js` de verify moi module trong `moduleCatalog` deu mount `__meta` route dung catalog contract
+  - bo sung scenario subset mount (`auth` + `teams`) de khoa `/api/v4/meta/modules`, `/api/v4/health`, `/api/v4/meta/rollout`, va `404` cho route nam ngoai matrix da mount
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server-v4/v4RolloutStatus.test.js --environment node`
+    - `pnpm exec eslint tests/server-v4/appShell.test.js tests/server-v4/v4RolloutStatus.test.js`
+
+- `cng-2k4.9` da hoan tat rollout metadata dashboard cho operator:
+  - them `src/components/data-health-dashboard/DataHealthRolloutStatusPanel.jsx` de render rollout stage, persistence source, declaration write path, va canh bao/doc readiness tu `/api/v4/meta/rollout`
+  - cap nhat `src/components/DataHealthDashboard.jsx` de nap rollout metadata voi callback on dinh, tranh request loop khi mount dashboard
+  - fix `src/hooks/useAsyncRequest.js` de khong reset `mountedRef` tren moi lan dependency change, dong thoi on dinh hoa `initialArgs`, `onSuccess`, va `onError` qua refs de async state settle dung cho `DataHealthDashboard` va `ExportAuditReport`
+  - cap nhat `src/components/ExportAuditReport.jsx` de request task/onError dung `useCallback`, loai bo render loop khi effect phu thuoc `execute`
+  - bo sung regression tests `tests/useAsyncRequest.test.jsx`, `tests/dataHealthRolloutStatusPanel.test.jsx`, va cap nhat `tests/dataHealthDashboard.test.jsx`, `tests/ExportAuditReport.test.jsx`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useAsyncRequest.test.jsx tests/dataHealthRolloutStatusPanel.test.jsx tests/dataHealthDashboard.test.jsx tests/ExportAuditReport.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/hooks/useAsyncRequest.js src/components/DataHealthDashboard.jsx src/components/ExportAuditReport.jsx src/components/data-health-dashboard/DataHealthRolloutStatusPanel.jsx tests/useAsyncRequest.test.jsx tests/dataHealthDashboard.test.jsx tests/dataHealthRolloutStatusPanel.test.jsx tests/ExportAuditReport.test.jsx`
+
+- `cng-dps` da hoan tat tach DataHealthDashboard policy sources panel:
+  - them `src/components/data-health-dashboard/DataHealthPolicySourcesPanel.jsx` de gom summary `policyStatusCounts` cung 2 card `Nguồn dữ liệu` va `Nguồn đang khóa`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model da format san cho source breakdown, action tone, locked metadata, va callback lock/unlock thay vi giu block JSX presentation dai
+  - bo sung `tests/dataHealthPolicySourcesPanel.test.jsx` de khoa branch co du lieu day du, lock/unlock callback, va fallback branch khi khong co source / lock data
+
+- `cng-daf` da hoan tat tach DataHealthDashboard activity feeds panel:
+  - them `src/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx` de gom 2 card `Sự kiện SQL Server gần đây` va `Thông báo real-time`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model da format san cho SQL timeout events va notification entries thay vi giu inline block JSX + tone wiring
+  - bo sung `tests/dataHealthActivityFeedsPanel.test.jsx` de khoa branch co du lieu day du va fallback branch khi khong co timeout / thong bao moi
+
+- `cng-dsb` da hoan tat tach DataHealthDashboard infrastructure status panel:
+  - them `src/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx` de gom grid `infrastructureAlerts` va banner `Trạng thái kết nối ECUS`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model cho alert severity tone, sync overview, va operator label thay vi giu JSX presentation o shell
+  - bo sung `tests/dataHealthInfrastructureStatusPanel.test.jsx` de khoa branch co canh bao day du va fallback branch khi khong co alert ha tang / khong co nguoi truc
+
+- `cng-dma` da hoan tat tach DataHealthDashboard metrics va alert summary panel:
+  - them `src/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx` de gom metrics grid cung 2 card `Nhóm trùng 11 số cần xử lý` va `Cảnh báo cần xử lý`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model da format san cho metrics, duplicate groups, va alert entries thay vi giu tiep block JSX presentation dai
+  - bo sung `tests/dataHealthMetricsAlertsPanel.test.jsx` de khoa branch co du lieu day du va fallback branch khi khong co duplicate group / alert ton dong
+
+- `cng-dsv` da hoan tat tach DataHealthDashboard storage overview panel:
+  - them `src/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx` de gom 3 card `Trạng thái sao lưu CSDL`, `Dung lượng hệ thống`, va `Trạng thái SQL Server`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model cho cum storage overview thay vi giu nguyen block JSX presentation dai trong shell
+  - bo sung `tests/dataHealthStorageOverviewPanel.test.jsx` de khoa branch co du lieu day du va fallback branch khi chua co nhat ky sao luu / SQLite stats
+
+- `cng-aqp` da hoan tat tach AccountManager permission groups panel:
+  - them `src/components/account-manager/AccountPermissionGroupsPanel.jsx` de gom permission checkbox rendering + per-group collapse logic dung chung cho create-form va dialog quan ly quyen
+  - `src/components/AccountManager.jsx` hien chi import panel moi thay vi giu 2 block JSX permission list gan nhu trung nhau
+  - bo sung `tests/accountPermissionGroupsPanel.test.jsx` de khoa count label, collapse/expand behavior, disabled predicate, va permission change callback
+
+- `cng-dhd` da hoan tat tach KPI category options:
+  - them `src/components/kpi-adjustments/model/categoryOptions.js` de gom `resolveCategoryOptions` va `CATEGORY_OPTIONS`
+  - `src/components/KPIAdjustments.jsx` hien import constant moi thay vi giu mapping config inline trong shell
+  - bo sung `tests/kpiAdjustments.categoryOptions.test.js` de khoa mapping category config -> option shape
+
+- `cng-0jn` da hoan tat tach KPI staff option builder:
+  - them `src/components/kpi-adjustments/model/staffOptions.js` de gom `buildStaffOptions`
+  - `src/components/KPIAdjustments.jsx` hien chi import helper moi thay vi giu roster flatten logic inline trong shell
+  - bo sung `tests/kpiAdjustments.staffOptions.test.js` de khoa flatten roster + trim member names
+
+- `cng-u7h` da hoan tat tach KPI reference parsing helper:
+  - them `src/components/kpi-adjustments/model/referenceParsing.js` de gom `parseReferences`
+  - `src/components/KPIAdjustments.jsx` hien chi import helper moi thay vi giu parse logic inline trong shell
+  - bo sung `tests/kpiAdjustments.referenceParsing.test.js` de khoa behavior split/normalize/dedupe
+
+- `cng-pnz` da hoan tat tach KPI field-id helpers:
+  - them `src/components/kpi-adjustments/model/fieldIds.js` de gom `normalizeFieldSegment`, `buildSettingsFieldId`, va `buildLicenseFieldId`
+  - `src/components/KPIAdjustments.jsx` hien chi import helper moi thay vi giu sanitize/id builder inline trong component shell
+  - bo sung `tests/kpiAdjustments.fieldIds.test.js` de khoa contract normalize segment va settings/license field-id generation
+
+- `cng-lch` da hoan tat tach KPI formatting helpers:
+  - them `src/components/kpi-adjustments/model/formatting.js` de gom `formatDateOnly`, `formatInt`, va `formatDecimal`
+  - `src/components/KPIAdjustments.jsx` hien chi import helper moi thay vi giu formatter inline trong component shell
+  - bo sung `tests/kpiAdjustments.formatting.test.js` de khoa defensive date parsing va `vi-VN` numeric formatting
+
+- `cng-y03` da hoan tat tach assignee cell khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/AssigneeCell.jsx` de gom display clamp, team hint, `HistoryDetails`, va che do edit thong qua `MstAssignmentStaffCombobox`
+  - `src/components/MSTAssignment.jsx` hien chi import/re-export module moi thay vi giu block presentation inline trong entry file
+  - cap nhat `tests/mstAssignment.person-columns.test.jsx` de import truc tiep component moi va tiep tuc khoa read-only + edit state
+
+- `cng-gpl` da hoan tat tach staff combobox wrapper khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/shared/MstAssignmentStaffCombobox.jsx` de gom preset `allowCustom`, `preserveTeamOnCustom`, va `preserveTeamOnClear` cho MST assignment flow
+  - `src/components/MSTAssignment.jsx` hien import wrapper moi thay vi giu anonymous inline component; `AssigneeCell` va `MstAssignmentAddFormPanel` tiep tuc dung chung mot contract
+  - bo sung `tests/mstAssignmentStaffCombobox.test.jsx` de khoa preset props cua wrapper moi ma khong phu thuoc vao hanh vi chi tiet cua shared combobox goc
+
+- `cng-s7x` da hoan tat tach company-name cell khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/CompanyNameCell.jsx` de gom render/view-edit behavior cho cot cong ty
+  - `src/components/MSTAssignment.jsx` hien chi import component moi thay vi giu sanitize/wrap/textarea sizing logic inline trong entry file
+  - cap nhat `tests/mstAssignment.company-name.test.jsx` de import truc tiep module moi va tiep tuc khoa wrap threshold, sanitize, va auto-resize behavior
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.company-name.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/table/CompanyNameCell.jsx tests/mstAssignment.company-name.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - slice nay chi rut company cell presentation/editing logic sang table module rieng, khong doi contract render cua data-table panel
+
+- `cng-y9o` da hoan tat tach person-column header khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/PersonColumnHeader.jsx` de gom presentation config + icon wiring cho `person_import` / `person_export`
+  - `src/components/MSTAssignment.jsx` hien chi import header moi thay vi giu config + UI metadata inline trong entry file
+  - cap nhat `tests/mstAssignment.person-columns.test.jsx` de import truc tiep module moi va tiep tuc khoa label 2 dong + tooltip behavior
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.person-columns.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/table/PersonColumnHeader.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - slice nay chi rut header presentation metadata sang table module rieng, khong doi contract render cua data-table panel
+
+- `cng-8j3` da hoan tat tach page-size control khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/PageSizeControl.jsx` de gom toan bo UI/behavior cho predefined options + custom page-size
+  - `src/components/MSTAssignment.jsx` hien chi import control moi thay vi giu block pagination control inline trong entry file
+  - cap nhat `tests/mstAssignment.pagination.test.jsx` de import truc tiep module moi va tiep tuc khoa hanh vi dropdown/custom input
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.pagination.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/table/PageSizeControl.jsx tests/mstAssignment.pagination.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - slice nay chi rut UI pagination control sang table module rieng, khong doi contract footer pagination cua data-table panel
+
+- `cng-crs` da hoan tat tach create-row-state helper khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/createRowState.js` de gom `createRowState`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu block normalize row state/meta trong entry file
+  - bo sung `tests/mstAssignment.create-row-state.test.js` de khoa normalization MST, trim field strings, auto-compute status, va meta behavior cua `__originalKey` / `__isNew`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.create-row-state.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/createRowState.js tests/mstAssignment.create-row-state.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx`
+  - slice nay chi rut helper pure cho bootstrap/import/add-form/row-commit row normalization, khong doi contract cua cac workspace consumer
+
+- `cng-svm` da hoan tat tach status view-model helper khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/statusViewModel.js` de gom `buildStatusViewModel`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu block status-chip view model trong entry file
+  - bo sung `tests/mstAssignment.status-view-model.test.js` de khoa 3 nhanh chinh: assigned, pending, va warning branches
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.status-view-model.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/statusViewModel.js tests/mstAssignment.status-view-model.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx`
+  - slice nay chi rut helper pure cho status-chip/status-badge projection, khong doi contract cua data-table/history/timeline/row-mutations consumer
+
+- `cng-hfy` da hoan tat tach history formatting helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/historyFormatting.js` de gom `formatHistoryTime` va `HISTORY_FIELD_LABELS`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu block history label/time formatter trong entry file
+  - bo sung `tests/mstAssignment.history-formatting.test.js` de khoa mapping history labels, format timestamp hop le, hanh vi `Invalid Date`, va catch path khi `Date` constructor nem loi
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.history-formatting.test.js tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/historyFormatting.js tests/mstAssignment.history-formatting.test.js tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx`
+  - slice nay chi rut helper pure cho history/timeline formatting, khong doi contract cua history/timeline/add-form/row-mutations workspace
+
+- `cng-kun` da hoan tat tach row-identity helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/rowIdentity.js` de gom `tidyMST` va `makeRowKey`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu block normalize MST/key builder trong entry file
+  - bo sung `tests/mstAssignment.row-identity.test.js` de khoa normalize MST digits-only, fallback rong, va row-key builder cho ca row day du lẫn row thieu field
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.row-identity.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/rowIdentity.js tests/mstAssignment.row-identity.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx`
+  - slice nay chi rut helper pure cho identity/lookup key, khong doi contract cua add-form/bootstrap/derived/import-save/row-commit/row-mutations workspace
+
+- `cng-w2c` da hoan tat tach import-sheet parsing helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/importSheet.js` de gom `headerAliases`, `findCell`, va `toISO`
+  - `src/components/MSTAssignment.jsx` hien chi import helper parsing moi thay vi giu block alias/date parsing trong entry file; `XLSX` cung da duoc bo khoi shell vi khong con dung truc tiep
+  - bo sung `tests/mstAssignment.import-sheet.test.js` de khoa alias tieng Viet/khong dau, parsing `Date`, serial Excel, va string date
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.import-sheet.test.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/importSheet.js tests/mstAssignment.import-sheet.test.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx`
+  - slice nay chi rut helper pure cho luong import, khong doi contract `useMSTAssignmentImportSaveWorkspace`
+
+- `cng-d5g` da hoan tat tach status/date helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/statusDate.js` de gom `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, va `computeStatusDisplay`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu 4 pure helper trong entry file, con `normalize`/`findCell` local van giu nguyen de tranh mo rong slice sang import parsing
+  - bo sung `tests/mstAssignment.status-date.test.js` de khoa format date, canonical status label, stored status, va display status branches
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.status-date.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/statusDate.js tests/mstAssignment.status-date.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx`
+  - slice nay giu nguyen wiring workspace hien co; chi rut 4 helper pure ra model rieng de don shell va co regression test rieng
+
+- `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js` de gom `bindPageSetter` va `goToFirstPage`
+  - `src/components/MSTAssignment.jsx` hien bind `setPage` vao workspace moi sau `usePagination`, roi truyen chung mot `goToFirstPage` cho add-form/history/import-save/staff-filter/view-controls workspace
+  - bo sung `tests/useMSTAssignmentPageResetWorkspace.test.jsx` de khoa 2 nhanh chinh: dispatch den current page setter va no-op an toan truoc khi bind
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentPageResetWorkspace.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js tests/useMSTAssignmentPageResetWorkspace.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx`
+  - slice nay chi giam lap wiring pagination callback, khong doi contract cac workspace con lai
+
+- `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/companyName.js` de gom `COMPANY_NAME_WRAP_THRESHOLD`, `shouldWrapCompanyName`, va `sanitizeCompanyNameInput`
+  - `src/components/MSTAssignment.jsx` hien chi con giu `CompanyNameCell` component va import helper moi thay vi export non-component helpers trong cung entry file
+  - cap nhat `tests/mstAssignment.company-name.test.jsx` de giu `CompanyNameCell` import tu `MSTAssignment.jsx`, con helper assertions chuyen sang module moi
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.company-name.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/companyName.js tests/mstAssignment.company-name.test.jsx`
+  - muc tieu cua slice nay la don 2 warning Fast Refresh con lai o `src/components/MSTAssignment.jsx`
+
+- `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js` de gom `filterAndPrioritizeRows`, `filtered`, `groupedStages`, `aggregatedByMST`, va `displayList`
+  - `src/components/MSTAssignment.jsx` hien khong con giu inline `useMemo` block cho filtering/sorting/grouping; shell chi con wiring outputs cua hook moi sang export, pagination, timeline, va table
+  - bo sung `tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx` de khoa 3 nhanh chinh: history/status/staff/search filtering + imported priority, grouped/aggregated display path, va raw display path khi tat `groupByMST`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js src/components/mst-assignment/model/displaySelectors.js tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-6d3` da hoan tat tach search/view controls workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js` de gom `search`, `groupByMST`, `applyFrom`, va cac handler `handleSearchChange`, `handleClearSearch`, `handleGroupByMSTChange`, `handleApplyFromChange`
+  - `src/components/MSTAssignment.jsx` hien khong con giu inline state header cho search/date/group toggle; shell chi con wiring gia tri/handler vao `SearchField`, checkbox gom MST, va input ngay ap dung
+  - bo sung `tests/useMSTAssignmentViewControlsWorkspace.test.jsx` de khoa 3 nhanh chinh: search change + clear deu reset page, group toggle reset page, va apply-from change khong tu y reset page
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentViewControlsWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentViewControlsWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-7db` da hoan tat tach staff-filter workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js` de gom `staffFilter` state, `handleStaffFilterSelect`, `clearStaffFilter`, `applyStaffFavorite`, va `handleSaveStaffFavorite`
+  - `src/components/MSTAssignment.jsx` hien khong con giu inline staff-filter state/callback; shell chi con wiring voi `MstAssignmentStaffFilterPanel` va doc `staffFilter` cho pipeline filter hien co
+  - bo sung `tests/useMSTAssignmentStaffFilterWorkspace.test.jsx` de khoa 3 nhanh chinh: select/clear/favorite deu reset page, empty-save alert, va duplicate/success messaging khi luu favorite
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-xkg` da hoan tat tach bootstrap workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js` de gom `subscribeTeamRoster`, derive `rosterTeams`, initial `getMSTMap` hydrate, va error logging path
+  - `src/components/MSTAssignment.jsx` hien khong con giu inline roster subscription hay initial hydrate effect; shell chi con wiring cho `rosterTeams` va cac hook phu thuoc vao rows/originalRows
+  - bo sung `tests/useMSTAssignmentBootstrapWorkspace.test.jsx` de khoa 3 nhanh chinh: hydrate rows/originalRows, roster subscription + cleanup, va hydrate failure logging
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-5dp` da hoan tat tach export workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js` de gom `filtered/all` scope selection, export row mapping, workbook build, timestamp formatting, va `writeFile`
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block `exportRowsToExcel`; shell giu nguyen contract cho 2 nut `Export (lọc)` va `Export (tất cả)`
+  - bo sung `tests/useMSTAssignmentExportWorkspace.test.jsx` de khoa 3 nhanh chinh: `empty-state alert`, export filtered rows mac dinh, va export full rows cho scope `all`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-5r6` da hoan tat tach timeline dialog workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js` de gom `timelineDialogState`, `handleOpenTimelineGroup`, `handleOpenAllTimelines`, va `handleTimelineDialogOpenChange`
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline timeline dialog state/open handlers, nen file goc tiep tuc giam orchestration quanh timeline aggregate/detail flow
+  - bo sung `tests/useMSTAssignmentTimelineWorkspace.test.jsx` de khoa 3 nhanh chinh: mo group dialog, mo/close aggregate dialog, va bo qua empty/null payload
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-cxh` da hoan tat tach history workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js` de gom history load, filter state, derived counters, filtered row-key mapping, va quick favorite handlers
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline history state/effect/selector block; shell chi con wiring va render panel
+  - bo sung `tests/useMSTAssignmentHistoryWorkspace.test.jsx` de khoa 3 nhanh chinh: initial load/filter counts, quick favorite save/reset flow, va refresh/status-filter mapping
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-bxf` da hoan tat tach row commit workflow khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js` de gom `originalMap`, `getRowDiff`, `rowHasChanges`, va `commitRow` save side effects khoi shell
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline diff/save block, nen file goc tiep tuc giam orchestration quanh bang du lieu
+  - bo sung `tests/useMSTAssignmentRowCommitWorkspace.test.jsx` de khoa 3 nhanh chinh: `no-change`, save thanh cong, va `conflict`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-7j8` da hoan tat tach add-form workflow/state khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js` de gom `showAddForm`, `draft`, `addError`, `toggleAddForm`, `startNewStageFromRow`, draft assignee handlers, close flow, va submit orchestration
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block add-form state/handlers; `useTooltipTitles` da duoc doi xuong sau workspace setup de tranh TDZ runtime regression
+  - bo sung `tests/useMSTAssignmentAddFormWorkspace.test.jsx` de khoa open/submit flow, stage prefill flow, va invalid date validation
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/mstAssignmentAddFormPanel.test.jsx tests/e2e.admin-flows.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/mstAssignmentAddFormPanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+  - local checkpoint cho hai slice truoc da duoc commit thanh `25cdeca` (`ref(frontend): Extract MST assignment import workspaces`)
+
+- `cng-czt` da hoan tat tach row-mutation handlers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js` de gom `updateRow`, assignee patch builder, imported-key migration, va `removeRow`
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block `updateRow` + assignee select handlers + remove-row confirm flow
+  - bo sung `tests/useMSTAssignmentRowMutations.test.jsx` de khoa row update normalization/status, imported-key migration, assignee patching, va delete flow
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignment.displaySelectors.test.js --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus map diff theo file `MSTAssignment.jsx`, nhung impact truoc khi sua cho `handleRowImportSelect` la `LOW` va scope thuc te chi quanh row-mutation extraction
+
+- `cng-elr` da hoan tat tach import/save orchestration khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js` de gom file-input state, import workbook mapping/merge, save orchestration, va helper add imported keys
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block `onImportXLSX` + `onSave` + `selectedFileName`/`fileRef`
+  - bo sung `tests/useMSTAssignmentImportSaveWorkspace.test.jsx` de khoa import flow local va save/reset imported highlights
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus map diff theo entry-point `MSTAssignment.jsx`; impact truoc khi sua cho symbol `MSTAssignment` van la `LOW` va scope thuc te cua slice chi quanh import/save extraction
+
+- `cng-a4y` da hoan tat tach selector/grouping helper khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/displaySelectors.js` de gom `sortMSTRows`, `buildGroupedStages`, `buildAggregatedRowsByMST`, `buildDisplayList`, va `buildTimelineGroupsByMST`
+  - `src/components/MSTAssignment.jsx` hien dung mot `groupedStages` selector duy nhat, khong con duplicate `groupedStages2`, va timeline/display list deu dung helper module moi
+  - bo sung `tests/mstAssignment.displaySelectors.test.js` de khoa sorting, grouped stages, aggregated-by-MST rows, display-list switch, va timeline map
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/displaySelectors.js tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+
+- `cng-pvx` da hoan tat tach bang du lieu/paging khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx` de gom summary bar, column visibility popover, data table, row action, va pagination shell
+  - `src/components/MSTAssignment.jsx` hien chi giu orchestration callback/state va render panel moi + timeline panel nhu child thay vi block JSX inline >1000 dong
+  - bo sung `tests/mstAssignmentDataTablePanel.test.jsx` de khoa column controls, badge row moi import, row actions, va paging/page-size callback
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx tests/mstAssignment.pagination.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx tests/mstAssignment.pagination.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus gom diff theo file entry-point `MSTAssignment.jsx`, nhung impact truoc khi sua cho symbol `MSTAssignment` la `LOW` va scope thuc te chi tap trung quanh table-panel extraction
+
+- `cng-sz6` da hoan tat tach form them MST khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx` de rut block form them MST thanh panel presentational rieng
+  - bo sung `tests/mstAssignmentAddFormPanel.test.jsx` de khoa wiring callback, assignee combobox labels, submit/cancel action, va error display
+  - `src/components/MSTAssignment.jsx` hien chi giu callback orchestration (`handleDraftImportSelect`, `handleDraftExportSelect`, `handleCloseAddForm`) va render panel moi thay vi block JSX inline
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx tests/mstAssignmentAddFormPanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentAddFormPanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus map diff theo file `MSTAssignment.jsx`, nhung scope thuc te chi la add-form extraction va regression tests lien quan da xanh
+
+- `cng-u40` da hoan tat tach bo loc lich su thay doi khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx` de rut section history filter thanh panel presentational rieng
+  - bo sung `tests/mstAssignmentHistoryFilterPanel.test.jsx` de khoa history summary, update filter callbacks, toolbar actions, va quick favorite action filter
+  - `src/components/MSTAssignment.jsx` hien dung panel moi thay vi giu inline block UI cho history filter
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: critical` vi worktree dang gom ca refactor chua commit cua `KPIAdjustments` va nhieu slice `MSTAssignment`
+
+- `cng-c6v` da hoan tat tach bo loc nhan vien khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx` de rut section bo loc nhan vien phu trach + quick favorites khoi entry-point
+  - bo sung `tests/mstAssignmentStaffFilterPanel.test.jsx` de khoa nut save filter, quick favorite apply/remove, va wiring callback
+  - `src/components/MSTAssignment.jsx` hien dung panel moi thay vi giu inline block UI cho staff filter
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx tests/mstAssignmentStaffFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentStaffFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: critical` vi worktree dang gom ca refactor chua commit cua `KPIAdjustments` va `MSTAssignment`
+
+- `cng-b9t` da hoan tat timeline shell extraction cho `MSTAssignment`:
+  - them `src/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx` de tach khung tong hop timeline va dialog shell khoi entry-point
+  - bo sung `tests/mstAssignmentTimelinePanel.test.jsx` de khoa trang thai nut tong hop, dialog render, va grouping display co ban
+  - `src/components/MSTAssignment.jsx` giam con 2537 dong sau khi rut summary/dialog shell cua timeline
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+
+- `cng-ejo` da hoan tat shell decomposition cuoi cho `KPIAdjustments`:
+  - them `src/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx` de tach card tong quan KPI +/- khoi file goc
+  - bo sung `tests/kpiAdjustmentOverviewPanel.test.jsx` de khoa 4 metric tong hop va formatter wiring
+  - `src/components/KPIAdjustments.jsx` giam con 564 dong sau khi rut xong overview panel
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx tests/kpiAdjustmentOverviewPanel.test.jsx tests/kpiAdjustments.test.jsx`
+    - `pnpm exec vitest run tests/kpiAdjustmentOverviewPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` giam xuong `risk_level: medium`, pham vi van tap trung quanh `KPIAdjustments`
+
+- `cng-cpg` da hoan tat form workspace extraction cho `KPIAdjustments`:
+  - them `src/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js` de gom declaration search/reference workspace, business lookup MST/cong ty, team-filtered staff options, guidance groups, va derived total/license state khoi file chinh
+  - bo sung `tests/useKpiAdjustmentFormWorkspace.test.jsx` de khoa lookup append-reference va computed totals/team filtering
+  - `src/components/KPIAdjustments.jsx` giam xuong 1021 dong sau khi rut block orchestration lon nhat cua form
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js tests/useKpiAdjustmentFormWorkspace.test.jsx tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx`
+    - `pnpm exec vitest run tests/useKpiAdjustmentFormWorkspace.test.jsx tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi tiep tuc cham entry-point `KPIAdjustments`, nhung affected process van chi xoay quanh flow cua chinh component nay
+
+1. `cng-4zp` da hoan tat form/declaration panel decomposition cho `KPIAdjustments`:
+   - them `src/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx` de rut card "Them diem KPI +/-", declaration workspace UI, va khu vuc tong hop diem khoi file chinh
+   - bo sung `tests/kpiAdjustmentFormPanel.test.jsx` de khoa header actions, declaration workspace callback, edit summary, va history/reset flow
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx`
+     - `pnpm exec vitest run tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+   - `detect_changes(scope: "all")` bao `risk_level: high` vi van cham entry-point `KPIAdjustments`, nhung pham vi thay doi khop muc tieu panel extraction cua slice nay
+
+2. `cng-e4b` da hoan tat dialog decomposition cho `KPIAdjustments`:
+   - them `src/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx`, `KpiAdjustmentGuidanceDialog.jsx`, va `KpiAdjustmentSettingsDialog.jsx`
+   - `src/components/KPIAdjustments.jsx` giam con 1536 dong sau khi rut 3 dialog lon ra panel rieng
+   - bo sung `tests/kpiAdjustmentDialogs.test.jsx` de khoa detail reject actions, guidance accordion/actions, va settings submit/reset flow
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx src/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx src/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.test.jsx`
+     - `pnpm exec vitest run tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.model.test.js --environment jsdom`
+   - `detect_changes(scope: "all")` bao `risk_level: high` vi cham entry-point `KPIAdjustments`, nhung changed scope van dung ky vong cho slice nay (`KPIAdjustments.jsx` + `task.md`)
+
+3. `cng-4hs` da hoan tat list/filter decomposition cho `KPIAdjustments`:
+   - them `src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx` de rut card "Danh sách điểm KPI +/-", bo loc, bang danh sach, va action buttons khoi file chinh
+   - bo sung `tests/kpiAdjustmentListPanel.test.jsx` de khoa filter interactions va row action callbacks
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx`
+     - `pnpm exec vitest run tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+   - `detect_changes(scope: "all")` van bao `risk_level: high` vi chinh entry-point `KPIAdjustments`, nhung pham vi van khop muc tieu refactor UI shell
+
+4. `cng-oo6` da duoc implementation o muc snapshot/insight orchestration extraction cho `AiAssistant`:
+   - them `src/components/ai-assistant/hooks/useAiAssistantInsightWorkspace.js` de gom snapshot fetch/cache, KPI summary generation, insight refresh/run/feedback, notify toggle, va snapshot history/detail loading khoi `src/components/AiAssistant.jsx`
+   - `src/components/AiAssistant.jsx` giam tu 832 dong xuong 310 dong, hien chu yeu con constants + composition/wiring voi `useAiAssistantConfig`, `useAiConversation`, va hook moi
+   - bo sung `tests/useAiAssistantInsightWorkspace.test.jsx` de khoa 3 flow chinh: hydrate insights/settings/history, summary tu cached snapshot, va feedback/notify/history-entry orchestration
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/AiAssistant.jsx src/components/ai-assistant/hooks/useAiAssistantInsightWorkspace.js tests/useAiAssistantInsightWorkspace.test.jsx tests/aiAssistant.config.test.jsx tests/aiAssistant.panels.test.jsx tests/useAiAssistantConfig.test.jsx`
+     - `pnpm exec vitest run tests/useAiAssistantInsightWorkspace.test.jsx tests/aiAssistant.config.test.jsx tests/aiAssistant.panels.test.jsx tests/useAiAssistantConfig.test.jsx --environment jsdom`
+   - `detect_changes(scope: "all")` hien tra ve `risk_level: medium` vi cham entry-point `AiAssistant`, nhung scope dung ky vong cua slice nay
+
+5. `cng-0pm` da duoc implementation o muc hoan tat shell decomposition cho `RulesEditor`:
+   - them `src/components/rules-editor/RulesGeneralInfoPanel.jsx` de tach khoi chon bo quy tac, metadata version, va form `name/description` khoi file goc
+   - them `src/components/rules-editor/RulesApplyActionsPanel.jsx` de tach khu vuc `applyFrom/applyNow`, save/reset, import/export, va delete action khoi `RulesEditor`
+   - import JSON hien dung `ref` ngay trong panel moi, khong con DOM lookup `document.getElementById(...)`
+   - bo sung regression tests `tests/rulesGeneralInfoPanel.test.jsx` va `tests/rulesApplyActionsPanel.test.jsx`
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesGeneralInfoPanel.jsx src/components/rules-editor/RulesApplyActionsPanel.jsx tests/rulesGeneralInfoPanel.test.jsx tests/rulesApplyActionsPanel.test.jsx tests/rulesEditor.test.jsx`
+     - `pnpm exec vitest run tests/rulesGeneralInfoPanel.test.jsx tests/rulesApplyActionsPanel.test.jsx tests/rulesEditor.test.jsx tests/rulesEditor.controls.test.jsx tests/useRulesEditorWorkflow.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx --environment jsdom`
+
+5. `cng-42t` da duoc implementation o muc test-workspace extraction cho `RulesEditor`:
+   - them `src/components/rules-editor/hooks/useRulesTestWorkspace.js` de tach declaration search/pick state, manual KPI scenario state, va derived KPI preview khoi file goc
+   - them `src/components/rules-editor/RulesTestWorkspacePanel.jsx` de render hai khu vuc "Test nhanh 1 tờ khai đã import" va "Test nhập tay" thanh panel rieng
+   - `src/components/RulesEditor.jsx` hien chi wiring `useRulesTestWorkspace` + `RulesTestWorkspacePanel`, giam them local state va JSX trung lap trong file goc
+   - them `tests/useRulesTestWorkspace.test.jsx` va `tests/rulesTestWorkspacePanel.test.jsx` de khoa ca hook state lẫn panel interaction
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesTestWorkspacePanel.jsx src/components/rules-editor/hooks/useRulesTestWorkspace.js tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx`
+     - `pnpm exec vitest run tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx tests/useRulesEditorWorkflow.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
+
+6. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
+   - them `src/components/rules-editor/hooks/useRulesEditorWorkflow.js` de tach save/reset/default/delete/import-export, history refresh/restore, va simulation khoi `src/components/RulesEditor.jsx`
+   - `src/components/RulesEditor.jsx` hien giu vai tro compose UI + wiring voi `useRulesConfigState` va `useRulesEditorWorkflow`, khong con giu block handler workflow trung lap
+   - them `tests/useRulesEditorWorkflow.test.jsx` de khoa truc tiep 2 flow quan trong: simulation summary va history refresh/restore
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/hooks/useRulesEditorWorkflow.js tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx`
+     - `pnpm exec vitest run tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
+
+5. Fact-check review da duoc ghi lai tai:
+   - `docs/gemini-review-v1-factcheck-2026-03-25.md`
+6. Backlog bead da duoc seed:
+   - `cng-xyq` epic
+   - `cng-xyq.6` security hardening baseline
+   - `cng-xyq.3` React Error Boundary app/tab level
+   - `cng-xyq.2` shared StaffCombobox extraction
+   - `cng-xyq.1` checklist verification + `Checklist.md`
+   - `cng-xyq.5` server-v4 rollout planning beyond reporting
+   - `cng-xyq.4` wave-1 frontend decomposition planning
+7. `Checklist.md` da duoc cap nhat voi trang thai xac minh hien tai:
+   - da danh dau cac muc co bang chung code/test
+   - da ghi ro cac muc chua thay, chua khop day du, hoac can E2E/runtime verification
+   - cac diem can theo doi them: C/O runtime 500, cot AMA, cleanup toan repo, muc "di lam muon", va mapping tai khoan mac dinh dung theo danh sach nghiep vu
+8. Draft rollout plan cho `server-v4` beyond reporting da duoc ghi lai tai:
+   - `docs/server-v4-rollout-plan-2026-03-25.md`
+   - bao gom:
+     - inventory route `legacy` va `v4` can doi chieu
+     - cac parity gap hien tai, dac biet quanh `auth` va `declarations`
+     - thu tu rollout theo wave thay vi mount dong loat 8 module
+     - verify gate va test suite nen chay cho moi wave
+9. `cng-xyq.7` dang implementation wave-1 mount:
+   - them `server/v4RolloutMount.js` de co dinh danh sach module wave-1 va helper chon module tu compiled `moduleCatalog`
+   - doi legacy mount tu `reporting` don le sang `reporting + teams + mst-assignments + hq-agencies`
+   - them `tests/v4RolloutMount.test.js` de khoa logic selection va missing-module warning path
+10. `cng-wh8` da duoc mo cho wave-2 mount:
+   - muc tieu tiep theo la mount `kpi-rules` va `kpi-adjustments` qua legacy server sau khi wave-1 da on dinh
+   - can chay impact analysis truoc khi cham vao startup mount helper va verify lai toan bo matrix `reporting + wave-1 + wave-2`
+11. `cng-wh8` da duoc implementation o muc code/test:
+   - mo rong `server/v4RolloutMount.js` bang `WAVE2_V4_MODULE_IDS`, `LEGACY_V4_MODULE_IDS`, `selectV4Modules`, va `selectLegacyV4Modules`
+   - legacy server startup mount hien chon tong hop `reporting + teams + mst-assignments + hq-agencies + kpi-rules + kpi-adjustments`
+   - bo sung regression tests cho selector legacy-v4 tong hop va missing-module path cua wave-2
+12. `cng-d0a` da duoc mo cho auth parity:
+   - muc tieu tiep theo la dua cac endpoint auth con thieu ve `server-v4` truoc khi xu ly declarations shadow/cutover
+   - can doi chieu lai 3 parity gap da note trong rollout plan va verify lai auth route matrix
+13. `cng-d0a` da duoc implementation o muc code/test:
+   - canonical `/api/v4/auth` da bo sung `POST /accounts/:username/password`, `DELETE /accounts/:username`, va `POST /password/change`
+   - `AuthService` va `AuthController` da co canonical home cho 3 flow con thieu, thay vi chi ton tai o compat layer
+   - auth regression tests da cover password reset, self-change password, delete account, boundary permission, va last-admin guard
+14. `cng-0fs` da duoc mo cho declarations shadow:
+   - day la domain blast radius cao nhat, can shadow parity + compat telemetry truoc write cutover
+   - verify gate se tap trung vao ECUS preview/commit, alerts config/review, C/O discrepancy, va declaration history/edit
+15. `cng-0fs` da duoc implementation o muc rollout status + test gate:
+   - them `server-v4/src/app/declarationsShadowRollout.ts` de tong hop 4 declaration shadow groups: ECUS preview/commit, alerts config/review, C/O discrepancy, va declaration history/edit parity
+   - `/api/v4/meta/rollout` hien bo sung `compatibility.declarationShadow` va them declaration-specific migration checks, de operator biet ro nhom nao dang xanh, nhom nao van con legacy compat hits
+   - rollout tests da khoa pass-path khi khong co legacy hits va warn-path khi route migrated van bi goi qua compat layer
+   - app-shell/legacy-compat fixtures da duoc lam ben vung hon, khong con phu thuoc vao file sqlite mac dinh ton tai trong worktree
+16. `cng-2wn` da duoc implementation o muc declarations cutover policy:
+   - them `server-v4/src/app/declarationsWriteCutover.ts` de tong hop readiness rieng cho declarations write cutover, tach biet shadow parity voi cutover readiness thuc su
+   - `/api/v4/meta/rollout` hien bo sung `compatibility.declarationCutover` va migration check `declarations-write-cutover-policy`, dua tren guard mode, migrated compat hits, va declaration shadow gate health
+   - readiness/stage `cutover-ready` khong con len xanh chi vi runtime da relational-store; declarations phai co `block-migrated` + zero migrated compat hits + shadow gate xanh moi duoc xem la ready
+   - them regression test moi `tests/server-v4/declarationsWriteCutover.test.js` va cap nhat `v4RolloutStatus`/`appShell` expectations cho hold/ready/blocked transitions
+17. `cng-7wv` da duoc implementation o muc runtime config wiring:
+   - `server-v4/src/config/server-v4-config.ts` hien co field chinh thuc `importerCompatGuardMode` va validate hai mode `off` / `block-migrated`
+   - `buildV4App` fallback sang runtime config khi caller khong truyen `options.importerCompat.guardMode`, nen block mode co the bat qua config thay vi patch tracker thu cong
+   - `apps/api/src/startApiServer.js` forward top-level `importerCompatGuardMode` xuong compiled `server-v4`, dong bo voi env `KPI_API_IMPORTER_COMPAT_GUARD_MODE`
+   - regression tests da khoa ca config env/apps-api path va route behavior path cho `off` vs `block-migrated`
+18. `cng-xyq.4` da duoc implementation o muc decomposition planning:
+   - them artifact goc `frontend-wave1-decomposition.md` tai project root de chot wave-1 backlog cho `MSTAssignment`, `KPIAdjustments`, `AiAssistant`, va `RulesEditor`
+   - chot thu tu tach nho an toan theo huong `pure/presentational truoc, hooks/panel stateful sau`
+   - xac dinh ro gap test hien tai: `RulesEditor` chua co test truc tiep, can dat baseline test truoc khi rut component
+   - seed them 4 bead follow-up de backlog khong dung o muc tai lieu:
+     - `cng-xyq.8` MSTAssignment helper + layout decomposition
+     - `cng-xyq.9` KPIAdjustments pure calculation + form hook decomposition
+     - `cng-xyq.10` AiAssistant snapshot/provider/history helper decomposition
+     - `cng-xyq.11` RulesEditor baseline test + panel decomposition
+19. `cng-xyq.8` da duoc implementation o muc helper extraction:
+   - tach `HistoryDetails`, `StageTimelinePreview`, `StageTimelineGroups`, va `ColumnResizeHandle` ra khoi `src/components/MSTAssignment.jsx` thanh module rieng duoi `src/components/mst-assignment/`
+   - `MSTAssignment.jsx` giam tu moc backlog 3170 dong xuong 2973 dong sau helper extraction
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/mstAssignment.timeline.test.jsx tests/mstAssignment.column-widths.test.jsx tests/mstAssignment.column-visibility.test.jsx tests/mstAssignment.pagination.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/timeline/HistoryDetails.jsx src/components/mst-assignment/timeline/StageTimelinePreview.jsx src/components/mst-assignment/timeline/StageTimelineGroups.jsx src/components/mst-assignment/table/ColumnResizeHandle.jsx`
+   - tach them bead `cng-xyq.12` de xu ly phan con lai cua MSTAssignment state/layout hook ma khong lam bead helper extraction bi qua to
+20. `cng-xyq.12` da duoc implementation o muc state/layout hook extraction:
+   - them `src/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js` de gom `COLUMN_OPTIONS`, width persistence, visibility persistence, resize handlers, va `columnMenuOpen`
+   - them `src/components/mst-assignment/hooks/useMSTAssignmentPageSize.js` de tach `pageSize` read/write helpers khoi `MSTAssignment.jsx`
+   - `src/components/MSTAssignment.jsx` da chuyen sang dung 2 hook moi thay vi giu localStorage + resize state trong component chinh
+   - bo sung `tests/mstAssignment.layout-hooks.test.jsx` de khoa hook moi, va doi test width/visibility/pagination sang import helper truc tiep tu module moi
+   - add-form MST bo sung `ariaLabel`/`searchAriaLabel` cho 2 combobox nhap/xuat de giu gate `tests/e2e.admin-flows.test.jsx` xanh
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/mstAssignment.column-widths.test.jsx tests/mstAssignment.column-visibility.test.jsx tests/mstAssignment.pagination.test.jsx tests/mstAssignment.layout-hooks.test.jsx --environment jsdom`
+     - `pnpm exec vitest run tests/mstAssignment.person-columns.test.jsx tests/e2e.admin-flows.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js src/components/mst-assignment/hooks/useMSTAssignmentPageSize.js tests/mstAssignment.column-widths.test.jsx tests/mstAssignment.column-visibility.test.jsx tests/mstAssignment.pagination.test.jsx tests/mstAssignment.layout-hooks.test.jsx`
+
+## Next Suggested Slice
+
+- Title: none
+- Bead: none
+- Status: queued-behind-active
+- Follow-up backlog:
+  - sau `cng-vtn`, tiep tuc chon 1 domain nho tiep theo trong `src/lib/store.js` truoc khi dong vao `storageClient.js`
+
+## Verification
+
+- Node tests:
+  - `pnpm exec vitest run tests/passwordPolicy.test.js tests/securityHardening.test.js --environment node`
+  - `pnpm exec vitest run tests/v4RolloutMount.test.js tests/server.monitor.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresTeamsRoute.test.js tests/server-v4/postgresMstAssignmentsRoute.test.js tests/server-v4/postgresHqAgenciesRoute.test.js --environment node`
+  - `pnpm exec vitest run tests/v4RolloutMount.test.js tests/server.monitor.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresKpiRulesRoute.test.js tests/server-v4/postgresKpiAdjustmentsRoute.test.js --environment node`
+  - `pnpm exec vitest run tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/appShell.test.js tests/server-v4/runtimeRoutes.test.js --environment node`
+  - `pnpm exec vitest run tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresDeclarationsRoute.test.js --environment node`
+  - `pnpm exec vitest run tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js --environment node`
+  - `pnpm exec vitest run tests/appsApiRuntimeConfig.test.js tests/apps/apiRuntimeConfig.test.js tests/appsApiStart.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
+- Frontend/jsdom tests:
+  - `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/automation.flows.test.js tests/e2e.admin-flows.test.jsx --environment jsdom`
+  - `pnpm exec vitest run tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/appShellFrame.test.jsx --environment jsdom`
+  - `pnpm exec vitest run tests/staffCombobox.test.jsx tests/dataImporterAssignmentComboboxes.test.jsx tests/accountManager.staff.test.jsx tests/mstAssignment.person-columns.test.jsx`
+- Targeted lint:
+  - `pnpm exec eslint server/index.js server/v4RolloutMount.js tests/v4RolloutMount.test.js`
+  - `pnpm exec eslint server/index.js server/securityHardening.js packages/domain/src/passwordPolicy.js src/auth/localAuth.js src/components/ChangePasswordDialog.jsx src/components/AccountManager.jsx tests/passwordPolicy.test.js tests/securityHardening.test.js tests/helpers/mockApi.js tests/helpers/mockApiState.js tests/automation.flows.test.js tests/e2e.admin-flows.test.jsx tests/playwright/account-management.spec.js`
+  - `pnpm exec eslint src/main.jsx src/AppRoot.jsx src/components/errorBoundaries/RuntimeErrorBoundary.jsx src/components/KPICalculator.jsx tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx`
+  - `pnpm exec eslint src/components/shared/StaffCombobox.jsx src/components/dataImporter/DataImporterAssignmentComboboxes.jsx src/components/AccountManager.jsx tests/accountManager.staff.test.jsx tests/staffCombobox.test.jsx`
+  - `pnpm exec eslint server-v4/src/app/declarationsShadowRollout.ts server-v4/src/app/v4-rollout-status.ts tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js`
+  - `pnpm exec eslint server-v4/src/app/declarationsWriteCutover.ts server-v4/src/app/v4-rollout-status.ts tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js`
+  - `pnpm exec eslint apps/api/src/startApiServer.js server-v4/src/config/server-v4-config.ts server-v4/src/app/build-v4-app.ts tests/appsApiRuntimeConfig.test.js tests/appsApiStart.test.js tests/apps/apiRuntimeConfig.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js`
+- GitNexus scope check:
+  - `detect_changes(scope: "all")` -> `risk_level: low`
+  - `detect_changes(scope: "all")` sau `cng-xyq.2` -> `risk_level: high` do diff cham 2 file lon (`AccountManager.jsx`, `MSTAssignment.jsx`), nhung 4 test muc tieu cua shared combobox/account/importer/mst deu pass
+18. `cng-xyq.10` da xong o muc tach helper `AiAssistant`:
+   - them `src/components/ai-assistant/snapshotCache.js`, `src/components/ai-assistant/providerConfig.js`, va `src/components/ai-assistant/historyStore.js`
+   - `src/components/AiAssistant.jsx` gio chi con orchestration/state/render, khong con giu inline snapshot cache, provider draft/health helpers, va local history store
+   - bo sung regression tests `tests/aiAssistant.snapshotCache.test.js`, `tests/aiAssistant.providerHelpers.test.js`, `tests/aiAssistant.historyStore.test.js`; `tests/aiAssistant.config.test.jsx` van pass nhu smoke test cho panel config
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/aiAssistant.config.test.jsx tests/aiAssistant.snapshotCache.test.js tests/aiAssistant.providerHelpers.test.js tests/aiAssistant.historyStore.test.js --environment jsdom`
+     - `pnpm exec eslint src/components/AiAssistant.jsx src/components/ai-assistant/snapshotCache.js src/components/ai-assistant/providerConfig.js src/components/ai-assistant/historyStore.js tests/aiAssistant.config.test.jsx tests/aiAssistant.snapshotCache.test.js tests/aiAssistant.providerHelpers.test.js tests/aiAssistant.historyStore.test.js`
+19. `cng-xyq.11` da xong o muc baseline test + tach panel `RulesEditor`:
+   - them `src/components/rules-editor/RulesSimulationPanel.jsx` va `src/components/rules-editor/RulesHistoryPanel.jsx`, rut 2 block JSX lon khoi `src/components/RulesEditor.jsx`
+   - bo sung regression tests `tests/rulesEditor.test.jsx`, `tests/rulesEditorSimulationPanel.test.jsx`, va `tests/rulesEditorHistoryPanel.test.jsx`
+   - flow da duoc khoa bang test: mo phong KPI, refresh lich su, expand chi tiet, va khoi phuc phien ban lich su
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx`
+20. `cng-xyq.13` da xong o muc tach control inline khoi `RulesEditor`:
+    - them `src/components/rules-editor/controls/RuleNumberInput.jsx`, `TierEditor.jsx`, `CodeMultiSelect.jsx`, `LicenseCodeInput.jsx`, `AgencyInput.jsx`, `LicensePointTable.jsx`, va `AgencyExcludeEditor.jsx`
+    - `src/components/RulesEditor.jsx` giam tiep tu 1625 dong xuong 1143 dong sau khi rut controls va input so dung chung
+    - bo sung regression test moi `tests/rulesEditor.controls.test.jsx` de khoa chon/bo chon ma, uppercase code, them bac, them dong ma giay phep, va dai ly loai tru
+    - targeted verify da pass:
+      - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx --environment jsdom`
+      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx src/components/rules-editor/controls/RuleNumberInput.jsx src/components/rules-editor/controls/TierEditor.jsx src/components/rules-editor/controls/CodeMultiSelect.jsx src/components/rules-editor/controls/LicenseCodeInput.jsx src/components/rules-editor/controls/AgencyInput.jsx src/components/rules-editor/controls/LicensePointTable.jsx src/components/rules-editor/controls/AgencyExcludeEditor.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx`
+21. `cng-jyz` da xong o muc tach config tab/orchestration khoi `RulesEditor`:
+   - them `src/components/rules-editor/RulesConfigTabsPanel.jsx` de gom JSX cho 3 tab `groups/license/bonus`
+   - them `src/components/rules-editor/hooks/useRulesConfigState.js` de tach derived state + handler `groups/license/agencies` khoi file chinh
+   - `src/components/RulesEditor.jsx` hien chi wiring panel/hook moi, khong con giu inline block config tab va handler update lien quan
+   - bo sung regression tests `tests/rulesEditorConfigTabsPanel.test.jsx` va `tests/useRulesConfigState.test.jsx`
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/useRulesConfigState.test.jsx tests/rulesEditorConfigTabsPanel.test.jsx tests/rulesEditor.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesConfigTabsPanel.jsx src/components/rules-editor/hooks/useRulesConfigState.js tests/rulesEditorConfigTabsPanel.test.jsx tests/useRulesConfigState.test.jsx`
+
+## Notes
+
+- GitNexus impact/context dang bi lock file `.gitnexus/lbug` do session `gitnexus serve`; tam thoi da fallback sang caller grep de scope edit an toan.
+- Working tree hien co thay doi chua commit cho `cng-xyq.7`; `cng-xyq.5` da duoc commit thanh rollout-plan artifact rieng.
+- `package.json` da co script `gitnexus:serve` tu thay doi truoc do; phien nay bo sung them dependency `helmet` va `express-rate-limit`.
+- `cng-9dx` chi dong bo tai lieu/notebook, khong thay doi runtime code.
+- `cng-xyq.3` khong doi logic nghiep vu; chi tang guardrail de app shell va tung module co fallback ro rang khi render/runtime error xay ra.
+- `cng-xyq.2` co working tree chua commit. Shared component moi da co test rieng; lint con 2 warning `react-refresh/only-export-components` do file export helper thuần.
+- GitNexus `detect_changes(scope: "all" | "unstaged")` trong worktree nay dang tra `No changes detected` du `git status` van co diff local; can xem ket qua nay la khong du tin cay cho slice `cng-jyz`.
+- `cng-xyq.5` draft plan hien de xuat thu tu rollout:
+  - wave 0: rollout instrumentation
+  - wave 1: `teams` + `mst-assignments` + `hq-agencies`
+  - wave 2: `kpi-rules` + `kpi-adjustments`
+  - wave 3: auth parity closure
+  - wave 4-5: declarations shadow rollout va write cutover
+- `cng-xyq.7` hien chi doi logic mount tren legacy server; khong doi `buildV4App` hay router internals ben trong `server-v4`.
+- `cng-xyq.7` da hoan tat va dong bead; working tree hien chi chua commit thay doi wave-1 mount truoc khi bat dau wave-2.
+- `cng-wh8` la bead tiep theo cho wave-2 mount `kpi-rules` + `kpi-adjustments`.
+- `cng-wh8` da pass targeted lint + node verification cho startup mount helper, `server.monitor`, `appShell`, legacy compat, `postgresKpiRulesRoute`, va `postgresKpiAdjustmentsRoute`.
+- `cng-wh8` da hoan tat va dong bead; wave-2 mount da duoc chot thanh commit rieng.
+- `cng-d0a` la bead active tiep theo cho auth parity closure truoc declarations rollout.
+- `cng-d0a` da hoan tat va dong bead; auth parity canonical da pass targeted lint + node verification.
+- `cng-0fs` la bead tiep theo cho declarations shadow rollout va compat telemetry gate.
+- `cng-0fs` da xong o muc code/test trong worktree hien tai va bead da duoc close qua WSL + `BEADS_DIR=/mnt/e/GPT/kpi_source_code_v4/.beads`.
+- `compatibility.declarationShadow` hien group cac gate declarations theo 4 nhom nghiep vu; neu bat ky legacy compat route nao con co hit thi nhom lien quan se chuyen `warn`, giup operator triage truoc write cutover.
+- `gitnexus_detect_changes(scope: "all")` tra ve `No changes detected` du `git status` van co diff; can kiem tra lai GitNexus/worktree awareness truoc luc dung no lam gate cho commit cua bead nay.
+- Remaining write-cutover risk sau `cng-0fs`: legacy aliases declarations van con song va duoc mount trong compat layer; can co quyet dinh rieng cho block mode/cutover sequence truoc khi dong bead write-cutover.
+- `cng-2wn` da xong o muc code/test va bead da duoc dong; rollout metadata gio tach rieng declaration shadow gate va declaration write-cutover policy, nen operator thay ro khi nao shadow xanh nhung cutover van phai hold vi guard mode/hit counter.
+- `cng-7wv` da duoc hoan tat: env `KPI_API_IMPORTER_COMPAT_GUARD_MODE` trong `apps/api` gio di het duong xuong `server-v4` qua top-level runtime config, va `buildV4App` cung fallback ve config nay khi khong co override tracker rieng.
+- bead ready tiep theo theo `bd ready` sau khi dong planning la `cng-xyq.8` cho MSTAssignment helper + layout decomposition; day la slice an toan nhat de mo dau wave-1 implementation.
+- `frontend-wave1-decomposition.md` la artifact root-level chot danh sach module dich, thu tu tach nho, va test gate cho 4 frontend fat component lon nhat.
+- `cng-xyq.4` da xong o muc planning/backlog; 4 child bead moi (`cng-xyq.8` -> `cng-xyq.11`) da duoc tao de chuyen ngay sang implementation slices nho.
+- `cng-xyq.8` da xong o muc tach helper UI; phan state/layout hook cua MSTAssignment da duoc tach thanh bead rieng `cng-xyq.12` de giu moi bead gon va de verify.
+- `cng-xyq.12` da xong o muc tach hook state/layout cho `MSTAssignment`.
+- `cng-xyq.9` da xong o muc tach pure model + form/filter hooks cho `KPIAdjustments`: them `src/components/kpi-adjustments/model/*`, `src/components/kpi-adjustments/hooks/*`, rut logic trung lap khoi file chinh, va bo sung `tests/kpiAdjustments.model.test.js` + `tests/kpiAdjustments.hooks.test.jsx`.
+- targeted verify cho `cng-xyq.9` da pass:
+  - `pnpm exec vitest run tests/kpiAdjustments.test.jsx tests/kpiAdjustments.model.test.js tests/kpiAdjustments.hooks.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/model/businessDirectory.js src/components/kpi-adjustments/model/calculationInfo.js src/components/kpi-adjustments/model/guidanceGroups.js src/components/kpi-adjustments/model/settingsDraft.js src/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js src/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.model.test.js tests/kpiAdjustments.hooks.test.jsx`
+- `cng-xyq.10` la slice wave-1 hop ly nhat tiep theo de tach snapshot/provider/history helper khoi `AiAssistant`.
+- `cng-xyq.10` da hoan tat o muc helper extraction cho `AiAssistant`; buoc tiep theo trong wave-1 la `cng-xyq.11` de dat baseline test va tach panel khoi `RulesEditor`.
+- `cng-xyq.11` da hoan tat o muc panel decomposition cho `RulesEditor`; phan con lai hop ly nhat neu tiep tuc wave-1 la tach cac control/editor nho va co the seed them bead rieng cho RulesEditor slice tiep theo.
+- `cng-xyq.13` da hoan tat; `RulesEditor` hien da tach xong panel + control co san, phan con lai neu muon giam them coupling se la config-tab/orchestration layer, nhung wave-1 backlog con bead pending hop ly hon la `AiAssistant` slice B.
+- `cng-xyq.14` da hoan tat; `AiAssistant` hien da tach panel `config/history/chat`, `AiAssistantStatusSidebar`, va hook `useAiAssistantConfig` / `useAiConversation` ra khoi `src/components/AiAssistant.jsx`, trong khi file goc giu lai orchestration snapshot/insight/history flow.
+- verify `cng-xyq.14`:
+  - `pnpm exec vitest run tests/aiAssistant.config.test.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/AiAssistant.jsx src/components/ai-assistant/hooks/useAiConversation.js src/components/ai-assistant/hooks/useAiAssistantConfig.js src/components/ai-assistant/panels/AiAssistantChatPanel.jsx src/components/ai-assistant/panels/AiAssistantHistoryPanel.jsx src/components/ai-assistant/panels/AiAssistantStatusSidebar.jsx src/components/ai-assistant/panels/AiAssistantConfigPanel.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx`
+- epic `cng-xyq` da du dieu kien dong: tat ca child task rollout/server-v4, security hardening, checklist verification, va 4 slice refactor frontend wave-1 deu da closed.
+- `cng-jyz` da duoc mo va claim cho wave-2 `RulesEditor`; slice config tabs da xong truoc do, va `cng-lte` vua hoan tat phan workflow save/restore/simulation orchestration tiep theo.
+- `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
+- `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
+- GitNexus `detect_changes` da hoat dong dung tro lai trong worktree nay sau khi xoa index cu trung ten cua repo goc `E:\GPT\kpi_source_code_v4`; root cause la registry co 2 entry cung ten `kpi_source_code_v4`.
+- `cng-7z0.32` da hoan tat audit accessibility cho `Import Data`, `Gán MST`, va `Điểm KPI +/- Thêm`:
+  - them smoke audit `tests/playwright/accessibility-admin.spec.js` dung `axe-core` de quet 3 tab admin runtime
+  - fix accessible name cho date/select controls trong `DataImporter*`, bo sung keyboard focus cho vung bang cuon ngang cua `DataImporter` va `MSTAssignment`, va tang contrast cho toolbar/badge/button text trong workflow import
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/dataImporter/DataImporterMonitoringPanel.jsx src/components/dataImporter/DataImporterQueryFilterControls.jsx src/components/dataImporter/DataImporterTableResults.jsx src/components/dataImporter/DataImporterSyncPreviewPanel.jsx src/components/dataImporter/DataImporterCoCodeConfigPanel.jsx src/components/dataImporter/DataImporterGridToolbarControls.jsx src/components/dataImporter/DataImporterListControlsPanel.jsx src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx tests/playwright/accessibility-admin.spec.js`
+    - `pnpm run build`
+    - `pnpm exec playwright test tests/playwright/accessibility-admin.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-7z0.33` da hoan tat:
+  - `tests/playwright/sync-flow.spec.js` gio co them regression runtime cho bo loc MST + khoang ngay va quick-search tren bang preview sau sync preview
+  - targeted verify da pass:
+    - `pnpm exec eslint tests/playwright/sync-flow.spec.js`
+    - `pnpm exec playwright test tests/playwright/sync-flow.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-2k4.22 / slice G` da xong o muc cleanup production export hygiene:
+  - xoa 4 helper adjustment summary da chet trong `server/reportExport.js` va bo import `createAdjustmentTotals` khong con dung den
+  - GitNexus impact truoc khi sua cho 4 helper deu `LOW`, `impactedCount: 0`; `detect_changes` van over-report `critical` do file-level process mapping, nhung diff tay xac nhan chi cham dead-code cleanup + `task.md`
+  - targeted verify da pass:
+    - `pnpm exec eslint server/reportExport.js`
+    - `pnpm exec vitest run tests/server.reportWatermark.test.js tests/reportExportPayloads.test.js --environment node`
+- `cng-2k4.22 / slice H` da xong o muc react-refresh hygiene:
+  - tach helper schedule draft sang `src/components/reporting/reportingScheduleDraft.js` va helper staff roster sang `src/components/shared/staffComboboxOptions.js`
+  - cap nhat caller `useReportViewerActions`, `AccountManager`, `useMSTAssignmentBootstrapWorkspace`, va test imports de giu nguyen contract
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/reporting/ReportingPanels.jsx src/components/reporting/reportingScheduleDraft.js src/components/reporting/useReportViewerActions.js src/components/shared/StaffCombobox.jsx src/components/shared/staffComboboxOptions.js src/components/AccountManager.jsx src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx`
+    - `pnpm exec vitest run tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx --environment jsdom`
+- `cng-2k4.22 / slice I` da xong o muc report shell regression hardening:
+  - them browser regression trong `tests/playwright/lazy-tab-shell.spec.js` de khoa fallback focus khi workflow guide mo `Báo cáo KPI` luc `ReportCenterPanel` chunk con dang treo
+  - them browser regression trong `tests/playwright/report-viewer.spec.js` de khoa handoff focus tu action `Tới khu export`
+  - them `tests/kpiCalculator.navigation.test.jsx` de khoa loading status va fallback focus cua `KPICalculator` o jsdom contract level
+  - targeted verify da pass:
+    - `pnpm exec eslint tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js`
+    - `pnpm exec playwright test tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1`
+    - `pnpm exec eslint tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx`
+    - `pnpm exec vitest run tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx --environment jsdom`
+
+## Previous Completed Slice
+
+- `cng-4fo` — Fact-check Gemini review V1 va seed backlog follow-up
+- `cng-bik` — Bo sung test cho canh bao disk error trong healthcheck

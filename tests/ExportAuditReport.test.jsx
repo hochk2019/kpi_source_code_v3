@@ -2,7 +2,7 @@ import React from 'react';
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 
 
@@ -22,7 +22,7 @@ vi.mock('@/auth/localAuth.js', async () => {
 
 
 
-import ExportAuditReport from '@/components/ExportAuditReport.jsx';
+import ExportAuditReport from '@/components/ExportAuditReport.tsx';
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
 
@@ -219,7 +219,7 @@ describe('ExportAuditReport', () => {
 
 
 
-    expect(url.pathname).toBe('/api/reports/export/audit');
+    expect(url.pathname).toBe('/api/v4/reporting/exports/audit');
 
     expect(url.searchParams.get('limit')).toBe('50');
 
@@ -269,10 +269,10 @@ describe('ExportAuditReport', () => {
 
     await waitFor(() => expect(fetchWithAuth).toHaveBeenCalled());
 
-    expect(screen.getByText('Lượt truy cập tab')).toBeInTheDocument();
-    expect(screen.getByText('Lượt truy cập gần đây')).toBeInTheDocument();
+    expect(screen.getByText('Tab truy cập')).toBeInTheDocument();
+    expect(screen.getByText('Truy cập Real-time')).toBeInTheDocument();
 
-    expect(await screen.findByText('Chưa ghi nhận lượt truy cập nào.')).toBeInTheDocument();
+    expect(await screen.findByText('Chưa có traffic.')).toBeInTheDocument();
   });
 
 

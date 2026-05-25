@@ -12,9 +12,9 @@ export const ThemeContext = createContext({
 
   brand: DEFAULT_BRAND,
 
-  setTheme: () => {},
+  setTheme: (_next) => {},
 
-  setBrand: () => {},
+  setBrand: (_next) => {},
 
   brandOptions: [],
 

@@ -31,6 +31,7 @@ import {
 import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
 
 import { fetchWithAuth } from '../auth/localAuth.js';
+import { API_V4_ROUTES } from './apiRoutes.js';
 
 import {
 
@@ -40,11 +41,11 @@ import {
 
   createDefaultRuleSetV2,
 
-} from '../shared/defaultRules.js';
+} from '../../packages/domain/src/defaultRules.js';
 
-import { coLineCount } from '../shared/co.js';
+import { coLineCount } from '../../packages/domain/src/co.js';
 
-export { DEFAULT_RULES } from '../shared/defaultRules.js';
+export { DEFAULT_RULES } from '../../packages/domain/src/defaultRules.js';
 
 
 
@@ -158,13 +159,13 @@ function normalizeGroup(rawGroup, fallbackGroup) {
 
       : typeof input.codes === 'string'
 
-      ? input.codes.split(',')
+        ? input.codes.split(',')
 
-      : Array.isArray(base.codes)
+        : Array.isArray(base.codes)
 
-      ? base.codes
+          ? base.codes
 
-      : [],
+          : [],
 
     base: Number.isFinite(Number(input.base)) ? Number(input.base) : Number(base.base) || 0,
 
@@ -230,9 +231,9 @@ function normalizeLicense(rawLicense, fallbackLicense) {
 
     : Array.isArray(base.codePoints)
 
-    ? base.codePoints
+      ? base.codePoints
 
-    : [];
+      : [];
 
 
 
@@ -258,9 +259,9 @@ function normalizeLicense(rawLicense, fallbackLicense) {
 
     : Array.isArray(base?.exclude?.codes)
 
-    ? base.exclude.codes
+      ? base.exclude.codes
 
-    : [];
+      : [];
 
 
 
@@ -270,9 +271,9 @@ function normalizeLicense(rawLicense, fallbackLicense) {
 
     : Array.isArray(base?.exclude?.agencies)
 
-    ? base.exclude.agencies
+      ? base.exclude.agencies
 
-    : [];
+      : [];
 
 
 
@@ -396,9 +397,9 @@ function normalizeRule(rawRule) {
 
     : Number.isFinite(Number(skeleton.version))
 
-    ? Number(skeleton.version)
+      ? Number(skeleton.version)
 
-    : 0;
+      : 0;
 
   next.version = Math.max(0, baseVersion);
 
@@ -498,22 +499,24 @@ function normalizeCollection(rawCollection) {
 
 
 
-function persistCollection(collection) {
-
+async function persistCollectionAsync(collection) {
   const normalized = normalizeCollection(collection);
-
-  persistRules(normalized);
-
+  await persistRules(normalized);
   const activeRule = normalized.sets.find((rule) => rule.id === normalized.activeId) || normalized.sets[0] || null;
-
   if (activeRule) {
-
-    setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(activeRule));
-
+    setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(activeRule)).catch((e) => console.warn(e));
   }
-
   return normalized;
+}
 
+function persistCollectionSync(collection) {
+  const normalized = normalizeCollection(collection);
+  persistRules(normalized).catch((err) => console.error("Background persistRules failed", err));
+  const activeRule = normalized.sets.find((rule) => rule.id === normalized.activeId) || normalized.sets[0] || null;
+  if (activeRule) {
+    setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(activeRule)).catch((e) => console.warn(e));
+  }
+  return normalized;
 }
 
 
@@ -550,7 +553,7 @@ function loadRuleCollection() {
 
     if (Array.isArray(stored.sets)) {
 
-      return persistCollection(stored);
+      return normalizeCollection(stored);
 
     }
 
@@ -568,7 +571,7 @@ function loadRuleCollection() {
 
       });
 
-      return persistCollection(collection);
+      return persistCollectionSync(collection);
 
     }
 
@@ -598,7 +601,15 @@ function loadRuleCollection() {
 
         });
 
-        return persistCollection(collection);
+        try {
+          if (typeof setStorageItem === 'function') {
+            setStorageItem('kpi_rules_legacy_backup', legacyRaw);
+          }
+        } catch (e) {
+          console.warn('Backup error:', e);
+        }
+
+        return persistCollectionSync(collection);
 
       }
 
@@ -614,8 +625,31 @@ function loadRuleCollection() {
 
   const defaults = createDefaultRuleCollection();
 
-  return persistCollection(defaults);
+  return persistCollectionSync(defaults);
 
+}
+
+
+
+export function rollbackLegacyRules() {
+  try {
+    const backupRaw = getStorageItem('kpi_rules_legacy_backup');
+    if (backupRaw) {
+      setStorageItem(LEGACY_KEY_ACTIVE, backupRaw);
+      const parsed = JSON.parse(backupRaw);
+      const legacyRule = migrateLegacyRule(parsed);
+      const defaults = createDefaultRuleSetV2();
+      const collection = normalizeCollection({
+        activeId: defaults.id,
+        sets: legacyRule ? [legacyRule, defaults] : [defaults],
+      });
+      persistCollectionSync(collection);
+      return { success: true, data: collection };
+    }
+    return { success: false, error: new Error('Không tìm thấy bản sao lưu hệ thống cũ') };
+  } catch (err) {
+    return { success: false, error: err };
+  }
 }
 
 
@@ -700,7 +734,7 @@ export async function fetchRulesHistoryFromServer({ signal } = {}) {
 
   try {
 
-    const response = await fetchWithAuth('/api/rules/history', { signal });
+    const response = await fetchWithAuth(API_V4_ROUTES.rules.history, { signal });
 
     const data = await response.json();
 
@@ -818,7 +852,7 @@ function resolveRuleId(ruleInput, fallbackId) {
 
 
 
-export function saveRules(ruleInput, opts = {}) {
+export async function saveRules(ruleInput, opts = {}) {
 
   const collection = loadRuleCollection();
 
@@ -874,7 +908,7 @@ export function saveRules(ruleInput, opts = {}) {
 
 
 
-  const persisted = persistCollection(collection);
+  const persisted = await persistCollectionAsync(collection);
 
   if (opts.appendHistory !== false) {
 
@@ -926,7 +960,7 @@ export function saveRules(ruleInput, opts = {}) {
 
 
 
-export function restoreRuleVersion(snapshotInput, opts = {}) {
+export async function restoreRuleVersion(snapshotInput, opts = {}) {
 
   if (!snapshotInput || typeof snapshotInput !== 'object') {
 
@@ -938,7 +972,7 @@ export function restoreRuleVersion(snapshotInput, opts = {}) {
 
   const normalizedSnapshot = normalizeRule(snapshotInput);
 
-  const restored = saveRules(
+  const restored = await saveRules(
 
     { ...normalizedSnapshot, updatedAt: new Date().toISOString() },
 
@@ -1006,7 +1040,7 @@ export function setDefaultRule(ruleId, { actor = 'system' } = {}) {
 
   collection.activeId = normalizedId;
 
-  const persisted = persistCollection(collection);
+  const persisted = persistCollectionSync(collection);
 
   const activeRule = persisted.sets.find((rule) => rule.id === persisted.activeId) || null;
 
@@ -1064,7 +1098,7 @@ export function exportRuleCollection() {
 
 export function restoreRuleCollection(collectionInput, { actor = 'system' } = {}) {
 
-  const persisted = persistCollection(collectionInput);
+  const persisted = persistCollectionSync(collectionInput);
 
   const activeRule = persisted.sets.find((entry) => entry.id === persisted.activeId);
 
@@ -1550,7 +1584,7 @@ export function deleteRule(ruleId, { actor = 'system' } = {}) {
 
   }
 
-  const persisted = persistCollection(collection);
+  const persisted = persistCollectionSync(collection);
 
   pushAuditLog({
 
@@ -1588,13 +1622,19 @@ function addByTiers(numItems, tiers = [], isCumulative = false) {
 
       sum += Number(add || 0);
 
-    } else if (numItems >= from && numItems <= to) {
+    } else {
 
-      sum = Number(add || 0);
+      // Find the highest matching tier - don't break early
 
-    } else if (numItems > to) {
+      // Continue checking to find the tier with highest 'from' value that matches
 
-      sum = Number(add || 0);
+      if (numItems >= from && numItems <= to) {
+
+        sum = Number(add || 0);
+
+      }
+
+      // Removed incorrect break statement that was causing wrong tier selection
 
     }
 

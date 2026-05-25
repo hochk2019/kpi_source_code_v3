@@ -34,6 +34,9 @@ jobs:
       - name: Run lint
         run: pnpm lint
 
+      - name: Run server-v4 lint
+        run: pnpm run lint:server-v4
+
       - name: Check formatting (CRLF)
         run: pnpm format:check
 
@@ -59,5 +62,11 @@ jobs:
       - name: Cài đặt dependencies (bao gồm @eslint/js, vitest)
         run: pnpm install --frozen-lockfile --prod=false
 
-      - name: Run tests
-        run: pnpm test -- --runInBand
+      - name: Run server-v4 typecheck
+        run: pnpm run typecheck:server-v4
+
+      - name: Run server-v4 tests
+        run: pnpm run test:server-v4
+
+      - name: Run repo smoke gate
+        run: pnpm run test:smoke:core

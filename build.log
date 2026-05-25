@@ -1,0 +1,33 @@
+
+> kpi-calculator@2.0.0 prebuild E:\GPT\kpi_source_code_v4
+> node scripts/check-server.mjs && node scripts/healthcheck.mjs
+
+- VITE_API_BASE doc tu .env.production.
+Da tai cac file .env: .env, .env.production
+≡ƒöì ─Éang chß║íy health check backend...
+Γ£à SQLite sß║╡n s├áng (E:\GPT\kpi_source_code_v4\data\storage.sqlite)
+Ho├án tß║Ñt health check sau 1156ms.
+Γä╣∩╕Å SQL Server ch╞░a cß║Ñu h├¼nh ΓÇö bß╗Å qua kiß╗âm tra n├áy.
+
+> kpi-calculator@2.0.0 build E:\GPT\kpi_source_code_v4
+> vite build
+
+[36mvite v6.3.6 [32mbuilding for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 6 modules transformed.
+Γ£ù Build failed in 69ms
+error during build:
+[vite:define] Transform failed with 1 error:
+E:/GPT/kpi_source_code_v4/src/lib/storageClient.js:69:21: ERROR: Syntax error "F"
+file: E:/GPT/kpi_source_code_v4/src/lib/storageClient.js
+    at failureErrorWithLog (E:\GPT\kpi_source_code_v4\node_modules\.pnpm\esbuild@0.25.10\node_modules\esbuild\lib\main.js:1467:15)
+    at E:\GPT\kpi_source_code_v4\node_modules\.pnpm\esbuild@0.25.10\node_modules\esbuild\lib\main.js:736:50
+    at responseCallbacks.<computed> (E:\GPT\kpi_source_code_v4\node_modules\.pnpm\esbuild@0.25.10\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (E:\GPT\kpi_source_code_v4\node_modules\.pnpm\esbuild@0.25.10\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (E:\GPT\kpi_source_code_v4\node_modules\.pnpm\esbuild@0.25.10\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:519:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+ΓÇëELIFECYCLEΓÇë Command failed with exit code 1.

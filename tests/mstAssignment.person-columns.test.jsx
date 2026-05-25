@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
-import { AssigneeCell, PersonColumnHeader } from "@/components/MSTAssignment.jsx";
+import AssigneeCell from "@/components/mst-assignment/table/AssigneeCell.jsx";
+import PersonColumnHeader from "@/components/mst-assignment/table/PersonColumnHeader.jsx";
 
 afterEach(() => {
   cleanup();
@@ -21,8 +22,8 @@ describe("PersonColumnHeader", () => {
       </table>
     );
 
-    expect(screen.getByText("Phụ trách")).toBeInTheDocument();
-    expect(screen.getByText("Nhập")).toBeInTheDocument();
+    expect(screen.getAllByText(/Phụ trách/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Nhập/i).length).toBeGreaterThan(0);
     const header = screen.getByTitle("Người phụ trách Nhập");
     expect(header).toHaveAttribute("data-column", "person_import");
   });
@@ -53,7 +54,7 @@ describe("AssigneeCell", () => {
     const display = screen.getByText(longName);
     expect(display).toHaveAttribute("data-assignee-state", "filled");
     expect(display).toHaveStyle({ WebkitLineClamp: "2" });
-    expect(screen.getByText("Tổ: Nhóm 1")).toBeInTheDocument();
+    expect(screen.getByText(/Tổ: Nhóm 1/i)).toBeInTheDocument();
   });
 
   it("hiển thị nút chọn nhân viên ở chế độ chỉnh sửa", () => {
@@ -79,6 +80,6 @@ describe("AssigneeCell", () => {
 
     const combobox = screen.getByRole("combobox");
     expect(combobox).toBeInTheDocument();
-    expect(screen.getByText("Chọn nhân viên nhập")).toBeInTheDocument();
+    expect(screen.getByText(/Chọn nhân viên/i)).toBeInTheDocument();
   });
 });

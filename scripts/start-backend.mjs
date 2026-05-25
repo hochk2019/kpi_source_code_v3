@@ -4,6 +4,8 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { resolveBackendEntrypointPlan } from '../apps/api/src/backendEntrypointPlan.js';
+import { ensureServerV4BuildSynced } from './server-v4-build-sync.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -81,6 +83,13 @@ function extractFlags(argv) {
     }
     if (arg === '--prod' || arg === '--production') {
       flags.add('production');
+      continue;
+    }
+    if (arg === '--legacy-entrypoint') {
+      throw new Error('Flag --legacy-entrypoint da bi loai bo. Runtime chi ho tro server-v4.');
+      continue;
+    }
+    if (arg === '--server-v4-entrypoint') {
       continue;
     }
     passthrough.push(arg);
@@ -173,6 +182,7 @@ async function startServer() {
   const { flags, passthrough } = extractFlags(args);
   const forceRebuild = flags.has('rebuild');
   const production = flags.has('production');
+  const repoRoot = resolve(__dirname, '..');
 
   if (production) {
     process.env.NODE_ENV = 'production';
@@ -198,9 +208,22 @@ async function startServer() {
     process.exit(1);
   }
 
+  await ensureServerV4BuildSynced({
+    projectRoot: repoRoot,
+    skip: production,
+    build: async () => {
+      const { command, args } = resolvePnpmCommand();
+      await run(command, [...args, 'build:server-v4'], { cwd: repoRoot });
+    },
+  });
+
   await ensureBetterSqlite3({ forceRebuild });
 
-  const serverEntry = resolve(__dirname, '..', 'server', 'index.js');
+  const entrypointPlan = resolveBackendEntrypointPlan({
+    envMode: process.env.KPI_API_ENTRYPOINT_MODE,
+    rootDir: repoRoot,
+  });
+  const serverEntry = entrypointPlan.entryFile;
   if (!existsSync(serverEntry)) {
     console.error('Khong tim thay file backend:', serverEntry);
     console.error('Vui long kiem tra cac buoc sau:');
@@ -209,8 +232,11 @@ async function startServer() {
     console.error('- Neu van gap loi, hay kiem tra lai duong dan va quyen truy cap file.');
     process.exit(1);
   }
-  console.log('Khoi dong backend tu', serverEntry);
-  const childEnv = { ...process.env };
+  console.log(`Khoi dong backend (${entrypointPlan.label}) tu`, serverEntry);
+  const childEnv = {
+    ...process.env,
+    KPI_API_ENTRYPOINT_MODE: entrypointPlan.mode,
+  };
   const childArgs = [serverEntry, ...passthrough];
   const child = spawn(process.execPath, childArgs, { stdio: 'inherit', env: childEnv });
 

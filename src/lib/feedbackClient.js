@@ -1,8 +1,10 @@
-const TRAINING_ENDPOINT = '/api/training-resources';
+import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
 
-const FEEDBACK_ENDPOINT = '/api/feedback';
+const TRAINING_ENDPOINT = API_V4_ROUTES.feedbackTraining.trainingResources;
 
-const FEEDBACK_SUMMARY_ENDPOINT = '/api/feedback/summary';
+const FEEDBACK_ENDPOINT = API_V4_ROUTES.feedbackTraining.feedback;
+
+const FEEDBACK_SUMMARY_ENDPOINT = API_V4_ROUTES.feedbackTraining.feedbackSummary;
 
 
 

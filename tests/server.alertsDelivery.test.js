@@ -42,7 +42,7 @@ let __internal;
 
 async function loadModule() {
 
-  const mod = await import('../server/alertsDelivery.js');
+  const mod = await import('@kpi/backend-shared/runtime');
 
   resolveSeverity = mod.resolveSeverity;
 
