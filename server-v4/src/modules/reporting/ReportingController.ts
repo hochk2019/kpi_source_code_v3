@@ -2,7 +2,19 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 
 import { BaseController } from '../../http/BaseController.js';
+import type { AuthStore } from '../auth/authStore.js';
+import { readSessionAccount, readSessionTokenFromRequest } from '../auth/authSessionContext.js';
 import { ReportingService } from './reportingService.js';
+
+class ReportingHttpError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 const reportingQuerySchema = z.object({
   from: z.string().trim().optional(),
@@ -72,12 +84,35 @@ const scheduleMutationSchema = z.object({
 });
 
 export class ReportingController extends BaseController {
-  constructor(private readonly reportingService: ReportingService) {
+  constructor(
+    private readonly reportingService: ReportingService,
+    private readonly authStore?: AuthStore,
+  ) {
     super();
+  }
+
+  private async readActor(req: Request): Promise<{ username: string; role: string; permissions: Record<string, boolean> }> {
+    const account = await readSessionAccount(this.authStore, readSessionTokenFromRequest(req));
+    if (!account) {
+      throw new ReportingHttpError(401, 'auth_required', 'Bạn cần đăng nhập để xem báo cáo.');
+    }
+    return { username: account.username, role: account.role, permissions: account.permissions };
+  }
+
+  private handleReportingError(error: unknown, res: Response, context: string): void {
+    if (error instanceof ReportingHttpError) {
+      res.status(error.statusCode).json({
+        ok: false,
+        error: { code: error.code, message: error.message },
+      });
+      return;
+    }
+    this.handleError(error, res, context);
   }
 
   async getView(req: Request, res: Response): Promise<void> {
     try {
+      await this.readActor(req);
       const query = reportingQuerySchema.parse({
         from: pickQueryValue(req.query.from),
         to: pickQueryValue(req.query.to),
@@ -87,12 +122,13 @@ export class ReportingController extends BaseController {
       const payload = await this.reportingService.getView(query);
       this.handleSuccess(res, payload);
     } catch (error) {
-      this.handleError(error, res, 'build reporting view');
+      this.handleReportingError(error, res, 'build reporting view');
     }
   }
 
   async getMonthlyAggregates(req: Request, res: Response): Promise<void> {
     try {
+      await this.readActor(req);
       const query = reportingQuerySchema.parse({
         from: pickQueryValue(req.query.from),
         to: pickQueryValue(req.query.to),
@@ -101,12 +137,13 @@ export class ReportingController extends BaseController {
       const payload = await this.reportingService.getMonthlyAggregates(query);
       this.handleSuccess(res, payload);
     } catch (error) {
-      this.handleError(error, res, 'list monthly reporting aggregates');
+      this.handleReportingError(error, res, 'list monthly reporting aggregates');
     }
   }
 
   async getObservability(req: Request, res: Response): Promise<void> {
     try {
+      await this.readActor(req);
       const query = observabilityQuerySchema.parse({
         jobSearch: pickQueryValue(req.query.jobSearch),
         jobStatus: pickQueryValue(req.query.jobStatus),
@@ -119,34 +156,43 @@ export class ReportingController extends BaseController {
       const payload = await this.reportingService.getObservability(query);
       this.handleSuccess(res, payload);
     } catch (error) {
-      this.handleError(error, res, 'read reporting observability');
+      this.handleReportingError(error, res, 'read reporting observability');
     }
   }
 
   async listSchedules(req: Request, res: Response): Promise<void> {
     try {
+      await this.readActor(req);
       const query = schedulesQuerySchema.parse({
         asOf: pickQueryValue(req.query.asOf),
       });
       const payload = await this.reportingService.listSchedules(query);
       this.handleSuccess(res, payload);
     } catch (error) {
-      this.handleError(error, res, 'list report schedules');
+      this.handleReportingError(error, res, 'list report schedules');
     }
   }
 
   async saveSchedule(req: Request, res: Response): Promise<void> {
     try {
+      const actor = await this.readActor(req);
+      if (!actor.permissions.reportsExport && !actor.permissions.accountManage) {
+        throw new ReportingHttpError(403, 'forbidden', 'Bạn không có quyền quản lý lịch báo cáo.');
+      }
       const payload = scheduleMutationSchema.parse(req.body ?? {});
       const result = await this.reportingService.saveSchedule(payload);
       this.handleSuccess(res, result);
     } catch (error) {
-      this.handleError(error, res, 'save report schedule');
+      this.handleReportingError(error, res, 'save report schedule');
     }
   }
 
   async deleteSchedule(req: Request, res: Response): Promise<void> {
     try {
+      const actor = await this.readActor(req);
+      if (!actor.permissions.reportsExport && !actor.permissions.accountManage) {
+        throw new ReportingHttpError(403, 'forbidden', 'Bạn không có quyền quản lý lịch báo cáo.');
+      }
       const id = pickQueryValue(req.params.id);
       const result = await this.reportingService.deleteSchedule(typeof id === 'string' ? id : '');
       if (!result.deleted) {
@@ -162,7 +208,7 @@ export class ReportingController extends BaseController {
 
       this.handleSuccess(res, result);
     } catch (error) {
-      this.handleError(error, res, 'delete report schedule');
+      this.handleReportingError(error, res, 'delete report schedule');
     }
   }
 }

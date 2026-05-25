@@ -177,6 +177,7 @@ export default function useDataImporterDuplicateReview({
 
     setDuplicateReviewConfirmed(false);
     setDuplicateReviewOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duplicate11Details, isReadOnlyForEdits, mode]);
 
   const handleCloseDuplicateReview = useCallback(() => {
@@ -340,6 +341,7 @@ export default function useDataImporterDuplicateReview({
     setDuplicateReviewConfirmed(false);
     loadSavedRows?.({ bypassConfirm: true });
     fetchAlerts?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     applyMergeField,

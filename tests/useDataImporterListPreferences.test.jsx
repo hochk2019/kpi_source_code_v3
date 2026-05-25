@@ -3,6 +3,14 @@ import { act, renderHook } from "@testing-library/react";
 
 import useDataImporterListPreferences from "@/components/dataImporter/useDataImporterListPreferences.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  confirm: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function createProps(overrides = {}) {
   return {
     columnHiddenSet: new Set(["agency"]),
@@ -25,16 +33,15 @@ function createProps(overrides = {}) {
     setCardGridColumns: vi.fn(),
     setShowDeletedRows: vi.fn(),
     setOverwrite: vi.fn(),
-    confirmOverwrite: vi.fn(() => true),
     ...overrides,
   };
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
 describe("useDataImporterListPreferences", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    dialogMocks.confirm.mockResolvedValue(true);
+  });
   it("opens column config with a cloned hidden set and cleared error state", () => {
     const props = createProps();
     const { result } = renderHook(() => useDataImporterListPreferences(props));
@@ -91,16 +98,16 @@ describe("useDataImporterListPreferences", () => {
     expect(toggleUpdater(false)).toBe(true);
   });
 
-  it("guards overwrite mode behind permissions and confirmation", () => {
-    const confirmOverwrite = vi.fn(() => false);
-    const props = createProps({ confirmOverwrite });
+  it("guards overwrite mode behind permissions and confirmation", async () => {
+    dialogMocks.confirm.mockResolvedValue(false);
+    const props = createProps();
     const { result } = renderHook(() => useDataImporterListPreferences(props));
 
-    act(() => {
-      result.current.handleOverwriteToggle(true);
+    await act(async () => {
+      await result.current.handleOverwriteToggle(true);
     });
 
-    expect(confirmOverwrite).toHaveBeenCalledTimes(1);
+    expect(dialogMocks.confirm).toHaveBeenCalledTimes(1);
     expect(props.setOverwrite).not.toHaveBeenCalled();
 
     const deniedProps = createProps({ canOverwriteData: false });

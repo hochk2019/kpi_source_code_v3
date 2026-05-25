@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppDialog } from "@/hooks/useAppDialog";
 
 import { toast } from "@/shared/toast.js";
@@ -34,8 +34,9 @@ const ECUS_COMMIT_JOB_ROUTE = "/api/v4/declarations/imports/ecus-jobs";
 const ECUS_PREVIEW_ROUTE = "/api/v4/declarations/imports/ecus-preview";
 const ECUS_STATUS_ROUTE = "/api/v4/declarations/imports/ecus-status";
 const ALERTS_ROUTE = "/api/v4/declarations/imports/alerts";
-const ECUS_COMMIT_POLL_DELAY_MS = 1200;
-const ECUS_COMMIT_POLL_MAX_ROUNDS = 300;
+const ECUS_COMMIT_POLL_BASE_DELAY_MS = 1000;
+const ECUS_COMMIT_POLL_MAX_DELAY_MS = 10000;
+const ECUS_COMMIT_POLL_MAX_ROUNDS = 60;
 
 const DEFAULT_ALERT_SUMMARY = {
   outstanding: 0,
@@ -210,6 +211,7 @@ export default function useDataImporterSync({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
+  const [previewHash, setPreviewHash] = useState("");
   const [previewRequestKey, setPreviewRequestKey] = useState("");
   const [syncProgressSteps, setSyncProgressSteps] = useState(() => createSyncProgressSteps());
   const [syncJobState, setSyncJobState] = useState(() => readStoredSyncJobState());
@@ -340,8 +342,16 @@ export default function useDataImporterSync({
     });
   }, []);
 
+  const syncCancelledRef = useRef(false);
+
+  useEffect(() => {
+    syncCancelledRef.current = false;
+    return () => { syncCancelledRef.current = true; };
+  }, []);
+
   const waitForDelay = useCallback((delayMs) => {
     return new Promise((resolve) => {
+      if (syncCancelledRef.current) { resolve(); return; }
       window.setTimeout(resolve, delayMs);
     });
   }, []);
@@ -480,9 +490,7 @@ export default function useDataImporterSync({
   }, [fetchWithAuth]);
 
   useEffect(() => {
-    fetchSyncConfig();
-    fetchAlerts();
-    fetchSyncStatus();
+    Promise.allSettled([fetchSyncConfig(), fetchAlerts(), fetchSyncStatus()]);
   }, [fetchAlerts, fetchSyncConfig, fetchSyncStatus]);
 
   const handleSaveSyncConfig = useCallback(async () => {
@@ -724,7 +732,12 @@ export default function useDataImporterSync({
               throw new Error("Job đồng bộ ECUS đang chạy quá lâu. Hãy resume lại để tiếp tục theo dõi.");
             }
 
-            await waitForDelay(ECUS_COMMIT_POLL_DELAY_MS);
+            const backoffDelay = Math.min(
+              ECUS_COMMIT_POLL_BASE_DELAY_MS * Math.pow(2, round - 1),
+              ECUS_COMMIT_POLL_MAX_DELAY_MS,
+            );
+            const jitter = backoffDelay * (0.5 + Math.random() * 0.5);
+            await waitForDelay(Math.round(jitter));
           }
 
           return null;
@@ -793,6 +806,7 @@ export default function useDataImporterSync({
                   to: workingJob.to || undefined,
                   includeTaxCodes: workingJob.includeTaxCodes || [],
                   excludeTaxCodes: workingJob.excludeTaxCodes || [],
+                  previewHash: previewHash || undefined,
                   async: true,
                 }),
                 credentials: "include",
@@ -980,6 +994,7 @@ export default function useDataImporterSync({
     refreshDeclRowsFromServer,
     updateSyncJobState,
     waitForDelay,
+    previewHash,
   ]);
 
   const handleRunSync = useCallback(async () => {
@@ -1041,6 +1056,7 @@ export default function useDataImporterSync({
     previewConflictWarningActive,
     syncPreflightSummary.ready,
     updateSyncJobState,
+    confirm,
   ]);
 
   const handleResumeSync = useCallback(async () => {
@@ -1109,6 +1125,7 @@ export default function useDataImporterSync({
       setPreviewLimited(!!payload?.preview?.limited);
       setPreviewRequestKey(currentPreviewRequestKey);
       setPreviewRangeInfo(payload?.preview?.range || null);
+      setPreviewHash(typeof payload?.preview?.previewHash === "string" ? payload.preview.previewHash : "");
 
       if (!rows.length) {
         const baseMessage = "Không tìm thấy tờ khai mới trong khoảng thời gian đã chọn.";
@@ -1129,6 +1146,7 @@ export default function useDataImporterSync({
       setPreviewLimited(false);
       setPreviewRequestKey("");
       setPreviewRangeInfo(null);
+      setPreviewHash("");
       return { ok: false, error: err };
     } finally {
       setPreviewLoading(false);

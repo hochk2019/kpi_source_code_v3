@@ -32,8 +32,11 @@ type CanonicalAdjustmentRow = {
   created_at?: unknown;
   updated_at?: unknown;
   approved_at?: unknown;
+  approved_by?: unknown;
   rejected_at?: unknown;
+  rejected_by?: unknown;
   history_jsonb?: unknown;
+  version?: unknown;
 };
 
 type ConfigDocumentRow = {
@@ -77,6 +80,9 @@ const CREATE_KPI_ADJUSTMENTS_TABLE_SQL =
 const CREATE_KPI_ADJUSTMENTS_MONTH_STATUS_INDEX_SQL =
   'CREATE INDEX IF NOT EXISTS idx_kpi_adjustments_month_status ON kpi_adjustments(month_start, status)';
 
+const ENSURE_VERSION_COLUMN_SQL =
+  'ALTER TABLE kpi_adjustments ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1';
+
 const CREATE_CONFIG_DOCUMENTS_TABLE_SQL =
   'CREATE TABLE IF NOT EXISTS config_documents (' +
   'config_key TEXT PRIMARY KEY, ' +
@@ -107,8 +113,11 @@ const READ_ADJUSTMENT_BY_ID_SQL =
   'created_at, ' +
   'updated_at, ' +
   'approved_at, ' +
+  'approved_by_account_id, ' +
   'rejected_at, ' +
-  "COALESCE(history_jsonb, '[]'::jsonb) AS history_jsonb " +
+  'rejected_by_account_id, ' +
+  "COALESCE(history_jsonb, '[]'::jsonb) AS history_jsonb, " +
+  'COALESCE(version, 1) AS version ' +
   'FROM kpi_adjustments ' +
   'WHERE id = $1';
 
@@ -117,12 +126,12 @@ const UPSERT_ADJUSTMENT_SQL =
   'id, month_start, category, mode, license_code, staff_member_id, team_id, staff_name_snapshot, team_name_snapshot, ' +
   'tax_code, company_name, quantity, unit_points, extra_quantity, extra_unit_points, total_points, "references", note, ' +
   'status, created_at, created_by_account_id, updated_at, updated_by_account_id, approved_at, approved_by_account_id, ' +
-  'rejected_at, rejected_by_account_id, history_jsonb' +
+  'rejected_at, rejected_by_account_id, history_jsonb, version' +
   ') VALUES (' +
   '$1, $2::date, $3, $4, $5, $6, $7, $8, $9, ' +
   '$10, $11, $12, $13, $14, $15, $16, $17::text[], $18, ' +
   '$19, $20::timestamptz, $21, $22::timestamptz, $23, $24::timestamptz, $25, ' +
-  '$26::timestamptz, $27, $28::jsonb' +
+  '$26::timestamptz, $27, $28::jsonb, $29' +
   ') ON CONFLICT (id) DO UPDATE SET ' +
   'month_start = EXCLUDED.month_start, ' +
   'category = EXCLUDED.category, ' +
@@ -148,7 +157,9 @@ const UPSERT_ADJUSTMENT_SQL =
   'approved_by_account_id = EXCLUDED.approved_by_account_id, ' +
   'rejected_at = EXCLUDED.rejected_at, ' +
   'rejected_by_account_id = EXCLUDED.rejected_by_account_id, ' +
-  'history_jsonb = EXCLUDED.history_jsonb';
+  'history_jsonb = EXCLUDED.history_jsonb, ' +
+  'version = EXCLUDED.version ' +
+  'WHERE kpi_adjustments.version = $29 - 1';
 
 const READ_SETTINGS_SQL =
   'SELECT document ' +
@@ -187,7 +198,10 @@ export class PostgresKpiAdjustmentsStore implements KpiAdjustmentsStore {
 
   async updateAdjustment(record: KpiAdjustmentStoredRecord): Promise<KpiAdjustmentStoredRecord> {
     await this.ensureInitialized();
-    await this.pool.query(UPSERT_ADJUSTMENT_SQL, toUpsertParams(record));
+    const result = await this.pool.query(UPSERT_ADJUSTMENT_SQL, toUpsertParams(record));
+    if (result.rowCount === 0) {
+      throw new Error('version_conflict');
+    }
     return cloneRecord(record);
   }
 
@@ -229,6 +243,7 @@ export class PostgresKpiAdjustmentsStore implements KpiAdjustmentsStore {
 async function initializeKpiAdjustmentsStorage(pool: PoolLike): Promise<void> {
   await pool.query(CREATE_KPI_ADJUSTMENTS_TABLE_SQL);
   await pool.query(CREATE_KPI_ADJUSTMENTS_MONTH_STATUS_INDEX_SQL);
+  await pool.query(ENSURE_VERSION_COLUMN_SQL);
   await pool.query(CREATE_CONFIG_DOCUMENTS_TABLE_SQL);
 }
 
@@ -258,10 +273,11 @@ function toUpsertParams(record: KpiAdjustmentStoredRecord): unknown[] {
     record.updatedAt,
     null,
     record.approvedAt ?? null,
-    null,
+    record.approvedBy ?? null,
     record.rejectedAt ?? null,
-    null,
+    record.rejectedBy ?? null,
     JSON.stringify(Array.isArray(record.history) ? record.history : []),
+    record.version ?? 1,
   ];
 }
 
@@ -299,7 +315,10 @@ function normalizeCanonicalAdjustment(row: CanonicalAdjustmentRow | undefined): 
     extraQuantity: normalizeOptionalNumber(row.extra_quantity),
     extraUnitPoints: normalizeOptionalNumber(row.extra_unit_points),
     approvedAt: normalizeOptionalText(row.approved_at),
+    approvedBy: normalizeOptionalText(row.approved_by),
     rejectedAt: normalizeOptionalText(row.rejected_at),
+    rejectedBy: normalizeOptionalText(row.rejected_by),
+    version: normalizeNumber(row.version) || 1,
   };
 }
 

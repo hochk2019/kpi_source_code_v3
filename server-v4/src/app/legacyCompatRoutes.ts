@@ -13,7 +13,7 @@ import { registerLegacyCompatAuthRoutes } from './legacy-compat/legacyCompatAuth
 import { registerLegacyCompatBootstrapRoutes } from './legacy-compat/legacyCompatBootstrapRoutes.js';
 import { registerLegacyCompatImporterRoutes } from './legacy-compat/legacyCompatImporterRoutes.js';
 import { registerLegacyCompatStorageRoutes } from './legacy-compat/legacyCompatStorageRoutes.js';
-import { DeclarationsController } from '../modules/declarations/DeclarationsController.js';
+import { DeclarationsController } from '../modules/declarations/declarationsController.js';
 import { DeclarationsAlertsService } from '../modules/declarations/declarationsAlertsService.js';
 import { DeclarationsCoMonitoringService } from '../modules/declarations/declarationsCoMonitoringService.js';
 import {
@@ -56,7 +56,10 @@ export function buildLegacyCompatRouter(
     persistence.declarationsStore,
     ecusFetchRunner,
   );
-  const declarationsImportJobService = new DeclarationsImportJobService(declarationsImportService);
+  const declarationsImportJobService = new DeclarationsImportJobService(
+    declarationsImportService,
+    persistence.declarationsImportJobStore,
+  );
   const declarationsAlertsService = new DeclarationsAlertsService(
     declarationsRepository,
     persistence.declarationsStore,

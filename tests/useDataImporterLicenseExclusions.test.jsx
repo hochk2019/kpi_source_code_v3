@@ -3,6 +3,14 @@ import { act, renderHook } from "@testing-library/react";
 
 import useDataImporterLicenseExclusions from "@/components/dataImporter/useDataImporterLicenseExclusions.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  alert: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function createProps(overrides = {}) {
   return {
     mode: "saved",
@@ -52,16 +60,16 @@ function createProps(overrides = {}) {
 
 describe("useDataImporterLicenseExclusions", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    dialogMocks.alert.mockResolvedValue();
   });
 
-  it("applies license exclusions to selected rows and reports the summary", () => {
+  it("applies license exclusions to selected rows and reports the summary", async () => {
     const props = createProps();
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { result } = renderHook(() => useDataImporterLicenseExclusions(props));
 
-    act(() => {
-      result.current.handleApplyLicenseExclusion();
+    await act(async () => {
+      await result.current.handleApplyLicenseExclusion();
     });
 
     expect(props.ensureEditableKeys).toHaveBeenCalledWith(
@@ -82,37 +90,96 @@ describe("useDataImporterLicenseExclusions", () => {
       }),
     ]);
     expect(props.setHasUnsaved).toHaveBeenCalledWith(true);
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy.mock.calls[0][0]).toContain("1/1");
-    expect(alertSpy.mock.calls[0][0]).toContain("ZZ00");
-    expect(alertSpy.mock.calls[0][0]).toContain("AG01");
+    expect(dialogMocks.alert).toHaveBeenCalledTimes(1);
+    expect(dialogMocks.alert.mock.calls[0][0]).toContain("1/1");
+    expect(dialogMocks.alert.mock.calls[0][0]).toContain("ZZ00");
+    expect(dialogMocks.alert.mock.calls[0][0]).toContain("AG01");
   });
 
-  it("alerts when no selected rows are available for manual apply", () => {
+  it("alerts when no selected rows are available for manual apply", async () => {
     const props = createProps({ selectedKeys: [] });
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { result } = renderHook(() => useDataImporterLicenseExclusions(props));
 
-    act(() => {
-      result.current.handleApplyLicenseExclusion();
+    await act(async () => {
+      await result.current.handleApplyLicenseExclusion();
     });
 
     expect(props.ensureEditableKeys).not.toHaveBeenCalled();
     expect(props.setRawRows).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(dialogMocks.alert).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks auto apply when the actor is not allowed to reconcile", () => {
+  it("blocks auto apply when the actor is not allowed to reconcile", async () => {
     const props = createProps({ canAutoReconcile: false });
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { result } = renderHook(() => useDataImporterLicenseExclusions(props));
 
-    act(() => {
-      result.current.handleAutoApplyLicenseExclusion();
+    await act(async () => {
+      await result.current.handleAutoApplyLicenseExclusion();
     });
 
     expect(props.ensureEditableKeys).not.toHaveBeenCalled();
     expect(props.setRawRows).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(dialogMocks.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks auto apply when canEdit is false", async () => {
+    const props = createProps({ canEdit: false });
+    const { result } = renderHook(() => useDataImporterLicenseExclusions(props));
+
+    await act(async () => {
+      await result.current.handleAutoApplyLicenseExclusion();
+    });
+
+    expect(props.ensureEditableKeys).not.toHaveBeenCalled();
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
+      expect.stringContaining("quyền"),
+    );
+  });
+
+  it("blocks auto apply when mode is source", async () => {
+    const props = createProps({ mode: "source" });
+    const { result } = renderHook(() => useDataImporterLicenseExclusions(props));
+
+    await act(async () => {
+      await result.current.handleAutoApplyLicenseExclusion();
+    });
+
+    expect(props.ensureEditableKeys).not.toHaveBeenCalled();
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
+      expect.stringContaining("đã lưu"),
+    );
+  });
+
+  it("blocks auto apply when filteredKeys is empty", async () => {
+    const props = createProps({ filteredKeys: [] });
+    const { result } = renderHook(() => useDataImporterLicenseExclusions(props));
+
+    await act(async () => {
+      await result.current.handleAutoApplyLicenseExclusion();
+    });
+
+    expect(props.ensureEditableKeys).not.toHaveBeenCalled();
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
+      expect.stringContaining("bộ lọc"),
+    );
+  });
+
+  it("auto apply success path calls applyLicenseExclusionForKeys and shows summary", async () => {
+    const props = createProps();
+    const { result } = renderHook(() => useDataImporterLicenseExclusions(props));
+
+    await act(async () => {
+      await result.current.handleAutoApplyLicenseExclusion();
+    });
+
+    expect(props.ensureEditableKeys).toHaveBeenCalledWith(
+      ["row-1"],
+      "đối chiếu giấy phép tự động",
+    );
+    expect(props.setRawRows).toHaveBeenCalled();
+    expect(props.setHasUnsaved).toHaveBeenCalledWith(true);
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
+      expect.stringContaining("tờ khai"),
+    );
   });
 });

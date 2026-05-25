@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
+import { ADMIN_ROLE, getPermissionTemplate } from "../../packages/domain/src/accountRoles.js";
 import { buildV4App } from "../../server-v4/src/index.ts";
 import { reportingModule } from "../../server-v4/src/modules/reporting/reporting.module.ts";
 import { LEGACY_BUSINESS_HOT_PATH_KEYS } from "../../server-v4/src/persistence/businessSnapshotReader.ts";
@@ -75,6 +76,13 @@ describe("server-v4 postgres reporting input wiring", () => {
         ],
       })),
     };
+    const authStore = createAuthStore([
+      createAccount({
+        username: "manager",
+        role: ADMIN_ROLE,
+        name: "Manager User",
+      }),
+    ]);
     const projections = createProjectionPersistence();
     const app = buildV4App({
       dbFile: ":memory:",
@@ -88,12 +96,14 @@ describe("server-v4 postgres reporting input wiring", () => {
         mstAssignmentsReader: createMstAssignmentsReader(),
         teamsReader,
         projections,
+        authStore,
         dispose: async () => {},
       },
     });
 
     const response = await request(app)
       .get("/api/v4/reporting/aggregates/monthly")
+      .set(sessionHeaders("session-manager"))
       .query({ from: "2026-02-01", to: "2026-02-28" });
 
     expect(response.status).toBe(200);
@@ -136,4 +146,76 @@ function createProjectionPersistence() {
     readMonthlyAggregateEntries: async () => [],
     readJobRunEntries: async () => [],
   };
+}
+
+const TEST_CSRF_TOKEN = "test-csrf-token";
+
+function sessionHeaders(sessionToken) {
+  return {
+    Cookie: `kpi_session=${sessionToken}; kpi_csrf=${TEST_CSRF_TOKEN}`,
+    "X-CSRF-Token": TEST_CSRF_TOKEN,
+  };
+}
+
+function createAuthStore(accounts) {
+  const sessions = new Map([
+    [
+      "session-manager",
+      {
+        token: "session-manager",
+        username: "manager",
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 86400_000,
+      },
+    ],
+  ]);
+
+  return {
+    async listAccounts() {
+      return clone(accounts);
+    },
+    async saveAccounts() {},
+    async readSession(token) {
+      return clone(sessions.get(token) ?? null);
+    },
+    async createSession(username) {
+      const session = {
+        token: `session-${username}`,
+        username,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      };
+      sessions.set(session.token, session);
+      return clone(session);
+    },
+    async deleteSession(token) {
+      sessions.delete(token);
+    },
+    async deleteSessionsForUser(username) {
+      for (const [token, session] of sessions.entries()) {
+        if (session.username === username) {
+          sessions.delete(token);
+        }
+      }
+    },
+  };
+}
+
+function createAccount({ username, role, name }) {
+  return {
+    username,
+    passwordHash: "unused-for-route-tests",
+    role,
+    name,
+    permissions: getPermissionTemplate(role),
+    memberId: null,
+    memberName: null,
+    teamId: null,
+    teamName: null,
+    updatedAt: "2026-03-14T00:00:00.000Z",
+  };
+}
+
+function clone(value) {
+  return value === null ? null : JSON.parse(JSON.stringify(value));
 }

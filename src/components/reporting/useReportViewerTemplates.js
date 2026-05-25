@@ -171,7 +171,7 @@ export default function useReportViewerTemplates({
     setAppliedTemplateId(selectedTemplate.id);
     writeLastTemplateId(selectedTemplate.id);
     await alert(`Đã áp dụng mẫu báo cáo "${selectedTemplate.name}".`);
-  }, [onApplyTemplateFilters, selectedTemplate]);
+  }, [onApplyTemplateFilters, selectedTemplate, alert]);
 
   const handleSaveTemplateAsNew = useCallback(async () => {
     let nextName = selectedTemplate ? `${selectedTemplate.name} (bản sao)` : "Mẫu báo cáo mới";
@@ -219,7 +219,7 @@ export default function useReportViewerTemplates({
     } finally {
       setTemplateSaving(false);
     }
-  }, [selectedTemplate, templatePayload, templates]);
+  }, [selectedTemplate, templatePayload, templates, alert]);
 
   const handleOverwriteSelectedTemplate = useCallback(async () => {
     if (!selectedTemplate) {
@@ -262,7 +262,7 @@ export default function useReportViewerTemplates({
     } finally {
       setTemplateSaving(false);
     }
-  }, [selectedTemplate, templatePayload, templates]);
+  }, [selectedTemplate, templatePayload, templates, alert, confirm]);
 
   const handleDeleteSelectedTemplate = useCallback(async () => {
     if (!selectedTemplate) {
@@ -296,7 +296,7 @@ export default function useReportViewerTemplates({
     } finally {
       setTemplateSaving(false);
     }
-  }, [appliedTemplateId, selectedTemplate, templates]);
+  }, [appliedTemplateId, selectedTemplate, templates, alert, confirm]);
 
   return {
     templates,

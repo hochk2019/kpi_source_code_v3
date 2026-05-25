@@ -16,7 +16,7 @@ describe("kpi adjustment overview panel", () => {
       />
     );
 
-    expect(screen.getByText(/Tổng quan điểm KPI +\/-/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tổng quan điểm KPI \+\/-/i)).toBeInTheDocument();
     expect(screen.getByText(/Tổng số mục/i)).toBeInTheDocument();
     expect(screen.getByText(/Đã duyệt/i)).toBeInTheDocument();
     expect(screen.getByText(/Chờ duyệt/i)).toBeInTheDocument();

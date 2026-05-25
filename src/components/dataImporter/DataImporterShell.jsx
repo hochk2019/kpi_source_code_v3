@@ -3,10 +3,7 @@ import { t } from '@/lib/i18n.js';
 
 import DataImporterSummaryCards from "@/components/dataImporter/DataImporterSummaryCards.jsx";
 import DataImporterUpdatedRowsBanner from "@/components/dataImporter/DataImporterUpdatedRowsBanner.jsx";
-import {
-  buildWorkflowGuideState,
-  getWorkflowStageStatus,
-} from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
+import { buildWorkflowGuideState } from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
 import { PageHeader } from '@/components/designSystem/PageHeader';
 import { PermissionBanner } from '@/components/designSystem/primitives';
 import { FileUp, History, RefreshCw, Table } from "lucide-react";
@@ -110,10 +107,6 @@ export default function DataImporterShell({
   const workflowState = buildWorkflowGuideState(workflowGuideProps);
   const previewSource = workflowGuideProps?.previewSource || null;
   const hasRows = !!workflowGuideProps?.hasRows;
-  const stageIdByNumber = new Map(workflowState.steps.map((step) => [step.number, step.targetId]));
-  const sourceStageStatus = getWorkflowStageStatus(1, workflowState.currentStep);
-  const reviewStageStatus = getWorkflowStageStatus(2, workflowState.currentStep);
-  const saveStageStatus = getWorkflowStageStatus(3, workflowState.currentStep);
 
   // Permission banner message
   let permissionBanner = null;

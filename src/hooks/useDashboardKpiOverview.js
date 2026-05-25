@@ -28,7 +28,10 @@ export function useDashboardKpiOverview() {
     }, []);
 
     // Memoize date range to prevent stale values on re-renders
-    const dateRange = useMemo(() => getMonthBoundaries(), [version]);
+    const dateRange = useMemo(() => {
+        void version;
+        return getMonthBoundaries();
+    }, [version]);
 
     useEffect(() => {
         let cancelled = false;
@@ -63,7 +66,7 @@ export function useDashboardKpiOverview() {
         return () => {
             cancelled = true;
         };
-    }, [version]);
+    }, [version, dateRange]);
 
     const topStaffByKpi = (data?.staff?.list || [])
         .map(item => ({

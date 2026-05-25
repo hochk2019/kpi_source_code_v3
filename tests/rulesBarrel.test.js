@@ -1,23 +1,14 @@
 // tests/rulesBarrel.test.js
 // Tests for refactored rules barrel exports
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  loadRules,
-  persistRules,
-  getActiveRuleSet,
-  createRuleSet,
-  updateRuleSet,
-  deleteRuleSet,
-  setActiveRuleSet,
-} from "../src/lib/rules/rulesCore.js";
+import { describe, it, expect, vi } from "vitest";
+
 import {
   computeKPI,
   addByTiersExported as addByTiers,
 } from "../src/lib/rules/rulesCalculation.js";
 import {
   validateTier,
-  validateRuleSet,
   sanitizeRuleSetName,
   isValidRuleId,
 } from "../src/lib/rules/rulesValidation.js";

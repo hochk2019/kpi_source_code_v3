@@ -109,7 +109,7 @@ function resolveLicenseSource(row) {
   return { codes: [], directCount: null };
 }
 
-function buildLicenseConfigMaps(licenseConfig) {
+export function buildLicenseConfigMaps(licenseConfig) {
   const excludeCodes = new Set(uniqueNormalized(licenseConfig?.exclude?.codes || []));
   const codePointMap = new Map();
   for (const entry of Array.isArray(licenseConfig?.codePoints) ? licenseConfig.codePoints : []) {
@@ -146,8 +146,7 @@ function addByTiers(numItems, tiers = [], isCumulative = false) {
         break;
       }
       if (numItems > to) {
-        sum = Number(add || 0);
-        break;
+        continue;
       }
     }
   }
@@ -178,6 +177,9 @@ function detectGroup(code, rules) {
       return { key, group };
     }
   }
+  if (normalized) {
+    console.warn(`detectGroup: code "${code}" did not match any group in rules`);
+  }
   return { key: '', group: null };
 }
 
@@ -191,7 +193,7 @@ function hasCOFlag(row) {
 
 export { DEFAULT_RULES };
 
-export function computeKPI(row, rulesInput) {
+export function computeKPI(row, rulesInput, cachedMaps) {
   const rules = rulesInput && rulesInput.groups ? rulesInput : DEFAULT_RULES;
   const code = norm(row?.loaiHinh || row?.loai_hinh);
   const items = Number(row?.num_items ?? row?.muc_hang ?? 0) || 0;
@@ -204,7 +206,7 @@ export function computeKPI(row, rulesInput) {
   }
 
   const licenseConfig = rules?.license || {};
-  const { excludeCodes, codePointMap, agencyMap } = buildLicenseConfigMaps(licenseConfig);
+  const { excludeCodes, codePointMap, agencyMap } = cachedMaps || buildLicenseConfigMaps(licenseConfig);
   const source = resolveLicenseSource(row);
   const agencyKey = norm(row?.agency || row?.dai_ly || row?.hqAgency || row?.agent);
   const agencyExcluded = agencyMap.get(agencyKey) || new Set();

@@ -71,7 +71,7 @@ const DEFAULT_ACCOUNT_SEED = [
   },
 ] as const;
 
-export const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = 8;
 export const SESSION_COOKIE_NAME = 'kpi_session';
 export const CSRF_COOKIE_NAME = 'kpi_csrf';
 export const CSRF_HEADER_NAME = 'x-csrf-token';

@@ -80,6 +80,7 @@ export default function RulesEditor({ canEdit = true, currentUser = null }: Rule
     currentUser,
     data,
   });
+  const declarationCount = data?.length || 0;
   const testWorkspace = useRulesTestWorkspace({ data, rule });
 
   const [mainTab, setMainTab] = useState<"active" | "history" | "test">("active");

@@ -218,6 +218,7 @@ export default function useDataImporterEditAccess({
       }
       return updates;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [assignedTeamKey, isStaffRole, normalizeName, teamChangeRestrictionMessage],
   );
 

@@ -1,10 +1,19 @@
 import express, { type Request, type Response, type Router } from 'express';
+import { z } from 'zod';
 
 import type { DomainModule } from '../../app/domain-module.js';
 import { readSessionAccount, readSessionTokenFromRequest } from '../auth/authSessionContext.js';
 import type { AuthStore } from '../auth/authStore.js';
 import type { AuthAccountRecord } from '../auth/authTypes.js';
 import type { AlertsRuntime } from './alertsRuntime.js';
+
+const alertsConfigBodySchema = z.object({
+  config: z.record(z.string(), z.unknown()).default({}),
+});
+
+const alertsKeysBodySchema = z.object({
+  keys: z.array(z.string()).default([]),
+});
 
 export function buildAlertsRouter(
   domainModule: DomainModule,
@@ -51,7 +60,7 @@ export function buildAlertsRouter(
     }
 
     try {
-      const config = isPlainObject(req.body?.config) ? req.body.config : {};
+      const { config } = alertsConfigBodySchema.parse(req.body ?? {});
       const result = alertsRuntime.domain.updateAlertConfig({
         actor: account.username || 'system',
         config,
@@ -69,7 +78,7 @@ export function buildAlertsRouter(
     }
 
     try {
-      const keys = parseKeys(req.body?.keys);
+      const { keys } = alertsKeysBodySchema.parse(req.body ?? {});
       const result = alertsRuntime.domain.reviewAlerts({
         actor: account.username || 'system',
         keys,
@@ -87,7 +96,7 @@ export function buildAlertsRouter(
     }
 
     try {
-      const keys = parseKeys(req.body?.keys);
+      const { keys } = alertsKeysBodySchema.parse(req.body ?? {});
       const result = alertsRuntime.domain.unreviewAlerts({
         actor: account.username || 'system',
         keys,

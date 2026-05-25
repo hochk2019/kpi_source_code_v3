@@ -842,7 +842,7 @@ function formatCsvValue(value: unknown): string {
   if (value === null || value === undefined) {
     return '""';
   }
-  const text = `${value}`.replace(/"/g, '""');
+  const text = `${value}`.replace(/[\r\n]+/g, ' ').replace(/"/g, '""');
   return `"${text}"`;
 }
 

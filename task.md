@@ -52,7 +52,7 @@
 - Slice 8.1 (Fix existing failing tests) dang in_progress, da land batch test-stabilization ngay 2026-05-06:
   - Green verified batches: KPIAdjustments (36 pass), KPICalculator (5 pass), reporting* (76 pass), rules* (41 pass), useDataImporterActionGuards (3 pass).
   - Da sua nhom MSTAssignment, KPIAdjustments, KPICalculator, reporting panels, rules editor/persistence, va 1 hook useDataImporterActionGuards theo DOM moi/async flow moi.
-  - Con lai: useDataImporter* batch hien `99 pass / 21 fail / 0 unhandled errors`; fail chu yeu do tests cu assert sync trong khi hook actions/confirm flow da async.
+  - useDataImporter* batch da xanh `117 pass / 0 fail / 0 unhandled errors` sau khi update async hook actions/AppDialog assertions.
   - 8.2 component tests, 8.3 visual regression, 8.4 a11y, 8.5 performance chua bat dau.
 - Highest-priority ready items hien tai:
   - `cng-sr1.6` - server-entrypoint-retirement-and-delete
@@ -77,9 +77,9 @@
 
 - Done: stabilized KPIAdjustments, KPICalculator, reporting*, rules*, MSTAssignment-related tests, and `useDataImporterActionGuards` against the new DOM and async storage/dialog flows.
 - Verify: JSON-redirected Vitest targeted commit verify reported `success=True`, `passed=56`, `failed=0`, `errors=0` for modified test files; prior batch evidence: KPIAdjustments 36 pass, KPICalculator 5 pass, reporting* 76 pass, rules* 41 pass, useDataImporterActionGuards 3 pass.
-- Risk: `useDataImporter*` batch still has `99 pass / 21 fail / 0 unhandled errors`; failures are mostly old sync assertions around async hook actions/AppDialog confirm flows.
-- Decision: commit stabilized batch now so tomorrow can continue from the smaller remaining fail cluster without re-running large verbose logs.
-- Next: continue from `useDataImporterImportFlow`, `useDataImporterRowMutations`, `useDataImporterSavedSession`, and `useDataImporterLicenseExclusions`; keep using JSON redirect + short parser to avoid context-window overflow.
+- Risk: Slice 8.2 component tests, 8.3 visual regression, 8.4 a11y, va 8.5 performance chua bat dau; Slice 8.1 test stabilization da xanh theo known failing clusters.
+- Decision: close Slice 8.1 scope after final targeted 8.1 verify; continue Slice 8.2+ in a separate slice.
+- Next: run/keep final JSON-redirected 8.1 verification evidence, then commit this final Slice 8.1 test-fix batch.
 
 ### Checkpoint: cng-sr1.5 / legacy-test-and-orphan-helper-migration complete
 

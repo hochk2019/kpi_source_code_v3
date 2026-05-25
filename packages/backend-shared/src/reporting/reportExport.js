@@ -13,9 +13,13 @@ import { computeLicenseSnapshot } from '../../../../shared/licenseSummary.js';
 
 
 
+// In-memory cache for generated report buffers. Reduces latency for repeated
+// requests (e.g., user re-downloading the same report within 5 minutes).
+// Eviction: TTL-based (5 min) + entry count cap (20) + byte size cap (100 MB).
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
 
 const MAX_CACHE_ENTRIES = 20;
+const MAX_CACHE_BYTE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 
 
@@ -135,9 +139,33 @@ function rememberCacheEntry(key, result, timestamp) {
 
   }
 
+  const newBuffer = Buffer.from(result.buffer);
+
+  let totalBytes = newBuffer.length;
+
+  for (const [, entry] of reportCache) {
+
+    totalBytes += entry.buffer.length;
+
+  }
+
+  while (totalBytes > MAX_CACHE_BYTE_SIZE && reportCache.size > 0) {
+
+    const oldestKey = reportCache.keys().next().value;
+
+    if (!oldestKey) break;
+
+    const removed = reportCache.get(oldestKey);
+
+    totalBytes -= removed?.buffer?.length ?? 0;
+
+    reportCache.delete(oldestKey);
+
+  }
+
   reportCache.set(key, {
 
-    buffer: Buffer.from(result.buffer),
+    buffer: newBuffer,
 
     filename: result.filename,
 

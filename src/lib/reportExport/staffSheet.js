@@ -1,7 +1,7 @@
 // reportExport/staffSheet.js
 // Staff detail and summary sheet exports
 
-import { requestExport, buildCompactExportPayload, normalizeText } from './core.js';
+import { requestExport, buildCompactExportPayload } from './core.js';
 
 /**
  * Export single staff detail report

@@ -74,6 +74,7 @@ export default function useDataImporterSavedSession({
 
     if (fileRef.current) fileRef.current.value = "";
     return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     defaultCoFilterMin,
     ensureCOFields,

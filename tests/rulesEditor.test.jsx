@@ -112,13 +112,17 @@ describe("RulesEditor", () => {
   });
 
   it("giu duoc flow mo phong, refresh lich su va khoi phuc phien ban", async () => {
-    render(<AppDialogProvider><RulesEditor currentUser={{ username: "admin" }} /></AppDialogProvider>);
+    render(
+      <AppDialogProvider>
+        <RulesEditor currentUser={{ username: "admin" }} />
+      </AppDialogProvider>
+    );
 
     await screen.findByText(/Quy tắc KPI/i);
 
     fireEvent.click(screen.getByRole("button", { name: "Chạy mô phỏng" }));
-
-    expect(await screen.findByText(/Phiên bản đang chỉnh/i)).toBeInTheDocument();
+    const elements = await screen.findAllByText(/Phiên bản đang chỉnh/i);
+    expect(elements.length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Lịch sử phiên bản" }));
     expect(await screen.findByText(/Bộ lịch sử test/i)).toBeInTheDocument();

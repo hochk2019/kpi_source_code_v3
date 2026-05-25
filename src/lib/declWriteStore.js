@@ -11,7 +11,6 @@ const declRowSchema = z.object({
   date: z.union([z.string(), z.date()]).optional(),
 });
 
-const importRowArraySchema = z.array(z.unknown());
 
 export function createDeclWriteStore({
   normalizeStr = defaultNormalizeStr,

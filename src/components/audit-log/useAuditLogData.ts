@@ -72,7 +72,7 @@ export function useAuditLogData(currentUser: AuthAccountView | null | undefined)
       }
       const data = await res.json();
       setBackupFiles(Array.isArray(data?.files) ? data.files : []);
-    } catch (e) {
+    } catch (_e) {
       setBackupFiles([]);
     }
   }, [canManageBackups]);

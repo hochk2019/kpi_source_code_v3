@@ -105,6 +105,15 @@ export class KpiAdjustmentsService {
       throw new KpiAdjustmentsHttpError(404, 'not_found', 'Không tìm thấy điểm KPI bổ sung.');
     }
 
+    const requestedStatus = normalizeStatus(payload.status);
+    if (
+      current.createdBy &&
+      current.createdBy === actor.username &&
+      (requestedStatus === 'approved' || requestedStatus === 'rejected')
+    ) {
+      throw new KpiAdjustmentsHttpError(403, 'forbidden', 'Bạn không thể tự duyệt điểm KPI do mình tạo.');
+    }
+
     const settings = await this.store.readSettings();
     const now = new Date();
     const record = buildStoredRecord({
@@ -115,8 +124,19 @@ export class KpiAdjustmentsService {
       now,
     });
 
-    const stored = await this.store.updateAdjustment(record);
-    return toOutputRecord(stored);
+    try {
+      const stored = await this.store.updateAdjustment(record);
+      return toOutputRecord(stored);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'version_conflict') {
+        throw new KpiAdjustmentsHttpError(
+          409,
+          'version_conflict',
+          'Điểm KPI bổ sung đã được chỉnh sửa bởi người khác. Vui lòng tải lại và thử lại.',
+        );
+      }
+      throw error;
+    }
   }
 
   private requireSubmitter(actor: KpiAdjustmentActor): void {
@@ -145,6 +165,9 @@ function buildStoredRecord(input: {
   if (!category) {
     throw new KpiAdjustmentsHttpError(400, 'invalid_request', 'Thiếu loại điểm KPI bổ sung.');
   }
+  if (settings.categories && Object.keys(settings.categories).length > 0 && !settings.categories[category]) {
+    throw new KpiAdjustmentsHttpError(400, 'invalid_request', `Loại điểm KPI "${category}" không hợp lệ.`);
+  }
 
   const month = normalizeMonth(payload.month ?? payload.period ?? current?.month);
   if (!month) {
@@ -158,6 +181,7 @@ function buildStoredRecord(input: {
     actor,
     settings,
     isCreate: !current,
+    note: typeof payload.note === 'string' ? payload.note : undefined,
   });
   const quantity = normalizeNumber(payload.quantity ?? current?.quantity ?? 1);
   const unitPoints = normalizeNumber(payload.unitPoints ?? current?.unitPoints ?? 0);
@@ -169,6 +193,9 @@ function buildStoredRecord(input: {
   const requestedTotal = normalizeOptionalNumber(payload.totalPoints);
   const totalPoints =
     requestedTotal !== undefined && actor.permissions.adjustOverridePoints ? roundPoints(requestedTotal) : computedTotal;
+  if (!Number.isFinite(totalPoints) || totalPoints < -10000 || totalPoints > 10000) {
+    throw new KpiAdjustmentsHttpError(400, 'invalid_request', 'Tổng điểm KPI bổ sung phải trong khoảng -10000 đến 10000.');
+  }
   const createdAt = current?.createdAt || nowIso;
   const statusChanged = current ? current.status !== status.status : true;
   const nextHistory = Array.isArray(current?.history) ? current!.history.slice() : [];
@@ -245,6 +272,7 @@ function buildStoredRecord(input: {
     approvedBy: nextApprovedBy,
     rejectedAt: nextRejectedAt,
     rejectedBy: nextRejectedBy,
+    version: (current?.version ?? 0) + 1,
   };
 }
 
@@ -254,6 +282,7 @@ function resolveNextStatus(input: {
   actor: KpiAdjustmentActor;
   settings: KpiAdjustmentSettingsDocument;
   isCreate: boolean;
+  note?: string;
 }) {
   const requested = normalizeStatus(input.requestedStatus) ?? input.currentStatus;
   const autoApproveEnabled = input.settings.autoApprove.enabled === true;
@@ -265,6 +294,7 @@ function resolveNextStatus(input: {
 
   if (input.isCreate && requested === 'pending' && autoApproveEnabled && !input.actor.permissions.adjustApprove) {
     const approvedBy = input.settings.autoApprove.updatedBy || 'auto-approve';
+    console.warn(`[kpi-adjustments] Auto-approve triggered: submitter="${input.actor.username}", approver="${approvedBy}"`);
     return {
       status: 'approved' as const,
       approvedAt: new Date().toISOString(),
@@ -300,7 +330,7 @@ function resolveNextStatus(input: {
       rejectedAt: statusChanged ? new Date().toISOString() : undefined,
       rejectedBy: statusChanged ? rejectedBy : undefined,
       statusActor: rejectedBy,
-      statusDetail: '',
+      statusDetail: input.note || '',
     };
   }
 

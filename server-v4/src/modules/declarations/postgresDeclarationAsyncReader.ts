@@ -108,6 +108,45 @@ export class PostgresDeclarationAsyncReader implements DeclarationAsyncReader {
 
     return this.fallbackReader.readDeclarationRows();
   }
+
+  async readDeclarationRowsByKeys(keys: string[]): Promise<unknown[]> {
+    if (!keys.length) {
+      return [];
+    }
+
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    for (const key of keys) {
+      const separatorIndex = key.lastIndexOf('_');
+      if (separatorIndex <= 0) continue;
+      const declarationNo = key.slice(0, separatorIndex);
+      const branchCode = key.slice(separatorIndex + 1);
+      conditions.push(`(d.declaration_no = $${paramIndex} AND d.branch_code = $${paramIndex + 1})`);
+      params.push(declarationNo, branchCode);
+      paramIndex += 2;
+    }
+
+    if (conditions.length === 0) {
+      return this.readDeclarationRows();
+    }
+
+    const whereClause = `WHERE d.deleted_at IS NULL AND (${conditions.join(' OR ')})`;
+    const sql = READ_CANONICAL_DECLARATION_ROWS_SQL.replace(
+      'WHERE d.deleted_at IS NULL',
+      whereClause,
+    );
+
+    try {
+      const result = await this.pool.query<CanonicalDeclarationRow>(sql, params);
+      return Array.isArray(result.rows)
+        ? result.rows.map((row) => buildCanonicalDeclaration(row))
+        : [];
+    } catch {
+      return this.readDeclarationRows();
+    }
+  }
 }
 
 function buildCanonicalDeclaration(row: CanonicalDeclarationRow): Record<string, unknown> {

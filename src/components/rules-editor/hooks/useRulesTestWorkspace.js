@@ -60,7 +60,7 @@ export default function useRulesTestWorkspace({ data = [], rule = null }) {
         await alert("Không tìm thấy tờ khai khớp với số đã nhập.");
       }
     },
-    [firstMatch, testSearch]
+    [firstMatch, testSearch, alert]
   );
 
   const pickedEntry = useMemo(

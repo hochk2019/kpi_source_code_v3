@@ -297,6 +297,7 @@ export default function useDataImporterFilterPresets({
         await alert(`Đã áp dụng bộ lọc "${preset.name}".`);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       actor,
       applyColumnConfig,
@@ -455,12 +456,14 @@ export default function useDataImporterFilterPresets({
     }
 
     applyPresetFilters(preset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyPresetFilters, savedPresets, selectedPresetId]);
 
   const handleSavePresetAsNew = useCallback(async () => {
     let presetName = selectedPreset ? `${selectedPreset.name} (bản sao)` : "Bộ lọc mới";
 
     if (typeof window !== "undefined") {
+      // TODO(a11y): Replace window.prompt with useAppDialog or custom PromptDialog
       const input = window.prompt("Đặt tên cho bộ lọc mới", presetName);
       if (input === null) {
         return;
@@ -494,6 +497,7 @@ export default function useDataImporterFilterPresets({
     } finally {
       setPresetSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     applyPresetFilters,
     buildFilterPresetPayload,
@@ -533,6 +537,7 @@ export default function useDataImporterFilterPresets({
     } finally {
       setPresetSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     applyPresetFilters,
     buildFilterPresetPayload,
@@ -578,6 +583,7 @@ export default function useDataImporterFilterPresets({
     } finally {
       setPresetSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedPresetId, deleteFilterPreset, resetPresetError, selectedPreset]);
 
   const handleRefreshPresetList = useCallback(() => {

@@ -26,6 +26,10 @@ export async function patchSharedSyncDeclarations(
   updates: readonly SharedSyncDeclarationUpdate[],
   actor: DeclarationActor,
 ): Promise<SharedSyncDeclarationPatchResult> {
+  if (!actor.permissions.importEdit && !actor.permissions.accountManage) {
+    throw new Error('Bạn không có quyền chỉnh sửa tờ khai.');
+  }
+
   const currentRows = await persistence.declarationsReader.readDeclarationRows();
   const rows = Array.isArray(currentRows) ? currentRows : [];
   const rowsByKey = new Map<string, Record<string, unknown>>();

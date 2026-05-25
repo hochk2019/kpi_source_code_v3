@@ -49,6 +49,12 @@ export class SqliteKpiAdjustmentsStore implements KpiAdjustmentsStore {
         throw new Error(`KPI adjustment "${record.id}" was not found in sqlite store.`);
       }
 
+      const expectedVersion = record.version ?? 1;
+      const currentVersion = rows[index].version ?? 1;
+      if (currentVersion !== expectedVersion) {
+        throw new Error('version_conflict');
+      }
+
       rows[index] = cloneRecord(record);
       this.writeAdjustmentRows(database, rows);
       return cloneRecord(record);
@@ -172,6 +178,7 @@ function normalizeStoredRecord(value: unknown): KpiAdjustmentStoredRecord | null
     approvedBy: normalizeOptionalText(record.approvedBy ?? record.approved_by),
     rejectedAt: normalizeOptionalText(record.rejectedAt ?? record.rejected_at),
     rejectedBy: normalizeOptionalText(record.rejectedBy ?? record.rejected_by),
+    version: normalizeNumber(record.version, 1) || 1,
   };
 }
 

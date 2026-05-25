@@ -1,6 +1,6 @@
 import type { Request, Response, Router } from 'express';
 
-import { DeclarationsController } from '../../modules/declarations/DeclarationsController.js';
+import { DeclarationsController } from '../../modules/declarations/declarationsController.js';
 
 type LegacyCompatImporterRouteWrapper = (
   method: 'GET' | 'POST' | 'PUT',

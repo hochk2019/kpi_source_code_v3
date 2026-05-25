@@ -3,6 +3,15 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 
 import useDataImporterImportFlow from "@/components/dataImporter/useDataImporterImportFlow.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  alert: vi.fn(() => Promise.resolve()),
+  confirm: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function createProps(overrides = {}) {
   return {
     fileRef: overrides.fileRef ?? { current: { value: "selected.xlsx" } },
@@ -92,6 +101,9 @@ function createProps(overrides = {}) {
     },
     toast: {
       error: vi.fn(),
+      success: vi.fn(),
+      sticky: vi.fn(() => "sticky-toast"),
+      dismiss: vi.fn(),
     },
     acceptedImportExtensions: [".xlsx", ".xlsm"],
     maxImportFileSizeBytes: 5 * 1024 * 1024,
@@ -102,7 +114,9 @@ function createProps(overrides = {}) {
 
 describe("useDataImporterImportFlow", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    dialogMocks.alert.mockResolvedValue();
+    dialogMocks.confirm.mockResolvedValue(true);
   });
 
   it("parses an accepted Excel file into preview-mode state", async () => {
@@ -141,7 +155,6 @@ describe("useDataImporterImportFlow", () => {
   });
 
   it("imports preview rows and refreshes saved data", async () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const props = createProps({
       mode: "preview",
       selectedFile: "imports.xlsx",
@@ -169,7 +182,7 @@ describe("useDataImporterImportFlow", () => {
     const { result } = renderHook(() => useDataImporterImportFlow(props));
 
     await act(async () => {
-      result.current.handleImport();
+      await result.current.handleImport();
     });
 
     expect(props.saveDeclRows).toHaveBeenCalledWith(
@@ -185,11 +198,10 @@ describe("useDataImporterImportFlow", () => {
     expect(props.loadSavedRows).toHaveBeenCalledWith({ bypassConfirm: true });
     expect(props.fetchAlerts).toHaveBeenCalledTimes(1);
     expect(props.fileRef.current.value).toBe("");
-    expect(alertSpy).toHaveBeenCalledWith("Import xong: thêm 1, cập nhật 2, bỏ qua 3 (khóa 1).");
+    expect(props.toast.success).toHaveBeenCalledWith("Import xong: thêm 1, cập nhật 2, bỏ qua 3 (khóa 1).");
   });
 
   it("blocks import when preview source is ECUS sync", async () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const props = createProps({
       mode: "preview",
       previewSource: "sync",
@@ -200,17 +212,16 @@ describe("useDataImporterImportFlow", () => {
     const { result } = renderHook(() => useDataImporterImportFlow(props));
 
     await act(async () => {
-      result.current.handleImport();
+      await result.current.handleImport();
     });
 
     expect(props.saveDeclRows).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith(
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
       'Bạn đang xem trước dữ liệu ECUS. Hãy dùng nút "Đồng bộ ngay" để đưa dữ liệu vào workspace.',
     );
   });
 
   it("blocks import when import preview has validation errors", async () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const props = createProps({
       mode: "preview",
       selectedFile: "imports.xlsx",
@@ -220,10 +231,80 @@ describe("useDataImporterImportFlow", () => {
     const { result } = renderHook(() => useDataImporterImportFlow(props));
 
     await act(async () => {
-      result.current.handleImport();
+      await result.current.handleImport();
     });
 
     expect(props.saveDeclRows).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith("Không thể kiểm tra file import. preview failed");
+    expect(dialogMocks.alert).toHaveBeenCalledWith("Không thể kiểm tra file import. preview failed");
+  });
+
+  it("blocks file upload when canUploadFiles is false", async () => {
+    const props = createProps({ canUploadFiles: false });
+    const { result } = renderHook(() => useDataImporterImportFlow(props));
+
+    await act(async () => {
+      await result.current.handleFileChange({ target: { files: [] } });
+    });
+
+    expect(dialogMocks.alert).toHaveBeenCalledWith(expect.stringContaining("chưa được cấp quyền"));
+  });
+
+  it("blocks file upload when isReadOnlyForEdits is true", async () => {
+    const props = createProps({ isReadOnlyForEdits: true });
+    const { result } = renderHook(() => useDataImporterImportFlow(props));
+
+    await act(async () => {
+      await result.current.handleFileChange({ target: { files: [] } });
+    });
+
+    expect(dialogMocks.alert).toHaveBeenCalledWith(expect.stringContaining("chỉ xem"));
+  });
+
+  it("rejects non-Excel file extensions", async () => {
+    const csvFile = new File(["a,b,c"], "data.csv", { type: "text/csv" });
+    const props = createProps({ canUploadFiles: true });
+    const { result } = renderHook(() => useDataImporterImportFlow(props));
+
+    await act(async () => {
+      await result.current.handleFileChange({ target: { files: [csvFile], value: "" } });
+    });
+
+    expect(props.toast.error).toHaveBeenCalledWith(expect.stringContaining("Excel"));
+  });
+
+  it("rejects files exceeding maxImportFileSizeBytes", async () => {
+    const bigFile = new File(
+      ["x".repeat(2000)],
+      "big.xlsx",
+      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    );
+    Object.defineProperty(bigFile, "size", { value: 2000 });
+    const props = createProps({ canUploadFiles: true, maxImportFileSizeBytes: 1000 });
+    const { result } = renderHook(() => useDataImporterImportFlow(props));
+
+    await act(async () => {
+      await result.current.handleFileChange({ target: { files: [bigFile], value: "" } });
+    });
+
+    expect(props.toast.error).toHaveBeenCalledWith(expect.stringContaining("vượt quá"));
+  });
+
+  it("processing lock prevents duplicate imports on rapid double-call", async () => {
+    const props = createProps({
+      mode: "preview",
+      selectedFile: "imports.xlsx",
+      effectivePreviewRows: [{ so_tk: "TK-001", date: "2025-01-01" }],
+      importPreview: { invalid: 0, inserted: 1, updated: 0 },
+      canOverwriteData: true,
+      overwrite: true,
+      isAdminRole: true,
+    });
+    const { result } = renderHook(() => useDataImporterImportFlow(props));
+
+    await act(async () => {
+      await Promise.all([result.current.handleImport(), result.current.handleImport()]);
+    });
+
+    expect(props.saveDeclRows).toHaveBeenCalledTimes(1);
   });
 });

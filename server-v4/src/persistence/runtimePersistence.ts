@@ -21,6 +21,9 @@ import type { DeclarationsStore } from '../modules/declarations/declarationsStor
 import { PostgresDeclarationAsyncReader } from '../modules/declarations/postgresDeclarationAsyncReader.js';
 import { PostgresDeclarationsStore } from '../modules/declarations/postgresDeclarationsStore.js';
 import { SqliteDeclarationsStore } from '../modules/declarations/sqliteDeclarationsStore.js';
+import type { DeclarationsImportJobStore } from '../modules/declarations/declarationsImportJobStore.js';
+import { PostgresDeclarationsImportJobStore } from '../modules/declarations/postgresDeclarationsImportJobStore.js';
+import { SqliteDeclarationsImportJobStore } from '../modules/declarations/sqliteDeclarationsImportJobStore.js';
 import type { HqAgenciesAsyncReader } from '../modules/hq-agencies/hqAgenciesAsyncReader.js';
 import { NoopHqAgenciesAsyncReader } from '../modules/hq-agencies/noopHqAgenciesAsyncReader.js';
 import { PostgresHqAgenciesAsyncReader } from '../modules/hq-agencies/postgresHqAgenciesAsyncReader.js';
@@ -65,6 +68,7 @@ export interface RuntimePersistence {
   authStore: AuthStore;
   declarationsReader: DeclarationAsyncReader;
   declarationsStore: DeclarationsStore;
+  declarationsImportJobStore: DeclarationsImportJobStore;
   hqAgenciesReader: HqAgenciesAsyncReader;
   hqAgenciesStore: HqAgenciesStore;
   kpiRulesReader: KpiRulesAsyncReader;
@@ -100,6 +104,7 @@ export function createRuntimePersistence(
     const authStore = new PostgresAuthStore(pool);
     const adjustmentsStore = new PostgresKpiAdjustmentsStore(pool);
     const declarationsStore = new PostgresDeclarationsStore(pool);
+    const declarationsImportJobStore = new PostgresDeclarationsImportJobStore(pool);
     const hqAgenciesStore = new PostgresHqAgenciesStore(pool);
     const kpiRulesStore = new PostgresKpiRulesStore(pool);
     const teamsStore = new PostgresTeamsStore(pool);
@@ -153,6 +158,7 @@ export function createRuntimePersistence(
       authStore,
       declarationsReader: postgresDeclarationsReader,
       declarationsStore,
+      declarationsImportJobStore,
       hqAgenciesReader: postgresHqAgenciesReader,
       hqAgenciesStore,
       kpiRulesReader: postgresKpiRulesReader,
@@ -175,6 +181,7 @@ export function createRuntimePersistence(
   const authStore = new SqliteAuthStore(dbFile);
   const adjustmentsStore = new SqliteKpiAdjustmentsStore(dbFile);
   const declarationsStore = new SqliteDeclarationsStore(dbFile);
+  const declarationsImportJobStore = new SqliteDeclarationsImportJobStore(dbFile);
   const hqAgenciesStore = new SqliteHqAgenciesStore(dbFile);
   const kpiRulesStore = new SqliteKpiRulesStore(dbFile);
   const teamsStore = new SqliteTeamsStore(dbFile);
@@ -194,6 +201,7 @@ export function createRuntimePersistence(
     authStore,
     declarationsReader,
     declarationsStore,
+    declarationsImportJobStore,
     hqAgenciesReader,
     hqAgenciesStore,
     kpiRulesReader,

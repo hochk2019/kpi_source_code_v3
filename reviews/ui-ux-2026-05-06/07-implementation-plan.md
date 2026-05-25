@@ -860,7 +860,7 @@ Compare với snapshot trước slice 1 (nếu có).
 - [x] New component tests added (ExportDropdown 9 tests, a11y 8 tests, all 58 component tests pass)
 - [x] 5 pages có visual snapshot baseline (visual-regression.spec.js created, needs --update-snapshots)
 - [x] 5 pages pass axe-core a11y (a11y.test.tsx: 8 pass, design system components)
-- [x] Lighthouse performance ≥ 80, accessibility ≥ 95
+- [~] Lighthouse performance ≥ 80, accessibility ≥ 95 (Bundle size verified; Lighthouse audit deferred — CLI not installed)
   - Bundle size: main index 48 kB gzipped ✅ (target ≤ 500 kB)
   - Code splitting: 39 lazy-loaded chunks, largest page chunk 73 kB gzipped
   - Lighthouse CLI not installed — run manually: `npx lighthouse http://localhost:4173`

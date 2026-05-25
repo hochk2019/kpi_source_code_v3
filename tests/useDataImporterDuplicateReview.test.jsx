@@ -3,6 +3,14 @@ import { act, renderHook } from "@testing-library/react";
 
 import useDataImporterDuplicateReview from "@/components/dataImporter/useDataImporterDuplicateReview.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  alert: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function createGroup(rawPrefix, keys, keeperKey = keys[0]) {
   return {
     rawPrefix,
@@ -46,7 +54,8 @@ function createProps(overrides = {}) {
 
 describe("useDataImporterDuplicateReview", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    dialogMocks.alert.mockResolvedValue();
   });
 
   it("builds default duplicate plan state and updates keeper-driven merges", () => {
@@ -97,7 +106,7 @@ describe("useDataImporterDuplicateReview", () => {
     expect(result.current.duplicateReviewConfirmed).toBe(false);
   });
 
-  it("applies delete and review plans, persists rows, and refreshes alert state", () => {
+  it("applies delete and review plans, persists rows, and refreshes alert state", async () => {
     const props = createProps({
       duplicate11Details: [
         createGroup("grp-delete", ["row-1", "row-2"]),
@@ -113,7 +122,6 @@ describe("useDataImporterDuplicateReview", () => {
         delete row.duplicate_review_pending;
       }),
     });
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { result } = renderHook(() => useDataImporterDuplicateReview(props));
 
     act(() => {
@@ -122,8 +130,8 @@ describe("useDataImporterDuplicateReview", () => {
       result.current.handleChangeDuplicateNote("grp-review", "Can review");
     });
 
-    act(() => {
-      result.current.handleConfirmDuplicateRemoval();
+    await act(async () => {
+      await result.current.handleConfirmDuplicateRemoval();
     });
 
     expect(props.saveDeclRows).toHaveBeenCalledWith(
@@ -161,8 +169,70 @@ describe("useDataImporterDuplicateReview", () => {
     );
     expect(props.loadSavedRows).toHaveBeenCalledWith({ bypassConfirm: true });
     expect(props.fetchAlerts).toHaveBeenCalledTimes(1);
-    expect(alertSpy).toHaveBeenCalledWith(
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
       "Đã xóa 1 bản ghi trong 1 nhóm, 1 nhóm được đánh dấu cần rà soát."
     );
+  });
+
+  it("blocks duplicate deletion when isReadOnlyForEdits", async () => {
+    const props = createProps({ isReadOnlyForEdits: true });
+    const { result } = renderHook(() => useDataImporterDuplicateReview(props));
+
+    await act(async () => {
+      await result.current.handleDeleteDuplicates11();
+    });
+
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
+      expect.stringContaining("không có quyền"),
+    );
+    expect(result.current.duplicateReviewOpen).toBe(false);
+  });
+
+  it("blocks duplicate deletion when mode is source", async () => {
+    const props = createProps({ mode: "source" });
+    const { result } = renderHook(() => useDataImporterDuplicateReview(props));
+
+    await act(async () => {
+      await result.current.handleDeleteDuplicates11();
+    });
+
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
+      expect.stringContaining("Chỉ có thể"),
+    );
+    expect(result.current.duplicateReviewOpen).toBe(false);
+  });
+
+  it("blocks duplicate deletion when duplicate11Details is empty", async () => {
+    const props = createProps({ duplicate11Details: [] });
+    const { result } = renderHook(() => useDataImporterDuplicateReview(props));
+
+    await act(async () => {
+      await result.current.handleDeleteDuplicates11();
+    });
+
+    expect(dialogMocks.alert).toHaveBeenCalledWith(
+      expect.stringContaining("Không có nhóm"),
+    );
+    expect(result.current.duplicateReviewOpen).toBe(false);
+  });
+
+  it("handleCloseDuplicateReview resets both flags to false", () => {
+    const props = createProps();
+    const { result } = renderHook(() => useDataImporterDuplicateReview(props));
+
+    act(() => {
+      result.current.handleDeleteDuplicates11();
+      result.current.setDuplicateReviewConfirmed(true);
+    });
+
+    expect(result.current.duplicateReviewOpen).toBe(true);
+    expect(result.current.duplicateReviewConfirmed).toBe(true);
+
+    act(() => {
+      result.current.handleCloseDuplicateReview();
+    });
+
+    expect(result.current.duplicateReviewOpen).toBe(false);
+    expect(result.current.duplicateReviewConfirmed).toBe(false);
   });
 });

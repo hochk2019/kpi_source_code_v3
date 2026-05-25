@@ -3,7 +3,7 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import ConflictResolutionDialog from "../src/components/ConflictResolutionDialog.jsx";
 
 describe("ConflictResolutionDialog", () => {

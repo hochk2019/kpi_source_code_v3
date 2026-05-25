@@ -95,6 +95,7 @@ export default function useDataImporterSavedEdits({
       console.error("Không thể lưu cập nhật hàng loạt", error);
       toast?.error?.(error?.message || "Không thể lưu cập nhật hàng loạt. Vui lòng thử lại.");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     fetchAlerts,
@@ -190,6 +191,7 @@ export default function useDataImporterSavedEdits({
       }));
       toast?.error?.(fallbackMessage);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     ensureCOFields,

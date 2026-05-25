@@ -84,6 +84,7 @@ export default function useDataImporterSelectionBulkActions({
     summarizeLicenseSnapshot,
     xlsx,
     xlsxLoader,
+    alert,
   ]);
 
   const selectionActionsProps = {

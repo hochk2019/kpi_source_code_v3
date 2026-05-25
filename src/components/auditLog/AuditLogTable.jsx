@@ -4,7 +4,7 @@
 import React from 'react';
 
 export default function AuditLogTable({
-  logs,
+  _logs,
   filteredLogs,
   isLoading,
   formatTime,

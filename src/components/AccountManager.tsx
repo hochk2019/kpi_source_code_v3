@@ -493,7 +493,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
 
       role: normalized,
 
-      permissions: getPermissionTemplate(normalized as any),
+      permissions: getPermissionTemplate(normalized as "admin" | "operator"),
 
     }));
 
@@ -729,6 +729,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
 
     },
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [setAccountPending]
 
   );
@@ -765,6 +766,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
 
     },
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [accounts]
 
   );
@@ -791,6 +793,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
 
     },
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
 
   );
@@ -819,6 +822,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
 
     },
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
 
   );

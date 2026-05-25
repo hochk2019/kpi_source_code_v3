@@ -38,6 +38,32 @@ const importSearchQuerySchema = z.object({
   ),
 });
 
+const importSearchFilterSchema = z.object({
+  query: z.union([z.string(), z.array(z.string())]).optional(),
+  q: z.union([z.string(), z.array(z.string())]).optional(),
+  mst: z.string().optional(),
+  company: z.string().optional(),
+  statuses: z.union([z.array(z.string()), z.string()]).optional(),
+  status: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  range: z.object({ from: z.string().optional(), to: z.string().optional() }).optional(),
+  noStaff: z.union([z.boolean(), z.string()]).optional(),
+  filterNoStaff: z.union([z.boolean(), z.string()]).optional(),
+  noTeam: z.union([z.boolean(), z.string()]).optional(),
+  filterNoTeam: z.union([z.boolean(), z.string()]).optional(),
+  duplicate: z.union([z.boolean(), z.string()]).optional(),
+  filterDuplicate11: z.union([z.boolean(), z.string()]).optional(),
+  coMode: z.string().optional(),
+  coMin: z.coerce.number().optional(),
+  coThreshold: z.coerce.number().optional(),
+  coFilterMin: z.coerce.number().optional(),
+  includeDeleted: z.union([z.boolean(), z.string()]).optional(),
+  showDeleted: z.union([z.boolean(), z.string()]).optional(),
+  withDeleted: z.union([z.boolean(), z.string()]).optional(),
+  include_deleted: z.union([z.boolean(), z.string()]).optional(),
+}).passthrough();
+
 const deletedDeclarationsQuerySchema = z.object({
   from: z.string().trim().optional(),
   to: z.string().trim().optional(),
@@ -101,6 +127,7 @@ const ecusImportCommitBodySchema = ecusImportPreviewBodySchema.extend({
   ),
   actor: z.string().trim().optional(),
   reason: z.string().trim().optional(),
+  previewHash: z.string().trim().optional(),
   async: z.boolean().optional().default(false),
 });
 
@@ -162,8 +189,9 @@ export class DeclarationsController extends BaseController {
         page: pickQueryValue(req.query.page),
         pageSize: pickQueryValue(req.query.pageSize),
       });
+      const filters = importSearchFilterSchema.parse(req.query ?? {});
       const result = await this.declarationsService.searchImportDeclarations({
-        filters: req.query ?? {},
+        filters,
         page: query.page,
         pageSize: query.pageSize,
       });
@@ -180,8 +208,9 @@ export class DeclarationsController extends BaseController {
         page: pickQueryValue(req.query.page),
         pageSize: pickQueryValue(req.query.pageSize),
       });
+      const filters = importSearchFilterSchema.parse(req.query ?? {});
       const result = await this.declarationsService.searchImportDeclarations({
-        filters: req.query ?? {},
+        filters,
         page: query.page,
         pageSize: query.pageSize,
       });
@@ -271,11 +300,12 @@ export class DeclarationsController extends BaseController {
       const actor = await readEcusBridgeActor(req, this.authStore);
       const payload = ecusImportCommitBodySchema.parse(req.body ?? {});
       if (payload.async) {
-        const job = this.declarationsImportJobService.createCommitJob(actor, {
+        const job = await this.declarationsImportJobService.createCommitJob(actor, {
           rawRows: payload.rawRows,
           fetchedTotal: payload.fetchedTotal,
           actor: payload.actor,
           reason: payload.reason,
+          previewHash: payload.previewHash,
           rangeInput: payload.range ?? { from: payload.from, to: payload.to },
           includeTaxCodes: payload.includeTaxCodes,
           excludeTaxCodes: payload.excludeTaxCodes,
@@ -292,6 +322,7 @@ export class DeclarationsController extends BaseController {
           fetchedTotal: payload.fetchedTotal,
           actor: payload.actor,
           reason: payload.reason,
+          previewHash: payload.previewHash,
           rangeInput: payload.range ?? { from: payload.from, to: payload.to },
           includeTaxCodes: payload.includeTaxCodes,
           excludeTaxCodes: payload.excludeTaxCodes,
@@ -312,7 +343,7 @@ export class DeclarationsController extends BaseController {
         throw new DeclarationsHttpError(400, 'invalid_request', 'Thiếu jobId đồng bộ ECUS.');
       }
 
-      const job = this.declarationsImportJobService.readJob(actor, jobId);
+      const job = await this.declarationsImportJobService.readJob(actor, jobId);
       if (!job) {
         throw new DeclarationsHttpError(404, 'not_found', 'Không tìm thấy job đồng bộ ECUS.');
       }

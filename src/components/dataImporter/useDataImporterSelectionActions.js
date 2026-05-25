@@ -59,6 +59,7 @@ export default function useDataImporterSelectionActions({
         return [...prev, key];
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       editingRestrictionMessage,
       isReadOnlyForEdits,
@@ -87,6 +88,7 @@ export default function useDataImporterSelectionActions({
 
     setSelectedKeys(filteredKeys);
     setPage(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredKeys, selectionEnabled, setPage, setSelectedKeys]);
 
   return {

@@ -6,6 +6,8 @@ import { SqliteKpiAdjustmentsStore } from "../../server-v4/src/modules/kpi-adjus
 import { PostgresDeclarationAsyncReader } from "../../server-v4/src/modules/declarations/postgresDeclarationAsyncReader.ts";
 import { PostgresDeclarationsStore } from "../../server-v4/src/modules/declarations/postgresDeclarationsStore.ts";
 import { SqliteDeclarationsStore } from "../../server-v4/src/modules/declarations/sqliteDeclarationsStore.ts";
+import { PostgresDeclarationsImportJobStore } from "../../server-v4/src/modules/declarations/postgresDeclarationsImportJobStore.ts";
+import { SqliteDeclarationsImportJobStore } from "../../server-v4/src/modules/declarations/sqliteDeclarationsImportJobStore.ts";
 import { PostgresHqAgenciesAsyncReader } from "../../server-v4/src/modules/hq-agencies/postgresHqAgenciesAsyncReader.ts";
 import { PostgresHqAgenciesStore } from "../../server-v4/src/modules/hq-agencies/postgresHqAgenciesStore.ts";
 import { SqliteHqAgenciesStore } from "../../server-v4/src/modules/hq-agencies/sqliteHqAgenciesStore.ts";
@@ -34,6 +36,7 @@ describe("server-v4 runtime persistence", () => {
     expect(persistence.adjustmentsStore).toBeInstanceOf(SqliteKpiAdjustmentsStore);
     expect(persistence.declarationsReader.getSourceKind()).toBe("dual-write");
     expect(persistence.declarationsStore).toBeInstanceOf(SqliteDeclarationsStore);
+    expect(persistence.declarationsImportJobStore).toBeInstanceOf(SqliteDeclarationsImportJobStore);
     expect(persistence.hqAgenciesReader.getSourceKind()).toBe("dual-write");
     expect(persistence.hqAgenciesStore).toBeInstanceOf(SqliteHqAgenciesStore);
     expect(persistence.kpiRulesReader.getSourceKind()).toBe("dual-write");
@@ -84,6 +87,7 @@ describe("server-v4 runtime persistence", () => {
     expect(persistence.adjustmentsStore).toBeInstanceOf(PostgresKpiAdjustmentsStore);
     expect(persistence.declarationsReader).toBeInstanceOf(PostgresDeclarationAsyncReader);
     expect(persistence.declarationsStore).toBeInstanceOf(PostgresDeclarationsStore);
+    expect(persistence.declarationsImportJobStore).toBeInstanceOf(PostgresDeclarationsImportJobStore);
     expect(persistence.hqAgenciesReader).toBeInstanceOf(PostgresHqAgenciesAsyncReader);
     expect(persistence.hqAgenciesStore).toBeInstanceOf(PostgresHqAgenciesStore);
     expect(persistence.kpiRulesReader).toBeInstanceOf(PostgresKpiRulesAsyncReader);

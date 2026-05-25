@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   normalizeDeclarationNumber,
   normalizeMst,
@@ -54,12 +55,14 @@ export type DeclarationsImportPreviewResponse = {
   limited: boolean;
   fetched: number;
   range: DeclarationImportRange;
+  previewHash: string;
 };
 
 export type DeclarationsImportCommitRequest = ImportPayload & {
   fetchedTotal?: number;
   actor?: string;
   reason?: string;
+  previewHash?: string;
 };
 
 export type DeclarationsImportCommitResponse = {
@@ -130,6 +133,7 @@ export class DeclarationsImportService {
       limited: source.limited || Boolean(limit && plan.previewRows.length > limit),
       fetched: source.fetched,
       range: source.range,
+      previewHash: computeRawRowsHash(source.rawRows),
     };
   }
 
@@ -139,13 +143,24 @@ export class DeclarationsImportService {
   ): Promise<DeclarationsImportCommitResponse> {
     this.requireSyncManage(actor);
     const source = await this.resolveImportSource(payload);
+
+    if (payload.previewHash) {
+      const currentHash = computeRawRowsHash(source.rawRows);
+      if (currentHash !== payload.previewHash) {
+        throw new DeclarationsHttpError(
+          409,
+          'preview_stale',
+          'Dữ liệu ECUS đã thay đổi kể từ khi xem trước. Vui lòng xem lại trước khi đồng bộ.',
+        );
+      }
+    }
     const plan = await this.buildImportPlan({
       ...payload,
       rawRows: source.rawRows,
       rangeInput: source.range,
     });
     const runAt = new Date().toISOString();
-    const commitActor = normalizeStr(payload.actor) || actor.username || 'ecus-bridge-service';
+    const commitActor = actor.username || 'ecus-bridge-service';
     const reason = normalizeStr(payload.reason) || 'manual';
     const fetchedTotal = Number.isFinite(Number(payload.fetchedTotal))
       ? Number(payload.fetchedTotal)
@@ -212,11 +227,16 @@ export class DeclarationsImportService {
   }
 
   private async buildImportPlan(payload: ImportPayload): Promise<ImportPlan> {
+    const syncConfig = await this.store.readEcusSyncConfig().catch(() => null);
+    const preferMonthFirst = syncConfig?.preferMonthFirst === true;
     const rawRows = Array.isArray(payload.rawRows) ? payload.rawRows : [];
     const range = normalizeRangeInput(payload.rangeInput);
     const includeSet = new Set(normalizeTaxCodeList(payload.includeTaxCodes));
     const excludeSet = new Set(normalizeTaxCodeList(payload.excludeTaxCodes));
-    const existingRows = await this.repository.listDeclarations();
+    const targetKeys = extractKeysFromRawRows(rawRows, { preferMonthFirst });
+    const existingRows = targetKeys.length > 0
+      ? await this.repository.listDeclarationsByKeys(targetKeys)
+      : await this.repository.listDeclarations();
     const workingByKey = new Map(existingRows.map((row) => [row.key, cloneRecord(row)]));
     const previewRows: DeclarationsImportPreviewRow[] = [];
     const commitEntries: DeclarationImportCommitEntry[] = [];
@@ -226,7 +246,7 @@ export class DeclarationsImportService {
     let updated = 0;
 
     for (const rawRow of rawRows) {
-      const mapped = mapImportedDeclaration(rawRow);
+      const mapped = mapImportedDeclaration(rawRow, { preferMonthFirst });
       if (!mapped || shouldSkipByTaxCode(mapped.mst, includeSet, excludeSet)) {
         skipped += 1;
         continue;
@@ -302,7 +322,7 @@ export class DeclarationsImportService {
   }
 }
 
-function mapImportedDeclaration(input: unknown): DeclarationRecord | null {
+function mapImportedDeclaration(input: unknown, options?: { preferMonthFirst?: boolean }): DeclarationRecord | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return null;
   }
@@ -312,7 +332,7 @@ function mapImportedDeclaration(input: unknown): DeclarationRecord | null {
   const soTkRaw = normalizeStr(getField('so_tk'));
   const soTk = normalizeDeclarationNumber(soTkRaw);
   const nhanh = normalizeStr(getField('nhanh'));
-  const date = toIsoDate(getField('date'));
+  const date = toIsoDate(getField('date'), { preferMonthFirst: options?.preferMonthFirst });
 
   if (!soTk || !date) {
     return null;
@@ -774,7 +794,7 @@ function isEqualValue(left: unknown, right: unknown): boolean {
 }
 
 function cloneRecord<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
+  return structuredClone(value);
 }
 
 function toFiniteInteger(value: unknown): number {
@@ -793,4 +813,20 @@ function isEmptyValue(value: unknown): boolean {
     return value.length === 0;
   }
   return false;
+}
+
+function computeRawRowsHash(rawRows: unknown[]): string {
+  const normalized = JSON.stringify(rawRows ?? []);
+  return createHash('sha256').update(normalized).digest('hex').slice(0, 32);
+}
+
+function extractKeysFromRawRows(rawRows: unknown[], options?: { preferMonthFirst?: boolean }): string[] {
+  const keys: string[] = [];
+  for (const rawRow of rawRows) {
+    const mapped = mapImportedDeclaration(rawRow, options);
+    if (mapped?.key) {
+      keys.push(mapped.key);
+    }
+  }
+  return keys;
 }

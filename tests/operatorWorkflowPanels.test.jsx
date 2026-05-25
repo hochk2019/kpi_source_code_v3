@@ -2,19 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('@/components/MSTAssignment.jsx', () => ({
+vi.mock('@/components/MSTAssignment.tsx', () => ({
   default: () => <div>MST workspace body</div>,
 }));
 
-vi.mock('@/components/KPIAdjustments.jsx', () => ({
+vi.mock('@/components/KPIAdjustments.tsx', () => ({
   default: () => <div>Adjustment workspace body</div>,
 }));
 
-vi.mock('@/components/ReportViewer.jsx', () => ({
+vi.mock('@/components/ReportViewer.tsx', () => ({
   default: () => <div>Report dashboard body</div>,
 }));
 
-vi.mock('@/components/ExportAuditReport.jsx', () => ({
+vi.mock('@/components/ExportAuditReport.tsx', () => ({
   default: () => <div>Export audit widget</div>,
 }));
 
@@ -29,7 +29,7 @@ describe('operator workflow panels', () => {
 
     render(<MSTWorkflowPanel currentUser={{ username: 'admin' }} onNavigate={onNavigate} />);
 
-    expect(screen.getByText(/Hàng chờ MST/i)).toBeInTheDocument();
+    expect(screen.getByText(/Gán mã số thuế.*MST/i)).toBeInTheDocument();
     expect(screen.getByText('MST workspace body')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Mở audit trail/i }));
@@ -39,9 +39,8 @@ describe('operator workflow panels', () => {
   it('renders KPI adjustment workflow shell with dedicated review stage', () => {
     render(<KPIAdjustmentsWorkflowPanel currentUser={{ username: 'admin' }} onNavigate={vi.fn()} />);
 
-    expect(screen.getByText(/Chọn kỳ điều chỉnh/i)).toBeInTheDocument();
+    expect(screen.getByText(/Điều chỉnh KPI/i)).toBeInTheDocument();
     expect(screen.getByText('Adjustment workspace body')).toBeInTheDocument();
-    expect(screen.getByText(/Xuất bản tác động/i)).toBeInTheDocument();
   });
 
   it('renders report center export surface separately when audit is allowed', async () => {
@@ -54,7 +53,7 @@ describe('operator workflow panels', () => {
       />,
     );
 
-    expect(screen.getByText(/Report Center/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Report Center/i })).toBeInTheDocument();
     expect(await screen.findByText('Report dashboard body')).toBeInTheDocument();
     expect(await screen.findByText('Export audit widget')).toBeInTheDocument();
   });

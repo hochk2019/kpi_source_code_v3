@@ -1,10 +1,6 @@
 // rulesCalculation.js
 // KPI calculation logic - tier-based scoring
 
-function clone(obj) {
-  return JSON.parse(JSON.stringify(obj ?? null));
-}
-
 function addByTiers(numItems, tiers = [], isCumulative = false) {
   if (!numItems || !tiers?.length) return 0;
   const sorted = [...tiers].sort((a, b) => (a.from || 0) - (b.from || 0));
@@ -32,7 +28,7 @@ export function computeKPI(row, rulesInput) {
   const rules = rulesInput || {};
   const tiers = rules?.export?.tiers || rules?.import?.tiers || [];
   const isCumulative = rules?.cumulative || false;
-  const itemCount = Number(row.itemCount) || 0;
+  const itemCount = Number(row?.num_items ?? row?.muc_hang ?? row?.itemCount ?? 0) || 0;
   return addByTiers(itemCount, tiers, isCumulative);
 }
 

@@ -655,6 +655,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }: 
         return next;
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, actor, loadFromStore, refreshHistory, updateRows],
   );
 
@@ -673,6 +674,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }: 
     if (fileRef.current) fileRef.current.value = "";
 
     await refreshHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, loadFromStore, refreshHistory]);
 
   const handleImport = useCallback(async () => {
@@ -744,6 +746,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }: 
 
       setSelectedFile("");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReadOnly, updateRows]);
 
   const handleFilePick = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -814,6 +817,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }: 
 
       await alert("Không thể lưu cấu hình Đại lý HQ. Vui lòng thử lại.");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor, isReadOnly, rows, loadFromStore, refreshHistory]);
 
   const handleSaveRow = useCallback(
@@ -866,6 +870,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }: 
         await alert("Không thể lưu đại lý HQ. Vui lòng thử lại.");
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, isReadOnly, actor, loadFromStore, refreshHistory],
   );
 

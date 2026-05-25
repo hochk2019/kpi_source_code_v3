@@ -3,6 +3,14 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 
 import useDataImporterSavedSession from "@/components/dataImporter/useDataImporterSavedSession.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  confirm: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function createProps(overrides = {}) {
   const fileRef = overrides.fileRef ?? { current: { value: "selected.xlsx" } };
 
@@ -43,7 +51,8 @@ function createProps(overrides = {}) {
 
 describe("useDataImporterSavedSession", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    dialogMocks.confirm.mockResolvedValue(true);
   });
 
   it("loads saved rows and resets the saved-session UI state", async () => {
@@ -52,7 +61,7 @@ describe("useDataImporterSavedSession", () => {
 
     let loaded = false;
     await act(async () => {
-      loaded = result.current.loadSavedRows();
+      loaded = await result.current.loadSavedRows();
     });
 
     expect(loaded).toBe(true);
@@ -84,7 +93,7 @@ describe("useDataImporterSavedSession", () => {
   });
 
   it("prompts before discarding unsaved saved-mode edits", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    dialogMocks.confirm.mockResolvedValue(false);
     const props = createProps({
       hasUnsaved: true,
       mode: "saved",
@@ -93,11 +102,11 @@ describe("useDataImporterSavedSession", () => {
 
     let loaded = true;
     await act(async () => {
-      loaded = result.current.loadSavedRows();
+      loaded = await result.current.loadSavedRows();
     });
 
     expect(loaded).toBe(false);
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(dialogMocks.confirm).toHaveBeenCalledTimes(1);
     expect(props.setRawRows).not.toHaveBeenCalled();
     expect(props.fileRef.current.value).toBe("");
   });

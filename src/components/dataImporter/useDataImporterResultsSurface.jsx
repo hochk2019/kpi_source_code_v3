@@ -118,6 +118,7 @@ export default function useDataImporterResultsSurface({
       visible={Boolean(lastSyncSummary)}
       rangeLabel={lastSyncRangeLabel}
       runAtLabel={lastSyncRunAtLabel}
+      runAt={lastSyncSummary?.runAt || ""}
       fetched={lastSyncFetched}
       inserted={lastSyncInserted}
       updated={lastSyncUpdated}

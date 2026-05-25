@@ -5,6 +5,7 @@ export interface DeclarationAsyncReader {
   getHotPathKeys(): ReturnType<BusinessSnapshotReader['getHotPathKeys']>;
   getLegacyDbFile(): string | null;
   readDeclarationRows(): Promise<unknown[]>;
+  readDeclarationRowsByKeys?(keys: string[]): Promise<unknown[]>;
 }
 
 export function createDeclarationAsyncReader(reader: BusinessSnapshotReader): DeclarationAsyncReader {

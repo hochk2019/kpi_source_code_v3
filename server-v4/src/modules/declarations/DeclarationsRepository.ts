@@ -55,6 +55,24 @@ export class DeclarationsRepository {
     return applyFilters(sortDeclarations(sanitized), filters);
   }
 
+  async listDeclarationsByKeys(keys: string[]): Promise<DeclarationRecord[]> {
+    if (!keys.length) {
+      return [];
+    }
+
+    const keySet = new Set(keys);
+    const reader = this.reader;
+    const raw = typeof reader.readDeclarationRowsByKeys === 'function'
+      ? await reader.readDeclarationRowsByKeys(keys)
+      : await reader.readDeclarationRows();
+
+    const sanitized = Array.isArray(raw)
+      ? raw.map((row, index) => sanitizeDeclaration(row, index)).filter((row): row is DeclarationRecord => Boolean(row))
+      : [];
+
+    return sanitized.filter((row) => keySet.has(row.key));
+  }
+
   async searchDeclarations(rawFilters: unknown = {}): Promise<DeclarationRecord[]> {
     const raw = await this.reader.readDeclarationRows();
     const sanitized = Array.isArray(raw)

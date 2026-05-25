@@ -62,7 +62,7 @@ export function useAccountManager() {
       const updated = await reloadAccounts();
       setAccounts(updated);
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error(err);
       setError(err?.message || "Không thể tải danh sách tài khoản");
     }
@@ -325,7 +325,7 @@ export function useAccountManager() {
       });
       await refresh();
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error("Failed to update permissions:", err);
     } finally {
       setPendingAccounts((prev) => {
@@ -380,7 +380,7 @@ export function useAccountManager() {
       });
       await refresh();
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error("Failed to update account staff:", err);
     } finally {
       setPendingAccounts((prev) => {
@@ -398,7 +398,7 @@ export function useAccountManager() {
       await setAccountPassword({ username, password: newPassword });
       await refresh();
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error("Failed to reset password:", err);
       throw err;
     } finally {

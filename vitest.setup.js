@@ -133,6 +133,15 @@ Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
 });
 
+globalThis.fetch = vi.fn(() =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(""),
+  })
+);
+
 if (typeof globalThis.ResizeObserver === "undefined") {
   class ResizeObserverMock {
     observe() {}

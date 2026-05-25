@@ -7,7 +7,6 @@ export default function ReportExport({
   exporting,
   scheduleDraft,
   editingScheduleId,
-  scheduleReadModel,
   nextScheduleRun,
   displayReportSchedules,
   scheduleAggregateStatus,
@@ -19,15 +18,8 @@ export default function ReportExport({
   onDeleteSchedule,
   onResetScheduleForm,
   onExportStaffAll,
-  onExportStaffDetail,
   onExportTeamAll,
-  onExportTeamDetail,
   adjustmentsPanelProps,
-  exportColumns,
-  reportRange,
-  rules,
-  activeRule,
-  onRuleCollectionChange,
 }) {
   return (
     <div className="space-y-6">

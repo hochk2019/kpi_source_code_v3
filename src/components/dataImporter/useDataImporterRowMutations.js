@@ -88,6 +88,7 @@ export default function useDataImporterRowMutations({
       loadSavedRows?.();
       fetchAlerts?.();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     editingRestrictionMessage,
@@ -162,6 +163,7 @@ export default function useDataImporterRowMutations({
       loadSavedRows?.();
       fetchAlerts?.();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     editingRestrictionMessage,
@@ -201,6 +203,7 @@ export default function useDataImporterRowMutations({
     }
 
     deleteRowsByKeys(allowedKeys, { alreadyFiltered: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     deleteRowsByKeys,
     ensureEditableKeys,
@@ -240,6 +243,7 @@ export default function useDataImporterRowMutations({
     }
 
     hardDeleteRowsByKeys(allowedKeys, { alreadyFiltered: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     ensureHardDeleteKeys,
     hardDeleteRowsByKeys,
@@ -259,6 +263,11 @@ export default function useDataImporterRowMutations({
       return;
     }
 
+    if (row?.reviewed) {
+      await alert(reviewLockMessage || "Tờ khai đã được rà soát, không thể chỉnh sửa.");
+      return;
+    }
+
     if (!isRowEditable(row)) {
       if (editingRestrictionMessage) {
         await alert(editingRestrictionMessage);
@@ -268,6 +277,7 @@ export default function useDataImporterRowMutations({
 
     if (!await confirm("Đánh dấu xóa tờ khai này?", { variant: "destructive", confirmLabel: "Xóa" })) return;
     deleteRowsByKeys([keyOfRow(row)], { alreadyFiltered: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     deleteRowsByKeys,
     editingRestrictionMessage,
@@ -275,6 +285,7 @@ export default function useDataImporterRowMutations({
     isRowEditable,
     keyOfRow,
     mode,
+    reviewLockMessage,
   ]);
 
   const handleHardDeleteSingle = useCallback(async (row) => {
@@ -302,6 +313,7 @@ export default function useDataImporterRowMutations({
     }
 
     hardDeleteRowsByKeys(allowedKeys, { alreadyFiltered: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     ensureHardDeleteKeys,
     hardDeleteRowsByKeys,
@@ -352,6 +364,7 @@ export default function useDataImporterRowMutations({
         await alert("Không thể khôi phục tờ khai. Vui lòng thử lại.");
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     fetchAlerts,

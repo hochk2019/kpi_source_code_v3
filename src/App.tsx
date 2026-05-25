@@ -245,6 +245,7 @@ export default function App() {
 
     });
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth?.username]);
 
   const handleSkipToContent = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {

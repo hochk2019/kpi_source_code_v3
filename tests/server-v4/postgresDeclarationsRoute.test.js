@@ -174,6 +174,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -271,6 +272,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -382,6 +384,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -1101,6 +1104,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -1191,6 +1195,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -1264,6 +1269,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -1597,6 +1603,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -1704,6 +1711,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -1802,6 +1810,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         sourceKind: "relational-store",
         declarationsReader: runtime.reader,
         declarationsStore: runtime.store,
+        declarationsImportJobStore: createInMemoryJobStore(),
         authStore,
         dispose: async () => {},
       },
@@ -2165,6 +2174,16 @@ function createAccount({ username, role, name }) {
     teamId: null,
     teamName: null,
     updatedAt: "2026-03-14T00:00:00.000Z",
+  };
+}
+
+function createInMemoryJobStore() {
+  const jobs = new Map();
+  return {
+    async writeJob(job) { jobs.set(job.id, clone(job)); },
+    async readJob(id) { return jobs.get(id) ?? null; },
+    async listJobs(limit = 50) { return [...jobs.values()].slice(0, limit); },
+    async deleteJob(id) { jobs.delete(id); },
   };
 }
 

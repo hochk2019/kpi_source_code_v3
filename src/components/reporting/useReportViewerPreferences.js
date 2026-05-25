@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { QUICK_RANGE_OPTIONS, computeQuickRange } from "@/lib/reports.js";
 import {

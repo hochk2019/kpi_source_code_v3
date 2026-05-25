@@ -1,7 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 
 import useDataImporterSavedHighlights from "@/components/dataImporter/useDataImporterSavedHighlights.js";
+
+const dialogMocks = vi.hoisted(() => ({
+  alert: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
 
 function createHook(overrides = {}) {
   return renderHook(() =>
@@ -13,13 +21,17 @@ function createHook(overrides = {}) {
       setSelectedKeys: vi.fn(),
       setPage: vi.fn(),
       setFilterDuplicate11: vi.fn(),
-      alertFn: vi.fn(),
       ...overrides,
     })
   );
 }
 
 describe("useDataImporterSavedHighlights", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    dialogMocks.alert.mockResolvedValue();
+  });
+
   it("derives last sync totals and preview data from summary payload", () => {
     const lastSyncSummary = {
       rowsFetched: 10,
@@ -64,8 +76,7 @@ describe("useDataImporterSavedHighlights", () => {
     expect(setPage).toHaveBeenNthCalledWith(2, 1);
   });
 
-  it("alerts outside saved mode and toggles duplicate filter only when duplicates exist", () => {
-    const alertFn = vi.fn();
+  it("alerts outside saved mode and toggles duplicate filter only when duplicates exist", async () => {
     const setFilterDuplicate11 = vi.fn();
     const setPage = vi.fn();
 
@@ -73,30 +84,32 @@ describe("useDataImporterSavedHighlights", () => {
       mode: "preview",
       lastSyncSummary: { updatedKeys: ["row-1"] },
       coMismatchKeySet: new Set(["row-2"]),
-      alertFn,
       setPage,
       setFilterDuplicate11,
     });
 
-    notSaved.result.current.handleSelectUpdated();
-    notSaved.result.current.handleSelectCoMismatches();
-    notSaved.result.current.handleToggleDuplicateFilter();
+    await act(async () => {
+      await notSaved.result.current.handleSelectUpdated();
+      await notSaved.result.current.handleSelectCoMismatches();
+      await notSaved.result.current.handleToggleDuplicateFilter();
+    });
 
-    expect(alertFn).toHaveBeenCalledTimes(3);
+    expect(dialogMocks.alert).toHaveBeenCalledTimes(3);
     expect(setPage).not.toHaveBeenCalled();
     expect(setFilterDuplicate11).not.toHaveBeenCalled();
 
-    alertFn.mockClear();
+    dialogMocks.alert.mockClear();
     const saved = createHook({
       hasDuplicate11Rows: true,
-      alertFn,
       setPage,
       setFilterDuplicate11,
     });
 
-    saved.result.current.handleToggleDuplicateFilter();
+    await act(async () => {
+      await saved.result.current.handleToggleDuplicateFilter();
+    });
 
-    expect(alertFn).not.toHaveBeenCalled();
+    expect(dialogMocks.alert).not.toHaveBeenCalled();
     expect(setFilterDuplicate11).toHaveBeenCalledTimes(1);
     expect(typeof setFilterDuplicate11.mock.calls[0][0]).toBe("function");
     expect(setFilterDuplicate11.mock.calls[0][0](false)).toBe(true);

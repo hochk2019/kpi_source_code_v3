@@ -8,6 +8,14 @@ import {
 } from "@/components/dataImporter/dataImporterSyncQueue.js";
 import useDataImporterSync from "@/components/dataImporter/useDataImporterSync.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  confirm: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
 const ECUS_COMMIT_ROUTE = "/api/v4/declarations/imports/ecus-commit";
 const ECUS_COMMIT_JOB_ROUTE = "/api/v4/declarations/imports/ecus-jobs";
@@ -23,6 +31,7 @@ describe("useDataImporterSync", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    dialogMocks.confirm.mockResolvedValue(true);
     window.localStorage.clear();
   });
 
@@ -833,7 +842,7 @@ describe("useDataImporterSync", () => {
   });
 
   it("asks for confirmation before overwriting existing declarations from preview conflicts", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    dialogMocks.confirm.mockResolvedValue(false);
     const fetchWithAuth = vi.fn(async (url, options = {}) => {
       if (url === ECUS_CONFIG_ROUTE && !options.method) {
         return {
@@ -945,7 +954,7 @@ describe("useDataImporterSync", () => {
       await result.current.handleRunSync();
     });
 
-    expect(confirmSpy).toHaveBeenCalledWith(
+    expect(dialogMocks.confirm).toHaveBeenCalledWith(
       expect.stringContaining("1 tờ khai đã tồn tại sẽ bị cập nhật"),
     );
     expect(fetchWithAuth).not.toHaveBeenCalledWith(
@@ -1032,7 +1041,7 @@ describe("useDataImporterSync", () => {
 
   it("retries retriable ECUS commit failures and persists a resumable job snapshot", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    dialogMocks.confirm.mockResolvedValue(true);
 
     const refreshDeclRowsFromServer = vi.fn(async () => []);
     const loadSavedRows = vi.fn(() => true);

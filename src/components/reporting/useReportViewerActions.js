@@ -149,9 +149,9 @@ export function useReportViewerActions({
     }
   };
 
-  const withExporter = async (runner) => {
+  const withExporter = async (runner, label = "báo cáo") => {
     setExporting(true);
-    const stickyId = toast.sticky("Đang xuất báo cáo…", {
+    const stickyId = toast.sticky(`Đang xuất ${label}…`, {
       kind: "info",
       description: "Vui lòng chờ trong khi file Excel được tạo.",
     });
@@ -188,6 +188,7 @@ export function useReportViewerActions({
         rules: report.rules,
         columns: exportColumns,
       }),
+      "báo cáo tất cả nhân viên",
     );
   };
 
@@ -210,6 +211,7 @@ export function useReportViewerActions({
         rules: report.rules,
         columns: exportColumns,
       }),
+      `báo cáo nhân viên ${staffEntry?.name || ""}`,
     );
   };
 
@@ -231,6 +233,7 @@ export function useReportViewerActions({
         rules: report.rules,
         columns: exportColumns,
       }),
+      "báo cáo tất cả đội nhóm",
     );
   };
 
@@ -253,6 +256,7 @@ export function useReportViewerActions({
         rules: report.rules,
         columns: exportColumns,
       }),
+      `báo cáo đội nhóm ${teamEntry?.name || ""}`,
     );
   };
 

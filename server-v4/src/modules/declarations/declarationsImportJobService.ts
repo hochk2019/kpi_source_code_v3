@@ -6,6 +6,7 @@ import type {
   DeclarationsImportCommitResponse,
   DeclarationsImportService,
 } from './declarationsImportService.js';
+import type { DeclarationsImportJobStore, StoredImportJob } from './declarationsImportJobStore.js';
 
 const MAX_TRACKED_JOBS = 50;
 
@@ -30,28 +31,23 @@ export type DeclarationsImportJobRecord = {
   } | null;
 };
 
-type StoredJob = DeclarationsImportJobRecord & {
-  ownerUsername: string;
-};
-
 export class DeclarationsImportJobService {
-  private readonly jobs = new Map<string, StoredJob>();
+  constructor(
+    private readonly importService: DeclarationsImportService,
+    private readonly store?: DeclarationsImportJobStore,
+  ) {}
 
-  private readonly orderedIds: string[] = [];
-
-  constructor(private readonly importService: DeclarationsImportService) {}
-
-  createCommitJob(
+  async createCommitJob(
     actor: DeclarationActor,
     payload: DeclarationsImportCommitRequest,
-  ): DeclarationsImportJobRecord {
+  ): Promise<DeclarationsImportJobRecord> {
     const now = new Date().toISOString();
     const normalizedPayload = normalizeCommitPayload(payload);
     const normalizedRange = {
       from: normalizedPayload.rangeInput?.from ?? '',
       to: normalizedPayload.rangeInput?.to ?? '',
     };
-    const job: StoredJob = {
+    const job: StoredImportJob = {
       id: `ecus-sync-job-${randomUUID()}`,
       status: 'queued',
       actor: actor.username || 'ecus-bridge-service',
@@ -67,25 +63,38 @@ export class DeclarationsImportJobService {
       result: null,
       error: null,
       ownerUsername: actor.username || '',
+      commitPayload: normalizedPayload as unknown as Record<string, unknown>,
     };
 
-    this.writeJob(job);
+    await this.writeJob(job);
     void this.runCommitJob(job.id, actor, normalizedPayload);
     return toPublicJob(job);
   }
 
-  readJob(actor: DeclarationActor, jobId: string): DeclarationsImportJobRecord | null {
-    const job = this.jobs.get(jobId);
-    if (!job) {
-      return null;
-    }
-
-    // Sync managers can inspect all jobs to support handoff during operations.
+  async readJob(actor: DeclarationActor, jobId: string): Promise<DeclarationsImportJobRecord | null> {
     if (!actor.permissions?.syncManage) {
       return null;
     }
 
+    const job = await this.store?.readJob(jobId);
+    if (!job) {
+      return null;
+    }
+
     return toPublicJob(job);
+  }
+
+  async listJobs(actor: DeclarationActor): Promise<DeclarationsImportJobRecord[]> {
+    if (!actor.permissions?.syncManage) {
+      return [];
+    }
+
+    const jobs = await this.store?.listJobs(MAX_TRACKED_JOBS);
+    if (!jobs) {
+      return [];
+    }
+
+    return jobs.map(toPublicJob);
   }
 
   private async runCommitJob(
@@ -93,12 +102,12 @@ export class DeclarationsImportJobService {
     actor: DeclarationActor,
     payload: DeclarationsImportCommitRequest,
   ): Promise<void> {
-    const queued = this.jobs.get(jobId);
+    const queued = await this.store?.readJob(jobId);
     if (!queued) {
       return;
     }
 
-    this.writeJob({
+    await this.writeJob({
       ...queued,
       status: 'running',
       startedAt: new Date().toISOString(),
@@ -108,12 +117,12 @@ export class DeclarationsImportJobService {
 
     try {
       const result = await this.importService.commitEcusImport(actor, payload);
-      const current = this.jobs.get(jobId);
+      const current = await this.store?.readJob(jobId);
       if (!current) {
         return;
       }
 
-      this.writeJob({
+      await this.writeJob({
         ...current,
         status: 'completed',
         result,
@@ -122,12 +131,12 @@ export class DeclarationsImportJobService {
         updatedAt: new Date().toISOString(),
       });
     } catch (error) {
-      const current = this.jobs.get(jobId);
+      const current = await this.store?.readJob(jobId);
       if (!current) {
         return;
       }
 
-      this.writeJob({
+      await this.writeJob({
         ...current,
         status: 'failed',
         result: null,
@@ -140,22 +149,8 @@ export class DeclarationsImportJobService {
     }
   }
 
-  private writeJob(job: StoredJob): void {
-    this.jobs.set(job.id, job);
-
-    const existingIndex = this.orderedIds.findIndex((id) => id === job.id);
-    if (existingIndex >= 0) {
-      this.orderedIds.splice(existingIndex, 1);
-    }
-    this.orderedIds.unshift(job.id);
-
-    while (this.orderedIds.length > MAX_TRACKED_JOBS) {
-      const removed = this.orderedIds.pop();
-      if (!removed) {
-        break;
-      }
-      this.jobs.delete(removed);
-    }
+  private async writeJob(job: StoredImportJob): Promise<void> {
+    await this.store?.writeJob(job);
   }
 }
 
@@ -182,7 +177,7 @@ function normalizeCommitPayload(payload: DeclarationsImportCommitRequest): Decla
   };
 }
 
-function toPublicJob(job: StoredJob): DeclarationsImportJobRecord {
+function toPublicJob(job: StoredImportJob): DeclarationsImportJobRecord {
   return {
     id: job.id,
     status: job.status,

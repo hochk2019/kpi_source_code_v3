@@ -158,7 +158,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
         difference: baseline && preview ? preview.total - baseline.total : null,
       });
     } catch (error) {
-      console.error("Không thể mô phỏng KPI", error);
+      console.error("DEBUG: runSimulation Error:", error);
       setSimError(error?.message || "Không thể mô phỏng KPI với bộ quy tắc hiện tại.");
       setSimResult(null);
     } finally {
@@ -206,7 +206,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     } finally {
       setRestoringId("");
     }
-  }, [actor, collection.activeId, isReadOnly]);
+  }, [actor, collection.activeId, isReadOnly, alert, confirm]);
 
   const handleSelectTab = useCallback(async (ruleId) => {
     if (ruleId === activeTab) return;
@@ -222,7 +222,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     setRule(loadRules(ruleId));
     setApplyNow(false);
     setDirty(false);
-  }, [activeTab, dirty, isReadOnly]);
+  }, [activeTab, dirty, isReadOnly, confirm]);
 
   const updateRule = useCallback((updater) => {
     setRule((prev) => {
@@ -253,7 +253,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     await alert(
       `Đã lưu bộ quy tắc ${rule.name}${recalcFrom ? ` và tính lại KPI từ ${recalcFrom}` : ""}.`
     );
-  }, [actor, applyNow, collection.activeId, isReadOnly, rule]);
+  }, [actor, applyNow, collection.activeId, isReadOnly, rule, alert]);
 
   const handleReset = useCallback(() => {
     if (isReadOnly) return;
@@ -277,7 +277,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     const updated = setDefaultRule(rule.id, { actor });
     setCollection(updated);
     await alert(`Đã đặt "${rule.name}" làm bộ quy tắc mặc định.`);
-  }, [actor, collection.activeId, rule.id, rule.name]);
+  }, [actor, collection.activeId, rule.id, rule.name, alert]);
 
   const handleDeleteRule = useCallback(async () => {
     if (isReadOnly || !rule?.id) return;
@@ -314,7 +314,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
       console.error(error);
       await alert(error?.message || "Không thể xóa bộ quy tắc.");
     }
-  }, [actor, collection.sets.length, isReadOnly, rule]);
+  }, [actor, collection.sets.length, isReadOnly, rule, alert, confirm]);
 
   const exportCurrentRule = useCallback(() => {
     downloadJson(`${rule.name || "kpi_rules"}.json`, rule);
@@ -406,7 +406,7 @@ export default function useRulesEditorWorkflow({ canEdit = true, currentUser = n
     };
 
     reader.readAsText(file);
-  }, [actor, isReadOnly]);
+  }, [actor, isReadOnly, confirm]);
 
   const handleAddRule = useCallback(() => {
     if (isReadOnly) return;

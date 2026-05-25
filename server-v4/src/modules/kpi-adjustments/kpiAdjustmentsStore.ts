@@ -29,6 +29,7 @@ export type KpiAdjustmentStoredRecord = Record<string, unknown> & {
   approvedBy?: string;
   rejectedAt?: string;
   rejectedBy?: string;
+  version?: number;
 };
 
 export type KpiAdjustmentSettingsDocument = {

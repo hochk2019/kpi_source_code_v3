@@ -53,7 +53,7 @@ export default defineConfig({
     tailwindcss(),
     {
       name: 'strip-shebang',
-      transform(code, id) {
+      transform(code, _id) {
         if (code.startsWith('#!')) {
           return { code: code.replace(/^#!.*/, ''), map: null };
         }
@@ -87,34 +87,24 @@ export default defineConfig({
 
             }
 
-            if (id.includes('/react/')) {
-
-              return 'vendor-react';
-
+            if (id.includes('lucide-react')) {
+              return 'vendor-lucide';
             }
 
-            if (id.includes('@radix-ui')) {
-
+            if (id.includes('radix-ui')) {
               return 'vendor-radix';
-
             }
 
             if (id.includes('recharts')) {
-
-              return 'vendor-charts';
-
+              return 'vendor-recharts';
             }
 
-            if (id.includes('date-fns')) {
-
-              return 'vendor-date';
-
+            if (id.includes('zod') || id.includes('hookform')) {
+              return 'vendor-form';
             }
 
-            if (id.includes('xlsx')) {
-
-              return 'vendor-xlsx';
-
+            if (id.includes('framer-motion')) {
+              return 'vendor-motion';
             }
 
           }

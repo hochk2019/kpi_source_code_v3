@@ -22,7 +22,7 @@ import {
 
 import { addAdjustmentTotals, cloneAdjustmentTotals, createAdjustmentTotals } from "./kpiAdjustments.js";
 
-import { computeKPI, DEFAULT_RULES } from "./reportingKpiComputation.js";
+import { computeKPI, buildLicenseConfigMaps, DEFAULT_RULES } from "./reportingKpiComputation.js";
 
 import { formatDisplayDate } from "./format.js";
 
@@ -785,6 +785,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
   const rows = Array.isArray(rowsInput) ? rowsInput : [];
 
   const effectiveRules = rules && rules.groups ? rules : DEFAULT_RULES;
+  const cachedLicenseMaps = buildLicenseConfigMaps(effectiveRules?.license || {});
 
 
 
@@ -929,6 +930,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
   const preparedRows = [];
 
   const comparisonRows = [];
+  const adjustmentComparisonRows = [];
 
   const adjustmentMeta = {
 
@@ -986,9 +988,9 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
     // Always recompute so the report reflects the currently selected rules.
 
-    const baseKpi = computeKPI(sanitized, effectiveRules);
+    const baseKpi = computeKPI(sanitized, effectiveRules, cachedLicenseMaps);
 
-    const kpiValue = Math.round(baseKpi * 10) / 10;
+    const kpiValue = baseKpi;
 
     const exportFlag = isExportDecl(sanitized.so_tk, sanitized.loai_hinh);
 
@@ -1146,9 +1148,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
   if (Array.isArray(adjustments) && adjustments.length) {
 
-    const startDateObj = start ? new Date(start) : null;
-
-    const endDateObj = end ? new Date(end) : null;
+    const startMonth = start ? start.slice(0, 7) : null;
+    const endMonth = end ? end.slice(0, 7) : null;
 
     for (const adj of adjustments) {
 
@@ -1190,9 +1191,9 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
       if (Number.isNaN(candidateDate.getTime())) continue;
 
-      if (startDateObj && candidateDate < startDateObj) continue;
-
-      if (endDateObj && candidateDate > endDateObj) continue;
+      const candidateMonth = candidateDateStr.slice(0, 7);
+      if (startMonth && candidateMonth < startMonth) continue;
+      if (endMonth && candidateMonth > endMonth) continue;
 
 
 
@@ -1392,7 +1393,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
       adjustmentMeta.applied.push({ ...detailRow, staffKey: staffEntry.key });
 
-      comparisonRows.push({ date: candidateDateStr, num_items: 0, licenses: 0, kpi: totalPoints, isExport: false });
+      adjustmentComparisonRows.push({ date: candidateDateStr, num_items: 0, licenses: 0, kpi: totalPoints, isExport: false });
 
     }
 
@@ -1650,7 +1651,25 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
   const sortedTimeline = Array.from(timelineByMonth.values()).sort((a, b) => a.key.localeCompare(b.key));
 
-  const recentTimeline = sortedTimeline.slice(-6);
+  const filledTimeline = [];
+  if (sortedTimeline.length >= 2) {
+    const firstKey = sortedTimeline[0].key;
+    const lastKey = sortedTimeline[sortedTimeline.length - 1].key;
+    const dataByMonth = new Map(sortedTimeline.map((entry) => [entry.key, entry]));
+    let current = firstKey;
+    while (current <= lastKey) {
+      filledTimeline.push(
+        dataByMonth.get(current) || { key: current, label: formatMonthLabel(current), stats: createStats() },
+      );
+      const [y, m] = current.split('-').map(Number);
+      const nextDate = new Date(y, m, 1);
+      current = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
+    }
+  } else {
+    filledTimeline.push(...sortedTimeline);
+  }
+
+  const recentTimeline = filledTimeline.slice(-6);
 
   const trendSeries = recentTimeline.map((entry) => ({
 

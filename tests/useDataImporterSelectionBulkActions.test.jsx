@@ -3,6 +3,14 @@ import { act, renderHook } from "@testing-library/react";
 
 import useDataImporterSelectionBulkActions from "@/components/dataImporter/useDataImporterSelectionBulkActions.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  alert: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function createProps(overrides = {}) {
   return {
     deleteEnabled: true,
@@ -56,11 +64,11 @@ function createProps(overrides = {}) {
   };
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
 describe("useDataImporterSelectionBulkActions", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    dialogMocks.alert.mockResolvedValue();
+  });
   it("derives bulk-action capability flags from the current selection state", () => {
     const { result } = renderHook(() => useDataImporterSelectionBulkActions(createProps()));
 
@@ -72,7 +80,6 @@ describe("useDataImporterSelectionBulkActions", () => {
   });
 
   it("alerts instead of exporting when nothing is selected", async () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const props = createProps({ selectedKeys: [] });
     const { result } = renderHook(() => useDataImporterSelectionBulkActions(props));
 
@@ -80,7 +87,7 @@ describe("useDataImporterSelectionBulkActions", () => {
       await result.current.handleExportSelected();
     });
 
-    expect(alertSpy).toHaveBeenCalledWith("Hãy chọn tờ khai trước khi xuất Excel.");
+    expect(dialogMocks.alert).toHaveBeenCalledWith("Hãy chọn tờ khai trước khi xuất Excel.");
     expect(props.xlsx.writeFile).not.toHaveBeenCalled();
   });
 

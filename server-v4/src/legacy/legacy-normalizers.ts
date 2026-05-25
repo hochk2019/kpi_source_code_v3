@@ -55,7 +55,7 @@ export function normalizeDeclarationNumber(value: unknown, { length = 11 }: { le
   return digitsOnly;
 }
 
-export function toIsoDate(value: unknown): string {
+export function toIsoDate(value: unknown, options?: { preferMonthFirst?: boolean }): string {
   const raw = normalizeStr(value);
   if (!raw) {
     return '';
@@ -74,11 +74,28 @@ export function toIsoDate(value: unknown): string {
       return `${first}-${padDatePart(second)}-${padDatePart(third)}`;
     }
 
-    const day = Number.parseInt(first, 10);
-    const month = Number.parseInt(second, 10);
+    const firstNum = Number.parseInt(first, 10);
+    const secondNum = Number.parseInt(second, 10);
     const year = normalizeYearPart(third);
     if (!year) {
       return '';
+    }
+
+    let day: number;
+    let month: number;
+    let dayStr: string;
+    let monthStr: string;
+
+    if (options?.preferMonthFirst && firstNum >= 1 && firstNum <= 12) {
+      month = firstNum;
+      monthStr = first;
+      day = secondNum;
+      dayStr = second;
+    } else {
+      day = firstNum;
+      dayStr = first;
+      month = secondNum;
+      monthStr = second;
     }
 
     if (!Number.isFinite(day) || day < 1 || day > 31) {
@@ -89,7 +106,7 @@ export function toIsoDate(value: unknown): string {
       return '';
     }
 
-    return `${year}-${padDatePart(second)}-${padDatePart(first)}`;
+    return `${year}-${padDatePart(monthStr)}-${padDatePart(dayStr)}`;
   }
 
   const parsed = new Date(raw);

@@ -2,7 +2,7 @@ const SYNC_QUEUE_STORAGE_KEY = "data-importer-ecus-sync-job-v1";
 const READY_STATUS_VALUES = new Set(["ok", "ready", "healthy", "connected"]);
 const SYNC_HISTORY_LIMIT = 6;
 
-export const SYNC_RETRY_DELAYS_MS = [1500, 5000];
+export const SYNC_RETRY_DELAYS_MS = [1500, 3000, 6000, 12000, 24000];
 
 export const SYNC_PROGRESS_STEP_DEFS = [
   { key: "commit", label: "Đồng bộ dữ liệu từ ECUS" },

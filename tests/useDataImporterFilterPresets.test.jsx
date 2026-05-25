@@ -7,6 +7,15 @@ import {
   LEGACY_FILTER_STORAGE_KEY,
 } from "@/components/dataImporter/dataImporterConfig.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  alert: vi.fn(() => Promise.resolve()),
+  confirm: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function createPreset(overrides = {}) {
   return {
     id: "preset-1",
@@ -93,20 +102,22 @@ function createProps(overrides = {}) {
 describe("useDataImporterFilterPresets", () => {
   afterEach(() => {
     window.localStorage.clear();
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    dialogMocks.alert.mockResolvedValue();
+    dialogMocks.confirm.mockResolvedValue(true);
   });
 
-  it("applies the selected preset and persists the applied preset id", () => {
+  it("applies the selected preset and persists the applied preset id", async () => {
     const props = createProps();
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { result } = renderHook(() => useDataImporterFilterPresets(props));
 
-    act(() => {
+    await act(async () => {
       result.current.handleSelectPreset("preset-1");
     });
 
-    act(() => {
-      result.current.handleApplySelectedPreset();
+    await act(async () => {
+      await result.current.handleApplySelectedPreset();
     });
 
     expect(props.clearPresetError).toHaveBeenCalled();
@@ -135,13 +146,12 @@ describe("useDataImporterFilterPresets", () => {
     expect(result.current.selectedPresetId).toBe("preset-1");
     expect(result.current.appliedPreset?.id).toBe("preset-1");
     expect(window.localStorage.getItem(LAST_FILTER_PRESET_KEY)).toBe("preset-1");
-    expect(alertSpy).toHaveBeenCalledWith('Đã áp dụng bộ lọc "Preset A".');
+    expect(dialogMocks.alert).toHaveBeenCalledWith('Đã áp dụng bộ lọc "Preset A".');
   });
 
   it("saves the current filter state as a new preset and reapplies it silently", async () => {
     const props = createProps();
-    vi.spyOn(window, "prompt").mockReturnValue("Preset moi");
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    vi.stubGlobal("prompt", vi.fn(() => "Preset moi"));
     const { result } = renderHook(() => useDataImporterFilterPresets(props));
 
     await act(async () => {
@@ -180,7 +190,7 @@ describe("useDataImporterFilterPresets", () => {
     );
     expect(props.setQuery).toHaveBeenCalledWith("current query");
     expect(window.localStorage.getItem(LAST_FILTER_PRESET_KEY)).toBe("preset-new");
-    expect(alertSpy).toHaveBeenCalledWith('Đã lưu bộ lọc "Preset moi".');
+    expect(dialogMocks.alert).toHaveBeenCalledWith('Đã lưu bộ lọc "Preset moi".');
   });
 
   it("imports the legacy localStorage filter into a saved preset and applies it", async () => {

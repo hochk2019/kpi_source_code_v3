@@ -67,6 +67,7 @@ export default function useDataImporterReviewActions({
     setHasUnsaved?.(false);
     loadSavedRows?.({ bypassConfirm: true });
     fetchAlerts?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     canReviewAlerts,
@@ -132,6 +133,7 @@ export default function useDataImporterReviewActions({
     setHasUnsaved?.(false);
     loadSavedRows?.({ bypassConfirm: true });
     fetchAlerts?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     canReviewAlerts,

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { loginAsAdmin, openImportTab, openReportsTab, openTeamsTab, openHQTab, openAccountsTab } from './utils.js';
+import { loginAsAdmin, openImportTab, openReportsTab, openTeamsTab, openAccountsTab } from './utils.js';
 
 const PAGES = [
   { name: 'dashboard', setup: null },

@@ -1,5 +1,6 @@
 import express, { type Express, type Router } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 
 import { resolveServerV4Config, type ServerV4ConfigInput } from '../config/server-v4-config.js';
 import { buildAlertsRouter } from '../modules/alerts/alertsRoutes.js';
@@ -24,6 +25,7 @@ import {
 } from '../modules/filter-presets/filterPresetsRoutes.js';
 import type { EcusSqlHealthCheck } from '../modules/declarations/declarationsEcusSyncService.js';
 import type { CoDiscrepancyRunner } from '../modules/declarations/ecusCoDiscrepancyRunner.js';
+import type { DeclarationsImportJobStore } from '../modules/declarations/declarationsImportJobStore.js';
 import { buildHqAgenciesRouter } from '../modules/hq-agencies/hqAgenciesRoutes.js';
 import { buildKpiAdjustmentsRouter } from '../modules/kpi-adjustments/kpiAdjustmentsRoutes.js';
 import {
@@ -55,6 +57,7 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
     ecusImportRunner?: CoDiscrepancyRunner;
     coDiscrepancyRunner?: CoDiscrepancyRunner;
     sqlHealthCheck?: EcusSqlHealthCheck;
+    jobStore?: DeclarationsImportJobStore;
   };
   importerCompat?: {
     guardMode?: ImporterCompatGuardMode;
@@ -142,7 +145,9 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   ]);
 
   app.disable('x-powered-by');
-  app.use(cors({ origin: true, credentials: true }));
+  app.use(helmet());
+  const corsOrigins = resolveCorsOrigins();
+  app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(express.json());
   app.use(createCsrfProtection());
   app.locals.runtimePersistenceDispose = async () => {
@@ -278,7 +283,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
           declarationsReader: persistence.declarationsReader,
           kpiRulesReader: persistence.kpiRulesReader,
           teamsReader: persistence.teamsReader,
-        }, options.reporting),
+        }, options.reporting, persistence.authStore),
       );
       continue;
     }
@@ -291,7 +296,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
           persistence.declarationsReader,
           persistence.declarationsStore,
           persistence.authStore,
-          options.declarations,
+          { ...options.declarations, jobStore: persistence.declarationsImportJobStore },
         ),
       );
       continue;
@@ -332,4 +337,19 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   }
 
   return app;
+}
+
+function resolveCorsOrigins(): (string | RegExp)[] {
+  const raw = process.env.CORS_ORIGINS;
+  if (raw) {
+    return raw
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+  }
+
+  return [
+    /^http:\/\/localhost:\d+$/,
+    /^http:\/\/127\.0\.0\.1:\d+$/,
+  ];
 }

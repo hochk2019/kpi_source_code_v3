@@ -208,7 +208,7 @@ function resolveSecret(providedSecret) {
 
   }
 
-  return 'kpi-export-signature-secret';
+  throw new Error('Watermark signing secret not configured: set KPI_EXPORT_SIGNATURE_SECRET or KPI_SESSION_SECRET');
 
 }
 

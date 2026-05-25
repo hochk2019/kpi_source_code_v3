@@ -6,6 +6,8 @@ import Database from 'better-sqlite3';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { ADMIN_ROLE, getPermissionTemplate } from '../../packages/domain/src/accountRoles.js';
+
 import {
   writeAdjustmentRowsSnapshot,
   writeDeclarationRowsSnapshot,
@@ -16,6 +18,21 @@ import {
 } from '@kpi/backend-shared/persistence';
 import { buildV4App } from '../../server-v4/src/index.ts';
 
+function createAccount({ username, role, name }) {
+  return {
+    username,
+    passwordHash: 'unused-for-route-tests',
+    role,
+    name,
+    permissions: getPermissionTemplate(role),
+    memberId: null,
+    memberName: null,
+    teamId: null,
+    teamName: null,
+    updatedAt: '2026-03-14T00:00:00.000Z',
+  };
+}
+
 function createLegacyDb(seed = {}) {
   const dbFile = path.join(
     os.tmpdir(),
@@ -23,11 +40,17 @@ function createLegacyDb(seed = {}) {
   );
   const db = new Database(dbFile);
   db.exec('CREATE TABLE kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS auth_sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)');
 
   const insert = db.prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(seed)) {
     insert.run(key, JSON.stringify(value));
   }
+
+  const now = Date.now();
+  db.prepare('INSERT OR REPLACE INTO auth_sessions (token, username, created_at, expires_at) VALUES (?, ?, ?, ?)').run('session-manager', 'manager', now, now + 86400_000);
+  const account = createAccount({ username: 'manager', role: ADMIN_ROLE, name: 'Manager User' });
+  db.prepare('INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)').run('kpi_users_v1', JSON.stringify([account]));
 
   materializeTypedBusinessSnapshots(db, seed);
 
@@ -88,14 +111,6 @@ function materializeTypedBusinessSnapshots(db, seed = {}) {
       writeReportingProjectionValue(db, 'kpi_reporting_monthly_aggregates_default_v1', snapshot);
     }
   }
-}
-
-const tempFiles = [];
-
-function registerTempDb(seed) {
-  const dbFile = createLegacyDb(seed);
-  tempFiles.push(dbFile);
-  return dbFile;
 }
 
 function createReportingSeed() {
@@ -323,14 +338,46 @@ function createStoredMonthlyAggregateSnapshot() {
   };
 }
 
-afterEach(() => {
+const tempFiles = [];
+const tempApps = [];
+
+function registerTempDb(seed) {
+  const dbFile = createLegacyDb(seed);
+  tempFiles.push(dbFile);
+  return dbFile;
+}
+
+
+
+afterEach(async () => {
+  while (tempApps.length > 0) {
+    const app = tempApps.pop();
+    if (app?.locals?.runtimePersistenceDispose) {
+      await app.locals.runtimePersistenceDispose();
+    }
+  }
   while (tempFiles.length > 0) {
     const dbFile = tempFiles.pop();
     if (dbFile && fs.existsSync(dbFile)) {
-      fs.unlinkSync(dbFile);
+      try {
+        fs.unlinkSync(dbFile);
+      } catch {
+        // file may be locked by a lingering DB connection; ignore
+      }
     }
   }
 });
+
+const TEST_CSRF_TOKEN = 'test-csrf-token';
+
+function sessionHeaders(sessionToken) {
+  return {
+    Cookie: `kpi_session=${sessionToken}; kpi_csrf=${TEST_CSRF_TOKEN}`,
+    'X-CSRF-Token': TEST_CSRF_TOKEN,
+  };
+}
+
+
 
 describe('server-v4 runtime routes', () => {
   it('lists sanitized teams from the legacy kv_store snapshot', async () => {
@@ -692,7 +739,7 @@ describe('server-v4 runtime routes', () => {
     const dbFile = registerTempDb(createReportingSeed());
     const app = buildV4App({ dbFile });
 
-    const response = await request(app).get('/api/v4/reporting/view').query({ from: '2026-02-01', to: '2026-02-28' });
+    const response = await request(app).get('/api/v4/reporting/view').set(sessionHeaders('session-manager')).query({ from: '2026-02-01', to: '2026-02-28' });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -901,7 +948,7 @@ describe('server-v4 runtime routes', () => {
     const dbFile = registerTempDb(seed);
     const app = buildV4App({ dbFile });
 
-    const response = await request(app).get('/api/v4/reporting/view').query({ from: '2026-02-01', to: '2026-02-28', ruleId: 'boosted-kpi' });
+    const response = await request(app).get('/api/v4/reporting/view').set(sessionHeaders('session-manager')).query({ from: '2026-02-01', to: '2026-02-28', ruleId: 'boosted-kpi' });
 
     expect(response.status).toBe(200);
     expect(response.body.data.summary.ruleSet).toEqual({
@@ -1055,7 +1102,7 @@ describe('server-v4 runtime routes', () => {
     db.close();
 
     const app = buildV4App({ dbFile });
-    const response = await request(app).get('/api/v4/reporting/view').query({ from: '2026-02-01', to: '2026-02-28' });
+    const response = await request(app).get('/api/v4/reporting/view').set(sessionHeaders('session-manager')).query({ from: '2026-02-01', to: '2026-02-28' });
 
     expect(response.status).toBe(200);
     expect(response.body.data.summary.ruleSet).toEqual({
@@ -1083,6 +1130,7 @@ describe('server-v4 runtime routes', () => {
 
     const response = await request(app)
       .get('/api/v4/reporting/view')
+      .set(sessionHeaders('session-manager'))
       .query({ from: '2026-01-01', to: '2026-02-28' });
 
     expect(response.status).toBe(200);
@@ -1126,6 +1174,7 @@ describe('server-v4 runtime routes', () => {
 
     const response = await request(app)
       .get('/api/v4/reporting/view')
+      .set(sessionHeaders('session-manager'))
       .query({ from: '2026-01-01', to: '2026-02-28' });
 
     expect(response.status).toBe(200);
@@ -1165,7 +1214,7 @@ describe('server-v4 runtime routes', () => {
     const app = buildV4App({ dbFile });
     const asOf = '2026-03-09T07:00:00.000Z';
 
-    const response = await request(app).get('/api/v4/reporting/schedules').query({ asOf });
+    const response = await request(app).get('/api/v4/reporting/schedules').set(sessionHeaders('session-manager')).query({ asOf });
 
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
@@ -1224,7 +1273,7 @@ describe('server-v4 runtime routes', () => {
     const dbFile = registerTempDb(createReportingSeed());
     const app = buildV4App({ dbFile });
 
-    const saveResponse = await request(app).post('/api/v4/reporting/schedules').send({
+    const saveResponse = await request(app).post('/api/v4/reporting/schedules').set(sessionHeaders('session-manager')).send({
       name: 'Monthly Red',
       frequency: 'monthly',
       dayOfMonth: 20,
@@ -1261,7 +1310,7 @@ describe('server-v4 runtime routes', () => {
         .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
         .get('kpi_report_schedule_v1');
 
-      const listAfterSave = await request(app).get('/api/v4/reporting/schedules').query({ asOf: '2026-03-09T07:00:00.000Z' });
+      const listAfterSave = await request(app).get('/api/v4/reporting/schedules').set(sessionHeaders('session-manager')).query({ asOf: '2026-03-09T07:00:00.000Z' });
       expect(listAfterSave.status).toBe(200);
       expect(listAfterSave.body.data.total).toBe(3);
       expect(listAfterSave.body.data.items).toEqual(
@@ -1297,7 +1346,7 @@ describe('server-v4 runtime routes', () => {
         { position: 2, schedule_id: createdId, name: 'Monthly Red' },
       ]);
 
-      const deleteResponse = await request(app).delete(`/api/v4/reporting/schedules/${createdId}`);
+      const deleteResponse = await request(app).delete(`/api/v4/reporting/schedules/${createdId}`).set(sessionHeaders('session-manager'));
       expect(deleteResponse.status).toBe(200);
       expect(deleteResponse.body).toEqual({
         ok: true,
@@ -1307,7 +1356,7 @@ describe('server-v4 runtime routes', () => {
         },
       });
 
-      const listAfterDelete = await request(app).get('/api/v4/reporting/schedules').query({ asOf: '2026-03-09T07:00:00.000Z' });
+      const listAfterDelete = await request(app).get('/api/v4/reporting/schedules').set(sessionHeaders('session-manager')).query({ asOf: '2026-03-09T07:00:00.000Z' });
       expect(listAfterDelete.status).toBe(200);
       expect(listAfterDelete.body.data.total).toBe(2);
       expect(listAfterDelete.body.data.items.find((item) => item.id === createdId)).toBeUndefined();
@@ -1350,7 +1399,7 @@ describe('server-v4 runtime routes', () => {
     });
     const app = buildV4App({ dbFile });
 
-    const response = await request(app).get('/api/v4/reporting/schedules').query({ asOf: '2026-03-09T07:00:00.000Z' });
+    const response = await request(app).get('/api/v4/reporting/schedules').set(sessionHeaders('session-manager')).query({ asOf: '2026-03-09T07:00:00.000Z' });
 
     expect(response.status).toBe(200);
     expect(response.body.data.aggregateStatus).toEqual({
@@ -1371,6 +1420,7 @@ describe('server-v4 runtime routes', () => {
 
     const response = await request(app)
       .get('/api/v4/reporting/aggregates/monthly')
+      .set(sessionHeaders('session-manager'))
       .query({ from: '2026-01-01', to: '2026-02-28' });
 
     expect(response.status).toBe(200);
@@ -1465,9 +1515,10 @@ describe('server-v4 runtime routes', () => {
 
     const aggregateResponse = await request(app)
       .get('/api/v4/reporting/aggregates/monthly')
+      .set(sessionHeaders('session-manager'))
       .query(query);
-    const viewResponse = await request(app).get('/api/v4/reporting/view').query(query);
-    const observabilityResponse = await request(app).get('/api/v4/reporting/observability');
+    const viewResponse = await request(app).get('/api/v4/reporting/view').set(sessionHeaders('session-manager')).query(query);
+    const observabilityResponse = await request(app).get('/api/v4/reporting/observability').set(sessionHeaders('session-manager'));
 
     expect(aggregateResponse.status).toBe(200);
     expect(viewResponse.status).toBe(200);
@@ -1520,9 +1571,9 @@ describe('server-v4 runtime routes', () => {
     const janQuery = { from: '2026-01-01', to: '2026-01-31' };
     const fullQuery = { from: '2026-01-01', to: '2026-02-28' };
 
-    const janResponse = await request(app).get('/api/v4/reporting/aggregates/monthly').query(janQuery);
-    const fullResponse = await request(app).get('/api/v4/reporting/aggregates/monthly').query(fullQuery);
-    const observabilityResponse = await request(app).get('/api/v4/reporting/observability').query({
+    const janResponse = await request(app).get('/api/v4/reporting/aggregates/monthly').set(sessionHeaders('session-manager')).query(janQuery);
+    const fullResponse = await request(app).get('/api/v4/reporting/aggregates/monthly').set(sessionHeaders('session-manager')).query(fullQuery);
+    const observabilityResponse = await request(app).get('/api/v4/reporting/observability').set(sessionHeaders('session-manager')).query({
       jobSearch: 'aggregate',
       jobStatus: 'success',
       jobPageSize: 1,
@@ -1590,8 +1641,8 @@ describe('server-v4 runtime routes', () => {
     const dbFile = registerTempDb(createReportingAggregateSeed());
     const app = buildV4App({ dbFile });
 
-    const first = await request(app).get('/api/v4/reporting/aggregates/monthly');
-    const second = await request(app).get('/api/v4/reporting/aggregates/monthly');
+    const first = await request(app).get('/api/v4/reporting/aggregates/monthly').set(sessionHeaders('session-manager'));
+    const second = await request(app).get('/api/v4/reporting/aggregates/monthly').set(sessionHeaders('session-manager'));
 
     expect(first.status).toBe(200);
     expect(first.body.data.range).toEqual({
@@ -1619,6 +1670,7 @@ describe('server-v4 runtime routes', () => {
 
     const response = await request(app)
       .get('/api/v4/reporting/aggregates/monthly')
+      .set(sessionHeaders('session-manager'))
       .query({ from: '2026-01-01', to: '2026-02-28' });
 
     expect(response.status).toBe(200);

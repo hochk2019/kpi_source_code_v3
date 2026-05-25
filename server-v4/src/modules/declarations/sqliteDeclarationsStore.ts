@@ -94,6 +94,9 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
     actor: DeclarationActor,
   ): Promise<DeclarationBatchPatchResult[]> {
     return this.withDatabase((database) => {
+      const hasTransaction = typeof database.transaction === 'function';
+
+      const work = (): DeclarationBatchPatchResult[] => {
       const patchEntries = Array.isArray(entries) ? entries : [];
       if (patchEntries.length === 0) {
         return [];
@@ -172,6 +175,12 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       }
 
       return results;
+      };
+
+      if (hasTransaction) {
+        return database.transaction(work)();
+      }
+      return work();
     });
   }
 
@@ -181,6 +190,9 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
     actor: DeclarationActor,
   ): Promise<Record<string, unknown>> {
     return this.withDatabase((database) => {
+      const hasTransaction = typeof database.transaction === 'function';
+
+      const work = (): Record<string, unknown> => {
       const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const rows = this.readRows(database);
       const index = rows.findIndex((row) => declarationTargetMatchesRow(row, target));
@@ -204,49 +216,65 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       }
 
       return cloneDeclarationRecord(nextRow);
+      };
+
+      if (hasTransaction) {
+        return database.transaction(work)();
+      }
+      return work();
     });
   }
 
   async commitImportedDeclarations(input: DeclarationImportCommitInput): Promise<void> {
     this.withDatabase((database) => {
-      const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
-      const rows = this.readRows(database);
-      const changedKeys = new Set<string>();
+      const hasTransaction = typeof database.transaction === 'function';
 
-      for (const entry of input.entries ?? []) {
-        const nextRow = cloneDeclarationRecord(entry.nextRecord);
-        if (!normalizeText(nextRow.declaration_id ?? nextRow.id)) {
-          nextRow.declaration_id = `decl-${entry.key}`;
-        }
+      const work = () => {
+        const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
+        const rows = this.readRows(database);
+        const changedKeys = new Set<string>();
 
-        const index = rows.findIndex(
-          (row) => createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch) === entry.key,
-        );
+        for (const entry of input.entries ?? []) {
+          const nextRow = cloneDeclarationRecord(entry.nextRecord);
+          if (!normalizeText(nextRow.declaration_id ?? nextRow.id)) {
+            nextRow.declaration_id = `decl-${entry.key}`;
+          }
 
-        if (index >= 0) {
-          rows[index] = nextRow;
+          const index = rows.findIndex(
+            (row) => createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch) === entry.key,
+          );
+
+          if (index >= 0) {
+            rows[index] = nextRow;
+            changedKeys.add(entry.key);
+            continue;
+          }
+
+          rows.push(nextRow);
           changedKeys.add(entry.key);
-          continue;
         }
 
-        rows.push(nextRow);
-        changedKeys.add(entry.key);
-      }
+        if (!canonicalRowsExist) {
+          replaceCanonicalSqliteDeclarationRows(database, rows);
+        } else if (changedKeys.size > 0) {
+          upsertCanonicalSqliteDeclarationRows(
+            database,
+            rows
+              .map((row, index) => ({
+                row,
+                sortOrder: index,
+                key: createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch ?? row.branch_code),
+              }))
+              .filter((entry) => entry.key && changedKeys.has(entry.key))
+              .map(({ row, sortOrder }) => ({ row, sortOrder })),
+          );
+        }
+      };
 
-      if (!canonicalRowsExist) {
-        replaceCanonicalSqliteDeclarationRows(database, rows);
-      } else if (changedKeys.size > 0) {
-        upsertCanonicalSqliteDeclarationRows(
-          database,
-          rows
-            .map((row, index) => ({
-              row,
-              sortOrder: index,
-              key: createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch ?? row.branch_code),
-            }))
-            .filter((entry) => entry.key && changedKeys.has(entry.key))
-            .map(({ row, sortOrder }) => ({ row, sortOrder })),
-        );
+      if (hasTransaction) {
+        database.transaction(work)();
+      } else {
+        work();
       }
     });
   }
@@ -402,6 +430,9 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
 
   async markDeclarationsReviewed(keys: readonly string[], actor: string): Promise<number> {
     return this.withDatabase((database) => {
+      const hasTransaction = typeof database.transaction === 'function';
+
+      const work = (): number => {
       const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const keySet = new Set(
         (Array.isArray(keys) ? keys : []).map((key) => normalizeText(key)).filter(Boolean),
@@ -447,11 +478,20 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       }
 
       return updated;
+      };
+
+      if (hasTransaction) {
+        return database.transaction(work)();
+      }
+      return work();
     });
   }
 
   async unmarkDeclarationsReviewed(keys: readonly string[], _actor: string): Promise<number> {
     return this.withDatabase((database) => {
+      const hasTransaction = typeof database.transaction === 'function';
+
+      const work = (): number => {
       const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const keySet = new Set(
         (Array.isArray(keys) ? keys : []).map((key) => normalizeText(key)).filter(Boolean),
@@ -495,6 +535,12 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       }
 
       return updated;
+      };
+
+      if (hasTransaction) {
+        return database.transaction(work)();
+      }
+      return work();
     });
   }
 

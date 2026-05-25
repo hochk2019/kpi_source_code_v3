@@ -516,6 +516,7 @@ export default function AuditLog({ currentUser }: AuditLogProps) {
         setRestoring(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [canManageBackups, fetchBackupFiles, loadSummary, refreshLogs, restoreNote, selectedBackup]
   );
 

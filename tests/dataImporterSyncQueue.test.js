@@ -99,8 +99,11 @@ describe("dataImporterSyncQueue", () => {
     expect(isRetriableSyncError(new Error("HTTP 400"))).toBe(false);
 
     expect(getSyncRetryDelayMs(0)).toBe(1500);
-    expect(getSyncRetryDelayMs(1)).toBe(5000);
-    expect(getSyncRetryDelayMs(2)).toBeNull();
+    expect(getSyncRetryDelayMs(1)).toBe(3000);
+    expect(getSyncRetryDelayMs(2)).toBe(6000);
+    expect(getSyncRetryDelayMs(3)).toBe(12000);
+    expect(getSyncRetryDelayMs(4)).toBe(24000);
+    expect(getSyncRetryDelayMs(5)).toBeNull();
     expect(formatRetryDelayLabel(1500)).toBe("1.5 giây");
     expect(formatRetryDelayLabel(5000)).toBe("5 giây");
   });

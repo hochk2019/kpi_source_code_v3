@@ -8,6 +8,14 @@ import {
 } from "../packages/domain/src/accountRoles.js";
 import useDataImporterEditAccess from "@/components/dataImporter/useDataImporterEditAccess.js";
 
+const dialogMocks = vi.hoisted(() => ({
+  alert: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/hooks/useAppDialog.tsx", () => ({
+  useAppDialog: () => dialogMocks,
+}));
+
 function normalizeStr(value) {
   return value == null ? "" : String(value).trim();
 }
@@ -64,7 +72,8 @@ function createProps(overrides = {}) {
 
 describe("useDataImporterEditAccess", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    dialogMocks.alert.mockResolvedValue();
   });
 
   it("builds roster teams and deduplicated agency options from HQ + current rows", () => {
@@ -125,8 +134,7 @@ describe("useDataImporterEditAccess", () => {
     ).toBe(false);
   });
 
-  it("blocks staff team changes outside their assignment and clears blocked notices when identity changes", () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+  it("blocks staff team changes outside their assignment and clears blocked notices when identity changes", async () => {
     const props = createProps();
     const { result, rerender } = renderHook(
       ({ hookProps }) => useDataImporterEditAccess(hookProps),
@@ -139,13 +147,13 @@ describe("useDataImporterEditAccess", () => {
     expect(
       result.current.isRowEditable({ team: "Team B", nhan_vien: "Binh" }),
     ).toBe(false);
-    expect(
+    await expect(
       result.current.sanitizeRowUpdates(
         { team: "Team A", nhan_vien: "An" },
         { team: "Team B" },
       ),
-    ).toBeNull();
-    expect(alertSpy).toHaveBeenCalledWith("Bạn chỉ được gán tổ đội Team A.");
+    ).resolves.toBeNull();
+    expect(dialogMocks.alert).toHaveBeenCalledWith("Bạn chỉ được gán tổ đội Team A.");
 
     act(() => {
       result.current.blockedEditNoticeRef.current.add("row-1");
@@ -163,5 +171,49 @@ describe("useDataImporterEditAccess", () => {
     });
 
     expect(result.current.blockedEditNoticeRef.current.size).toBe(0);
+  });
+
+  it("isRowEditable returns false for rows with deleted_at", () => {
+    const props = createProps({
+      currentUser: { role: ADMIN_ROLE, name: "Admin", username: "admin" },
+    });
+    const { result } = renderHook(() => useDataImporterEditAccess(props));
+
+    expect(
+      result.current.isRowEditable({ team: "Team A", deleted_at: "2025-01-01" }),
+    ).toBe(false);
+  });
+
+  it("isRowEditable returns false for reviewed rows with non-admin role", () => {
+    const props = createProps({
+      currentUser: { role: DEFAULT_ROLE, name: "An", username: "an" },
+    });
+    const { result } = renderHook(() => useDataImporterEditAccess(props));
+
+    expect(
+      result.current.isRowEditable({ team: "Team A", reviewed: true }),
+    ).toBe(false);
+  });
+
+  it("staff role: row with matching team is editable", () => {
+    const props = createProps({
+      currentUser: { role: DEFAULT_ROLE, name: "An", username: "an" },
+    });
+    const { result } = renderHook(() => useDataImporterEditAccess(props));
+
+    expect(
+      result.current.isRowEditable({ team: "Team A", nhan_vien: "Someone" }),
+    ).toBe(true);
+  });
+
+  it("staff role: row with different team is not editable", () => {
+    const props = createProps({
+      currentUser: { role: DEFAULT_ROLE, name: "An", username: "an" },
+    });
+    const { result } = renderHook(() => useDataImporterEditAccess(props));
+
+    expect(
+      result.current.isRowEditable({ team: "Team B", nhan_vien: "Binh" }),
+    ).toBe(false);
   });
 });

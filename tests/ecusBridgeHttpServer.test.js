@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetch } from 'undici';
 
 import { createStandaloneEcusBridgeHttpServer } from '../apps/ecus-bridge/src/bridgeHttpServer.js';
 

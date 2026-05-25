@@ -2,7 +2,8 @@ import express, { type Request, type Response, type Router } from 'express';
 
 import type { DomainModule } from '../../app/domain-module.js';
 import type { ReportingProjectionPersistence } from '../../persistence/reportingProjectionPersistence.js';
-import { ReportingController } from './ReportingController.js';
+import type { AuthStore } from '../auth/authStore.js';
+import { ReportingController } from './reportingController.js';
 import { ReportingRepository, type ReportingRepositoryReaders } from './ReportingRepository.js';
 import { ReportingService } from './reportingService.js';
 
@@ -19,11 +20,12 @@ export function buildReportingRouter(
   projections: ReportingProjectionPersistence,
   readers: ReportingRouterReaders,
   runtime?: ReportingRuntime,
+  authStore?: AuthStore,
 ): Router {
   const router = express.Router();
   const repository = new ReportingRepository(projections, readers);
   const service = new ReportingService(repository);
-  const controller = new ReportingController(service);
+  const controller = new ReportingController(service, authStore);
 
   router.get('/__meta', (_req, res) => {
     res.json({ ok: true, module: domainModule });

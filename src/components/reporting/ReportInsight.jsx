@@ -8,7 +8,6 @@ export default function ReportInsight({
   report,
   ruleComparison,
   ruleDeltaLabel,
-  baselineSummary,
   scope,
   staffViewMode,
   teamViewMode,

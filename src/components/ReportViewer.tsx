@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { t } from '@/lib/i18n.js';
 
 import "../print.css";
@@ -169,20 +169,33 @@ export default function ReportViewer({
     setRuleCollection(loadRuleSets());
   }, [version]);
 
+  const storageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedRefresh = useMemo(() => {
+    return () => {
+      if (storageTimerRef.current) clearTimeout(storageTimerRef.current);
+      storageTimerRef.current = setTimeout(() => {
+        setRuleCollection(loadRuleSets());
+        bumpVersion();
+      }, 100);
+    };
+  }, [bumpVersion]);
+
   useEffect(() => {
-    const unsubscribeDeclarations = subscribeStorage(DECL_KEY, bumpVersion);
+    return () => {
+      if (storageTimerRef.current) clearTimeout(storageTimerRef.current);
+    };
+  }, []);
 
-    const unsubscribeAdjustments = subscribeStorage(KPI_ADJUSTMENTS_KEY, bumpVersion);
+  useEffect(() => {
+    const unsubscribeDeclarations = subscribeStorage(DECL_KEY, debouncedRefresh);
 
-    const unsubscribeRules = subscribeStorage(RULES_KEY, () => {
-      setRuleCollection(loadRuleSets());
+    const unsubscribeAdjustments = subscribeStorage(KPI_ADJUSTMENTS_KEY, debouncedRefresh);
 
-      bumpVersion();
-    });
+    const unsubscribeRules = subscribeStorage(RULES_KEY, debouncedRefresh);
 
-    const unsubscribeTeams = subscribeStorage(TEAM_KEY, bumpVersion);
+    const unsubscribeTeams = subscribeStorage(TEAM_KEY, debouncedRefresh);
 
-    const unsubscribeMst = subscribeStorage(MST_KEY, bumpVersion);
+    const unsubscribeMst = subscribeStorage(MST_KEY, debouncedRefresh);
 
     return () => {
       unsubscribeDeclarations();
@@ -195,6 +208,7 @@ export default function ReportViewer({
 
       unsubscribeMst();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bumpVersion]);
 
   useEffect(() => {
@@ -379,7 +393,9 @@ export default function ReportViewer({
       return [];
     }
 
-    return sortStatsCollection((report.companies as unknown as Record<string, unknown>).rows as any[], staffSortKey, (item) => item?.name || "");
+    return sortStatsCollection((report.companies as unknown as Record<string, unknown>).rows as Array<{ name?: string }>, staffSortKey, (item) => item?.name || "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(report.companies as unknown as Record<string, unknown>).rows, staffSortKey, staffViewMode]);
 
   const companySummaryAllTeams = useMemo(() => {
@@ -387,7 +403,9 @@ export default function ReportViewer({
       return [];
     }
 
-    return sortStatsCollection((report.companies as unknown as Record<string, unknown>).groups as any[], staffSortKey, (item) => item?.name || "");
+    return sortStatsCollection((report.companies as unknown as Record<string, unknown>).groups as Array<{ name?: string }>, staffSortKey, (item) => item?.name || "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(report.companies as unknown as Record<string, unknown>).groups, staffSortKey, staffViewMode]);
 
   const filteredStaffList = sortedStaffList;

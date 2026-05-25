@@ -77,12 +77,13 @@
   --ds-radius-md: 1rem;
   --ds-radius-lg: 1.25rem;
   --ds-radius-pill: 999px;
-  --ds-shadow-soft: 0 20px 60px rgba(15, 23, 42, 0.08);
-  --ds-shadow-strong: 0 32px 120px rgba(15, 23, 42, 0.14);
+  --ds-shadow-color: 15 23 42;
+  --ds-shadow-soft: 0 20px 60px rgb(var(--ds-shadow-color) / 0.08);
+  --ds-shadow-strong: 0 32px 120px rgb(var(--ds-shadow-color) / 0.14);
   /* Slice 1: standardized shadows */
-  --ds-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --ds-shadow-md: 0 4px 8px rgba(15, 23, 42, 0.06);
-  --ds-shadow-lg: 0 12px 24px rgba(15, 23, 42, 0.08);
+  --ds-shadow-sm: 0 1px 2px rgb(var(--ds-shadow-color) / 0.04);
+  --ds-shadow-md: 0 4px 8px rgb(var(--ds-shadow-color) / 0.06);
+  --ds-shadow-lg: 0 12px 24px rgb(var(--ds-shadow-color) / 0.08);
   /* Slice 1: motion tokens */
   --ds-duration-fast: 100ms;
   --ds-duration-md: 150ms;
@@ -165,6 +166,17 @@
   --brand-on-500: #ffffff;
   --brand-ring: color-mix(in srgb, #f59e0b 45%, white);
   --brand-gradient: linear-gradient(135deg, #f59e0b 0%, #fbbf24 52%, #d97706 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .dark {

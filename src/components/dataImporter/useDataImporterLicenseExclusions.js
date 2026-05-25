@@ -304,6 +304,7 @@ export default function useDataImporterLicenseExclusions({
         },
       };
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       computeKPI,
       computeLicenseSnapshot,
@@ -355,6 +356,7 @@ export default function useDataImporterLicenseExclusions({
     }
 
     await alert(formatLicenseExclusionAlert(result));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyLicenseExclusionForKeys, ensureEditableKeys, selectedKeys]);
 
   const handleAutoApplyLicenseExclusion = useCallback(async () => {
@@ -395,6 +397,7 @@ export default function useDataImporterLicenseExclusions({
     }
 
     await alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     applyLicenseExclusionForKeys,
     canAutoReconcile,

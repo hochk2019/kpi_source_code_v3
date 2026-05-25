@@ -243,6 +243,7 @@ export default function useDataImporterCoMonitoring({
     } finally {
       setCoCodeSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageSync, coCodeForm, extractErrorMessage, fetchWithAuth, syncCoCodeForm]);
 
   const handleResetCoCodeForm = useCallback(() => {
@@ -351,6 +352,7 @@ export default function useDataImporterCoMonitoring({
     } finally {
       setCoDiscrepancySaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageSync, coDiscrepancyForm, extractErrorMessage, fetchWithAuth, syncCoDiscrepancyConfig]);
 
   const handleResetCoDiscrepancyForm = useCallback(() => {
@@ -412,6 +414,7 @@ export default function useDataImporterCoMonitoring({
     } finally {
       setCoDiscrepancyRunning(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     canManageSync,
     coDiscrepancyRange.from,

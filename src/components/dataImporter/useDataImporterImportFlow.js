@@ -229,6 +229,7 @@ export default function useDataImporterImportFlow({
 
       reader.readAsArrayBuffer(file);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       FileReaderCtor,
       acceptedImportExtensions,
@@ -387,6 +388,7 @@ export default function useDataImporterImportFlow({
       isProcessingRef.current = false;
       setIsImporting(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     actor,
     canOverwriteData,

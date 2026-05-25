@@ -89,7 +89,7 @@ interface AuditResponse {
   availableKinds: string[];
 }
 
-interface FormState extends AuditFilters {}
+type FormState = AuditFilters;
 
 interface LoadParams {
   limit: number;

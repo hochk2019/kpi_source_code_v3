@@ -2,7 +2,7 @@ import express, { type Router } from 'express';
 
 import type { DomainModule } from '../../app/domain-module.js';
 import type { AuthStore } from '../auth/authStore.js';
-import { DeclarationsController } from './DeclarationsController.js';
+import { DeclarationsController } from './declarationsController.js';
 import { DeclarationsAlertsService } from './declarationsAlertsService.js';
 import { DeclarationsCoMonitoringService } from './declarationsCoMonitoringService.js';
 import {
@@ -16,6 +16,7 @@ import { DeclarationsRepository } from './DeclarationsRepository.js';
 import type { DeclarationAsyncReader } from './declarationAsyncReader.js';
 import { DeclarationsService } from './declarationsService.js';
 import type { DeclarationsStore } from './declarationsStore.js';
+import type { DeclarationsImportJobStore } from './declarationsImportJobStore.js';
 import {
   createDefaultCoDiscrepancyRunner,
   type CoDiscrepancyRunner,
@@ -31,6 +32,7 @@ export function buildDeclarationsRouter(
     ecusImportRunner?: CoDiscrepancyRunner;
     coDiscrepancyRunner?: CoDiscrepancyRunner;
     sqlHealthCheck?: EcusSqlHealthCheck;
+    jobStore?: DeclarationsImportJobStore;
   } = {},
 ): Router {
   const router = express.Router();
@@ -39,7 +41,7 @@ export function buildDeclarationsRouter(
   const ecusFetchRunner =
     options.ecusImportRunner ?? options.coDiscrepancyRunner ?? createDefaultCoDiscrepancyRunner(reader);
   const importService = new DeclarationsImportService(repository, store, ecusFetchRunner);
-  const importJobService = new DeclarationsImportJobService(importService);
+  const importJobService = new DeclarationsImportJobService(importService, options.jobStore);
   const alertsService = new DeclarationsAlertsService(repository, store);
   const coMonitoringService = new DeclarationsCoMonitoringService(
     repository,

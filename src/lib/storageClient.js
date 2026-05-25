@@ -59,6 +59,9 @@ export async function setItem(key, value) {
   const payload = value === null || value === undefined ? { value: null } : { value };
   const target = `${normalizeBaseUrl(apiBase)}${SHARED_SYNC_BASE_PATH}/storage/${encodeURIComponent(key)}`;
 
+  // Optimistic cache update for immediate synchronous reads
+  updateCachedItem(key, value);
+
   const response = await fetchWithAuth(target, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -69,8 +72,6 @@ export async function setItem(key, value) {
     throw new Error(`Failed to save ${key}: HTTP ${response.status}`);
   }
 
-  // Success: Update cache instantly
-  updateCachedItem(key, value);
   return value;
 }
 
