@@ -35,6 +35,163 @@ vi.mock('@/lib/hqHistoryClient.js', () => ({
 
 }));
 
+// Mock Radix-based UI components to avoid composeRefs/Slot infinite loop in React 19 + JSDOM
+// These mocks MUST be in the test file (not setupFiles) because vi.mock() is hoisted only in test files.
+
+vi.mock('@/components/ui/button.tsx', () => ({
+  Button: function MockButton({ children, onClick, onPointerDown, disabled, type, className, role, 'aria-label': ariaLabel, 'aria-expanded': ariaExpanded }) {
+    return React.createElement('button', {
+      onClick,
+      onPointerDown,
+      disabled,
+      type: type || 'button',
+      className,
+      role,
+      'aria-label': ariaLabel,
+      'aria-expanded': ariaExpanded,
+    }, children);
+  },
+  buttonVariants: () => '',
+}));
+
+vi.mock('@/components/ui/popover.tsx', () => ({
+  Popover: function MockPopover({ children }) {
+    return React.createElement('div', { 'data-testid': 'mock-popover' }, children);
+  },
+  PopoverTrigger: function MockPopoverTrigger({ children, asChild, onClick, onPointerDown }) {
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(children, {
+        onClick: children.props.onClick || onClick,
+        onPointerDown: children.props.onPointerDown || onPointerDown,
+      });
+    }
+    return React.createElement('div', { 'data-testid': 'mock-popover-trigger', onClick, onPointerDown }, children);
+  },
+  PopoverContent: function MockPopoverContent({ children }) {
+    return React.createElement('div', { 'data-testid': 'mock-popover-content' }, children);
+  },
+  PopoverAnchor: function MockPopoverAnchor({ children }) {
+    return React.createElement('div', null, children);
+  },
+}));
+
+vi.mock('@/components/ui/command.tsx', () => ({
+  Command: ({ children }) => React.createElement('div', { 'data-testid': 'mock-command' }, children),
+  CommandInput: function MockCommandInput({ value, onValueChange, placeholder }) {
+    return React.createElement('input', {
+      'data-testid': 'mock-command-input',
+      value: value || '',
+      placeholder,
+      onChange: (e) => onValueChange && onValueChange(e.target.value),
+    });
+  },
+  CommandList: ({ children }) => React.createElement('div', { 'data-testid': 'mock-command-list' }, children),
+  CommandEmpty: ({ children }) => React.createElement('div', { 'data-testid': 'mock-command-empty' }, children),
+  CommandGroup: ({ children }) => React.createElement('div', { 'data-testid': 'mock-command-group' }, children),
+  CommandItem: function MockCommandItem({ children, onSelect, value }) {
+    return React.createElement('div', {
+      'data-testid': 'mock-command-item',
+      'data-value': value,
+      onClick: () => onSelect && onSelect(value),
+    }, children);
+  },
+  CommandSeparator: () => React.createElement('hr', null),
+  CommandShortcut: ({ children }) => React.createElement('span', null, children),
+  CommandDialog: ({ children, open }) => open ? React.createElement('div', null, children) : null,
+}));
+
+vi.mock('@/components/shared/StaffCombobox.tsx', () => ({
+  default: function MockStaffCombobox({ value, onSelect, ariaLabel, searchPlaceholder, disabled, teams }) {
+    const [open, setOpen] = React.useState(false);
+    const [search, setSearch] = React.useState('');
+    const displayValue = value || 'Chọn nhân viên';
+    const searchTrimmed = search.trim();
+
+    const allMembers = React.useMemo(() => {
+      if (!teams || !Array.isArray(teams)) return [];
+      const result = [];
+      teams.forEach((team) => {
+        const members = team.members || team.persons || [];
+        members.forEach((m) => {
+          result.push({ name: m.name || m, teamName: team.name || team });
+        });
+      });
+      return result;
+    }, [teams]);
+
+    const filteredMembers = searchTrimmed
+      ? allMembers.filter((m) => m.name.toLowerCase().includes(searchTrimmed.toLowerCase()))
+      : allMembers;
+
+    const showCustom = searchTrimmed && !allMembers.some((m) => m.name.toLowerCase() === searchTrimmed.toLowerCase());
+
+    function handleToggle() {
+      if (disabled) return;
+      setOpen((v) => !v);
+      setSearch('');
+    }
+
+    function handleSelectMember(name, teamName) {
+      onSelect && onSelect({ staffName: name, teamName: teamName || '' });
+      setOpen(false);
+      setSearch('');
+    }
+
+    function handleCustom() {
+      onSelect && onSelect({ staffName: searchTrimmed, teamName: '', isCustom: true });
+      setOpen(false);
+      setSearch('');
+    }
+
+    return React.createElement('div', { 'data-testid': 'mock-staff-combobox' },
+      React.createElement('button', {
+        type: 'button',
+        role: 'combobox',
+        'aria-label': ariaLabel || displayValue,
+        'aria-expanded': open,
+        disabled: !!disabled,
+        // Only use onClick (not onPointerDown) to avoid double-toggle:
+        // Test uses both fireEvent.pointerDown + fireEvent.click, both would call handleToggle
+        // which would toggle open→closed→open, leaving closed. Use click only.
+        onClick: handleToggle,
+      }, displayValue),
+      open ? React.createElement('div', { 'data-testid': 'mock-staff-combobox-popover' },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: searchPlaceholder || 'Tìm nhân viên',
+          value: search,
+          autoFocus: true,
+          onChange: (e) => setSearch(e.target.value),
+        }),
+        showCustom ? React.createElement('div', {
+          role: 'option',
+          'data-testid': 'mock-custom-option',
+          onClick: handleCustom,
+        }, `Dùng giá trị "${searchTrimmed}"`) : null,
+        ...filteredMembers.map((m, i) => React.createElement('div', {
+          key: i,
+          role: 'option',
+          'data-testid': 'mock-member-option',
+          onClick: () => handleSelectMember(m.name, m.teamName),
+        }, m.name))
+      ) : null
+    );
+  },
+}));
+
+const { mockAlert, mockConfirm } = vi.hoisted(() => ({
+  mockAlert: vi.fn().mockResolvedValue(undefined),
+  mockConfirm: vi.fn().mockResolvedValue(true)
+}));
+
+vi.mock('@/hooks/useAppDialog', () => ({
+  useAppDialog: () => ({
+    alert: mockAlert,
+    confirm: mockConfirm
+  }),
+  AppDialogProvider: ({ children }) => <>{children}</>
+}));
+
 
 
 function ensureTestGlobals() {
@@ -161,13 +318,18 @@ describe('Luồng quản trị – Gán MST', () => {
 
     const importStaffCombobox = addFormScope.getByRole('combobox', { name: 'Người phụ trách Nhập' });
     await user.click(importStaffCombobox);
-    await user.type(screen.getByPlaceholderText('Tìm nhân viên'), 'Minh Trí');
-    await user.click(await screen.findByText('Dùng giá trị "Minh Trí"'));
+
+    await user.type(addFormScope.getByPlaceholderText('Tìm nhân viên Nhập'), 'Minh Trí');
+    await user.click(await addFormScope.findByText('Dùng giá trị "Minh Trí"'));
+
+    // Wait for import combobox to close before opening export combobox
+    await waitFor(() => expect(addFormScope.queryByText('Dùng giá trị "Minh Trí"')).not.toBeInTheDocument());
 
     const exportStaffCombobox = addFormScope.getByRole('combobox', { name: 'Người phụ trách Xuất' });
     await user.click(exportStaffCombobox);
-    await user.type(screen.getByPlaceholderText('Tìm nhân viên'), 'Ngọc Hà');
-    await user.click(await screen.findByText('Dùng giá trị "Ngọc Hà"'));
+
+    await user.type(addFormScope.getByPlaceholderText('Tìm nhân viên Xuất'), 'Ngọc Hà');
+    await user.click(await addFormScope.findByText('Dùng giá trị "Ngọc Hà"'));
 
     fireEvent.change(addFormScope.getByLabelText('Áp dụng từ ngày'), {
       target: { value: '2025-01-01' },
@@ -177,13 +339,13 @@ describe('Luồng quản trị – Gán MST', () => {
 
     await user.click(addFormSubmit);
 
-    await waitFor(() => expect(alertMock).toHaveBeenCalledWith('Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.'));
+    await waitFor(() => expect(mockAlert).toHaveBeenCalledWith('Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.'));
 
 
 
     await user.click(screen.getByRole('button', { name: /^lưu$/i }));
 
-    await waitFor(() => expect(alertMock).toHaveBeenCalledWith('Lưu thành công!'));
+    await waitFor(() => expect(mockAlert).toHaveBeenCalledWith('Lưu thành công!'));
 
 
 
@@ -220,45 +382,45 @@ describe('Luồng quản trị – Gán MST', () => {
     const user = userEvent.setup();
 
     sharedSetItem(
-
       MST_KEY,
-
       JSON.stringify([
-
-        {
-
-          mst: '0101010101',
-
-          company: 'Công ty Đã Gán',
-
-          person_import: 'Ngọc Trâm',
-
-          person_export: 'Anh Khoa',
-
-          team: 'Tổ A',
-
-          effective_from: '2024-01-01',
-
-        },
-
-        {
-
-          mst: '0202020202',
-
-          company: 'Công ty Chưa Gán',
-
-          person_import: '',
-
-          person_export: '',
-
-          team: '',
-
-          effective_from: '2024-01-01',
-
-        },
-
+        { mst: '0101010101', company: 'Công ty Đã Gán', person_import: 'Ngọc Trâm', person_export: 'Anh Khoa', team: 'Tổ A', effective_from: '2024-01-01' },
+        { mst: '0202020202', company: 'Công ty Chưa Gán', person_import: '', person_export: '', team: '', effective_from: '2024-01-01' },
       ]),
+    );
 
+    // Seed history entries so the status-based history filter has data to work with.
+    // rowKey format: `${mst}__${effective_from}__${effective_to}`
+    sharedSetItem(
+      MST_HISTORY_KEY,
+      JSON.stringify([
+        {
+          id: 'hist-1',
+          mst: '0101010101',
+          field: 'status',
+          from: 'Chưa gán nhân viên',
+          to: 'Đã gán nhân viên',
+          actor: 'admin',
+          timestamp: '2024-01-02T00:00:00.000Z',
+          rowKey: '0101010101__2024-01-01__',
+          type: 'update',
+          effective_from: '2024-01-01',
+          effective_to: '',
+        },
+        {
+          id: 'hist-2',
+          mst: '0202020202',
+          field: 'status',
+          from: 'Đã gán nhân viên',
+          to: 'Chưa gán nhân viên',
+          actor: 'admin',
+          timestamp: '2024-01-02T01:00:00.000Z',
+          rowKey: '0202020202__2024-01-01__',
+          type: 'update',
+          effective_from: '2024-01-01',
+          effective_to: '',
+        },
+      ]),
     );
 
     render(<AppDialogProvider><MSTAssignment canEdit currentUser={{ username: 'admin' }} /></AppDialogProvider>);
@@ -272,7 +434,7 @@ describe('Luồng quản trị – Gán MST', () => {
     });
 
     const historyFilterSection = screen.getByText('Bộ lọc lịch sử thay đổi').closest('section');
-    const typeSelect = within(historyFilterSection ?? document.body).getByLabelText('Thao tác / Trạng thái');
+    const typeSelect = within(historyFilterSection ?? document.body).getByLabelText('Thao tác / Chuyển trạng thái');
 
     await user.selectOptions(typeSelect, 'status:assigned');
 
@@ -302,10 +464,6 @@ describe('Luồng quản trị – Gán MST', () => {
 
 describe('Luồng quản trị – Đại Lý HQ', () => {
 
-  let alertMock;
-
-
-
   beforeEach(() => {
 
     ensureTestGlobals();
@@ -317,10 +475,8 @@ describe('Luồng quản trị – Đại Lý HQ', () => {
     sharedSetItem(HQ_HISTORY_KEY, JSON.stringify([]));
 
     sharedSetItem(DECL_KEY, JSON.stringify([]));
-
-    alertMock = vi.fn();
-
-    vi.stubGlobal('alert', alertMock);
+    
+    mockAlert.mockClear();
 
   });
 
@@ -341,9 +497,9 @@ describe('Luồng quản trị – Đại Lý HQ', () => {
 
     render(<AppDialogProvider><HQAgencyManager canEdit currentUser={{ username: 'admin' }} /></AppDialogProvider>);
 
-    await user.click(screen.getByRole('button', { name: /thêm dòng mới/i }));
+    await user.click(screen.getByRole('button', { name: /\+ thêm dòng/i }));
 
-    const hqSection = screen.getByText('Danh sách Đại lý Hải quan hợp tác').closest('section');
+    const hqSection = screen.getByText('Danh sách Đại lý Hải quan').closest('section');
     const resolveDraftRowControls = () => {
       const agentInput = within(hqSection ?? document.body).queryByPlaceholderText('Ví dụ: Đại lý A, Đại lý B');
       const draftRow = agentInput?.closest('tr');
@@ -391,9 +547,10 @@ describe('Luồng quản trị – Đại Lý HQ', () => {
       expect(agentInput).toHaveValue('AnExpress, BLogistics');
     });
 
-    await user.click(screen.getByRole('button', { name: /lưu cấu hình/i }));
+    const saveBtn = screen.getByRole('button', { name: /lưu cấu hình/i });
+    await user.click(saveBtn);
 
-    await waitFor(() => expect(alertMock).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.'));
+    await waitFor(() => expect(mockAlert).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.'));
 
 
 
@@ -474,7 +631,7 @@ describe('Luồng quản trị – Báo Cáo KPI', () => {
 
 
 
-    await screen.findByText(/Top nhân viên theo điểm KPI/i);
+    await screen.findByText(/Khám phá phạm vi báo cáo/i);
 
     const rangeLabel = screen.getByText('Khoảng thời gian');
 
@@ -524,8 +681,6 @@ describe('Luồng quản trị – Báo Cáo KPI', () => {
 
 describe('Luồng quản trị – Tài khoản', () => {
 
-  let alertMock;
-
   let fetchMock;
 
 
@@ -538,9 +693,8 @@ describe('Luồng quản trị – Tài khoản', () => {
 
     fetchMock = installMockApi();
 
-    alertMock = vi.fn();
-
-    vi.stubGlobal('alert', alertMock);
+    mockAlert.mockClear();
+    mockConfirm.mockClear();
 
     vi.stubGlobal('prompt', vi.fn(() => 'MatKhauMoi!'));
 
@@ -576,15 +730,16 @@ describe('Luồng quản trị – Tài khoản', () => {
     await user.type(within(createSection ?? document.body).getByPlaceholderText(/Ít nhất \d+ ký tự/), 'Tester@2025');
 
     const roleSelect = within(createSection ?? document.body).getAllByRole('combobox').at(-1);
+    fireEvent.pointerDown(roleSelect);
+    fireEvent.click(roleSelect);
 
-    await user.click(roleSelect);
-    await user.click(await screen.findByRole('option', { name: 'Quản lý' }));
+    const staffOption = await screen.findByRole('option', { name: 'Quản lý' });
+    fireEvent.click(staffOption);
 
+    const createBtn = screen.getByRole('button', { name: /^tạo$/i });
+    fireEvent.submit(createBtn.closest('form') || createBtn);
 
-
-    await user.click(screen.getByRole('button', { name: /tạo tài khoản/i }));
-
-    await waitFor(() => expect(alertMock).toHaveBeenCalledWith('Đã tạo tài khoản mới.'));
+    await waitFor(() => expect(mockAlert).toHaveBeenCalledWith('Đã tạo tài khoản mới.'));
 
     await waitFor(() => expect(screen.getByText('tester')).toBeInTheDocument());
 

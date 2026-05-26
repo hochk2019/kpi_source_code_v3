@@ -8,6 +8,14 @@ import {
 import { buildStaffComboboxTeams } from "@/components/shared/staffComboboxOptions.js";
 import { sortMSTRows } from "@/components/mst-assignment/model/displaySelectors.js";
 
+// Stable fallback functions defined at module scope to prevent new references on every render.
+const _defaultLogError = (...args) => console.error(...args);
+const _defaultBuildRosterTeams = buildStaffComboboxTeams;
+const _defaultLoadMstMap = getMSTMap;
+const _defaultLoadTeamRoster = getTeamRoster;
+const _defaultSortRows = sortMSTRows;
+const _defaultSubscribeRoster = subscribeTeamRoster;
+
 export default function useMSTAssignmentBootstrapWorkspace({
   createRowState,
   makeRowKey,
@@ -16,12 +24,12 @@ export default function useMSTAssignmentBootstrapWorkspace({
   deps = {},
 }) {
   const {
-    buildRosterTeams = buildStaffComboboxTeams,
-    loadMstMap = getMSTMap,
-    loadTeamRoster = getTeamRoster,
-    logError = (...args) => console.error(...args),
-    sortRows = sortMSTRows,
-    subscribeRoster = subscribeTeamRoster,
+    buildRosterTeams = _defaultBuildRosterTeams,
+    loadMstMap = _defaultLoadMstMap,
+    loadTeamRoster = _defaultLoadTeamRoster,
+    logError = _defaultLogError,
+    sortRows = _defaultSortRows,
+    subscribeRoster = _defaultSubscribeRoster,
   } = deps;
 
   const [rosterSnapshot, setRosterSnapshot] = useState(() => loadTeamRoster());
@@ -53,6 +61,7 @@ export default function useMSTAssignmentBootstrapWorkspace({
       logError("getMSTMap error:", error);
     }
   }, [createRowState, loadMstMap, logError, makeRowKey, setOriginalRows, setRows, sortRows]);
+
 
   return {
     rosterSnapshot,

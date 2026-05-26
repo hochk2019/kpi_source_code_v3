@@ -73,6 +73,14 @@
 - Verify: `pnpm exec eslint tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js packages/backend-shared/src/testing/index.js`; `pnpm exec vitest run tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js --environment node`; `pnpm verify:server-retirement`; `pnpm bd:check`.
 - Handoff: direct imports da ve 0, nhung `packages/backend-shared/src/testing/index.js` van la quarantine layer re-export `server/index.js` de phuc vu legacy route suite (`/api/auth/*`, `/api/bootstrap`, `/api/notifications`, `/api/ai/*`, ...); muon dong that su `cng-sr1.6` can thay layer nay bang harness/modular runtime khong con import noi bo vao `server/`.
 
+### Checkpoint: 2026-05-26 / repo-wide stabilization
+
+- Done: fixed frontend/backend/test instability across import preview, KPI adjustment dialogs, lazy KPI dialogs, StaffCombobox mocks, ExportDropdown double-select handling, reviewed-row refresh, and server-v4 ESM cron locale import.
+- Verify: `pnpm run typecheck:frontend`; `pnpm run typecheck:server-v4`; `pnpm lint`; `pnpm run build:server-v4`; `pnpm run build`; `NODE_OPTIONS=--max-old-space-size=8192 pnpm run test:all` => 398 files passed, 1501 tests passed, 9 skipped.
+- Risk: lint still has 31 pre-existing warnings; axe/jsdom still logs pseudo-element `getComputedStyle` warnings during a11y tests, but all tests pass.
+- Decision: keep changes scoped to stabilization and test harness compatibility; commit all existing uncommitted work per user request.
+- Next: no new open follow-up from this stabilization slice.
+
 ### Checkpoint: cng-0if.8.1 / frontend test stabilization partial
 
 - Done: stabilized KPIAdjustments, KPICalculator, reporting*, rules*, MSTAssignment-related tests, and `useDataImporterActionGuards` against the new DOM and async storage/dialog flows.

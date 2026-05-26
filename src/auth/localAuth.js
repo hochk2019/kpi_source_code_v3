@@ -663,6 +663,9 @@ export function listAccounts() {
 
 
 
+/**
+ * @param {string} [role]
+ */
 export function getPermissionTemplate(role = DEFAULT_ROLE) {
 
   return getRolePermissionTemplate(role);

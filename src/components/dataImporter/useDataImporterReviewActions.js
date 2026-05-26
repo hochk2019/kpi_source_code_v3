@@ -47,7 +47,7 @@ export default function useDataImporterReviewActions({
       return;
     }
 
-    const updated = markDeclRowsReviewed?.(allowedKeys, { actor }) ?? 0;
+    const updated = await (markDeclRowsReviewed?.(allowedKeys, { actor }) ?? 0);
     if (updated === 0) {
       await alert("Các tờ khai đã được đánh dấu hoặc không tìm thấy.");
     }
@@ -65,7 +65,7 @@ export default function useDataImporterReviewActions({
 
     setSelectedKeys?.([]);
     setHasUnsaved?.(false);
-    loadSavedRows?.({ bypassConfirm: true });
+    await loadSavedRows?.({ bypassConfirm: true });
     fetchAlerts?.();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -113,7 +113,7 @@ export default function useDataImporterReviewActions({
       return;
     }
 
-    const updated = unmarkDeclRowsReviewed?.(reviewedKeys, { actor }) ?? 0;
+    const updated = await (unmarkDeclRowsReviewed?.(reviewedKeys, { actor }) ?? 0);
     if (updated === 0) {
       await alert("Không tìm thấy tờ khai nào để bỏ đánh dấu.");
     }
@@ -131,7 +131,7 @@ export default function useDataImporterReviewActions({
 
     setSelectedKeys?.([]);
     setHasUnsaved?.(false);
-    loadSavedRows?.({ bypassConfirm: true });
+    await loadSavedRows?.({ bypassConfirm: true });
     fetchAlerts?.();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

@@ -54,13 +54,15 @@ function buildHistoryIndex(entries = []) {
 const NOOP_ALERT = () => {};
 const DEFAULT_HISTORY_LIMIT = 500;
 
+const defaultLoadHistoryEntries = () => getMSTHistoryEntries(DEFAULT_HISTORY_LIMIT);
+
 export default function useMSTAssignmentHistoryWorkspace({
   addQuickFavorite,
   goToFirstPage,
   alertFn = typeof window !== "undefined" && typeof window.alert === "function"
     ? window.alert.bind(window)
     : NOOP_ALERT,
-  loadHistoryEntries = () => getMSTHistoryEntries(DEFAULT_HISTORY_LIMIT),
+  loadHistoryEntries = defaultLoadHistoryEntries,
 }) {
   const [historyEntries, setHistoryEntries] = useState(() => loadHistoryEntries() || []);
   const [historyFilter, setHistoryFilter] = useState({

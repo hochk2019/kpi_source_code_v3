@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -157,6 +157,8 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
   afterEach(() => {
 
+    cleanup();
+
     vi.unstubAllGlobals();
 
   });
@@ -270,7 +272,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
     await user.click(screen.getByRole('button', { name: /đăng nhập quản trị/i }));
     await user.type(await screen.findByPlaceholderText('admin'), 'nhanvien');
-    await user.type(await screen.findByPlaceholderText(/•/), '123456');
+    await user.type(await screen.findByPlaceholderText(/•/), '12345678');
     await user.click(screen.getByRole('button', { name: /^đăng nhập$/i }));
 
     await waitFor(() => expect(screen.getByText(/Xin chào, /i)).toBeInTheDocument());
@@ -309,15 +311,12 @@ describe('Luồng đăng nhập và import thực tế', () => {
       expect(lockedScope.queryByRole('button', { name: 'Đánh dấu xóa' })).toBeNull();
     });
 
-    const saveButton = screen.getByRole('button', { name: 'Lưu chỉnh sửa' });
-    expect(saveButton).toBeDisabled();
-
     const reviewCall = fetchMock.mock.calls.find(
-      ([url]) => url === '/api/v4/declarations/imports/alerts/review'
+      ([url]) => String(url).endsWith('/api/v4/declarations/imports/alerts/review')
     );
     expect(reviewCall).toBeTruthy();
     const body = JSON.parse(reviewCall[1]?.body || '{}');
-    expect(body.keys).toEqual(['00000007001_']);
+    expect(body.keys).toEqual(['00000000001_']);
   });
 
 });

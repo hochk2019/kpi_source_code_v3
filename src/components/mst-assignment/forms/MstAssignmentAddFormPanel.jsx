@@ -53,6 +53,7 @@ export default function MstAssignmentAddFormPanel({
             placeholder="Chọn nhân viên nhập"
             ariaLabel="Người phụ trách Nhập"
             searchAriaLabel="Tìm người phụ trách Nhập"
+            searchPlaceholder="Tìm nhân viên Nhập"
             onSelect={onImportSelect}
           />
         </label>
@@ -65,6 +66,7 @@ export default function MstAssignmentAddFormPanel({
             placeholder="Chọn nhân viên xuất"
             ariaLabel="Người phụ trách Xuất"
             searchAriaLabel="Tìm người phụ trách Xuất"
+            searchPlaceholder="Tìm nhân viên Xuất"
             onSelect={onExportSelect}
           />
         </label>

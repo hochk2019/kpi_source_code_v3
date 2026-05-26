@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { emitCommand } = vi.hoisted(() => ({
   emitCommand: vi.fn(),
@@ -16,6 +16,10 @@ import KpiAdjustmentSettingsDialog from "@/components/kpi-adjustments/panels/Kpi
 
 beforeEach(() => {
   emitCommand.mockReset();
+});
+
+afterEach(() => {
+  cleanup();
 });
 
 describe("kpi adjustment dialogs", () => {
@@ -62,7 +66,7 @@ describe("kpi adjustment dialogs", () => {
       />
     );
 
-    const dialog = screen.getByTestId("kpi-adjust-detail-dialog");
+    const dialog = screen.getByRole("dialog", { name: "Chi tiết mục điểm" });
     const queries = within(dialog);
 
     expect(queries.getByText("Lan")).toBeInTheDocument();

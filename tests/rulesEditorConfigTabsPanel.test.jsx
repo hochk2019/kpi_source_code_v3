@@ -131,7 +131,7 @@ describe("RulesConfigTabsPanel", () => {
     expect(await screen.findByText(/Các bậc cộng thêm/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Chọn mã loại hình/i }));
-    const matches = await screen.findAllByText(/Nhập kinh doanh/i);
+    const matches = await screen.findAllByText("A11");
     fireEvent.click(matches[matches.length - 1]);
 
     await waitFor(() => {

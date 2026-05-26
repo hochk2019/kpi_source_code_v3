@@ -428,7 +428,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }: 
 
   useEffect(() => {
     const unsubscribe = subscribePerformanceTelemetry((summary: unknown) => {
-      setFrontendPerformanceSummary(summary as Record<string, unknown>);
+      setFrontendPerformanceSummary(summary as ReturnType<typeof getPerformanceTelemetrySummary>);
     });
     return () => {
       unsubscribe?.();

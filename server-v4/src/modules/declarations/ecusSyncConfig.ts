@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import cron from 'node-cron';
 import cronstrue from 'cronstrue';
-import 'cronstrue/locales/vi';
+import 'cronstrue/locales/vi.js';
 
 import { normalizeMst, normalizeStr } from '../../legacy/legacy-normalizers.js';
 

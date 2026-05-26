@@ -90,7 +90,7 @@ function findSelectByOptionValue(value) {
 
 describe('KPIAdjustments UI', () => {
 
-  beforeEach(() => {
+  beforeEach(async () => {
 
     const now = new Date();
 
@@ -111,11 +111,11 @@ describe('KPIAdjustments UI', () => {
 
     };
 
-    sharedSetItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify(baseSettings));
+    await sharedSetItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify(baseSettings));
 
-    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+    await sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
 
-    sharedSetItem(
+    await sharedSetItem(
 
       TEAM_KEY,
 
@@ -123,7 +123,7 @@ describe('KPIAdjustments UI', () => {
 
     );
 
-    sharedSetItem(
+    await sharedSetItem(
 
       DECL_KEY,
 
@@ -138,7 +138,7 @@ describe('KPIAdjustments UI', () => {
 
     );
 
-    saveKpiAdjustment(
+    await saveKpiAdjustment(
 
       {
 
@@ -254,7 +254,7 @@ describe('KPIAdjustments UI', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
 
-    await userEvent.click(toggle);
+    fireEvent.click(toggle);
 
 
 

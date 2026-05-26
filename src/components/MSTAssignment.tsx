@@ -79,6 +79,7 @@ import {
 } from "@/components/ui/command.tsx";
 import type { AuthAccountView } from '@/types';
 import { t } from '@/lib/i18n.js';
+import { useAppDialog } from '@/hooks/useAppDialog.tsx';
 
 interface MSTAssignmentProps {
   canEdit?: boolean;
@@ -88,6 +89,7 @@ interface MSTAssignmentProps {
 export default function MSTAssignment({ canEdit = true, currentUser = null }: MSTAssignmentProps) {
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [originalRows, setOriginalRows] = useState<Record<string, unknown>[]>([]);
+  const { alert: appAlert } = useAppDialog();
   const actor = currentUser?.username || "guest";
   const { initialPageSize, persistPageSize } = useMSTAssignmentPageSize();
   const {
@@ -265,6 +267,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }: MS
     setRecentlyImportedKeys,
     setRows,
     goToFirstPage,
+    alertFn: appAlert,
   });
 
   const {

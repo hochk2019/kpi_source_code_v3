@@ -444,7 +444,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
 
 
   const handleCreate = async (event) => {
-
+    console.log('--- FORM SUBMITTED ---', form);
     event.preventDefault();
 
     setError("");

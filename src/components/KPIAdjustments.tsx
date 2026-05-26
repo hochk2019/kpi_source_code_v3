@@ -556,60 +556,66 @@ export default function KPIAdjustments({ currentUser }: KPIAdjustmentsProps) {
 
   return (
     <div className="space-y-6">
-      <Suspense fallback={null}>
-        <KpiAdjustmentDetailDialog
-          open={Boolean(detailEntry)}
-          detailLabel={detailLabel}
-          detailData={detailData}
-          detailCategoryConfig={detailCategoryConfig}
-          detailExtraQuantity={detailExtraQuantity}
-          detailExtraUnit={detailExtraUnit}
-          detailExtraTotal={detailExtraTotal}
-          detailIntent={detailIntent}
-          statusLabels={STATUS_LABELS}
-          formatDecimal={formatDecimal}
-          formatDateTime={formatDateTime}
-          decisionNote={decisionNote}
-          onDecisionNoteChange={setDecisionNote}
-          showClearLicenseAction={Boolean(form.licenseCode)}
-          onClearLicenseCode={() => handleLicenseChange("")}
-          onClose={closeDetailDialog}
-          onConfirm={handleDetailConfirm}
-          decisionNoteFieldId={FORM_FIELD_IDS.decisionNote}
-        />
-      </Suspense>
+      {detailEntry ? (
+        <Suspense fallback={null}>
+          <KpiAdjustmentDetailDialog
+            open={Boolean(detailEntry)}
+            detailLabel={detailLabel}
+            detailData={detailData}
+            detailCategoryConfig={detailCategoryConfig}
+            detailExtraQuantity={detailExtraQuantity}
+            detailExtraUnit={detailExtraUnit}
+            detailExtraTotal={detailExtraTotal}
+            detailIntent={detailIntent}
+            statusLabels={STATUS_LABELS}
+            formatDecimal={formatDecimal}
+            formatDateTime={formatDateTime}
+            decisionNote={decisionNote}
+            onDecisionNoteChange={setDecisionNote}
+            showClearLicenseAction={Boolean(form.licenseCode)}
+            onClearLicenseCode={() => handleLicenseChange("")}
+            onClose={closeDetailDialog}
+            onConfirm={handleDetailConfirm}
+            decisionNoteFieldId={FORM_FIELD_IDS.decisionNote}
+          />
+        </Suspense>
+      ) : null}
 
-      <Suspense fallback={null}>
-        <KpiAdjustmentGuidanceDialog
-          open={guidanceOpen}
-          fullscreen={guidanceFullscreen}
-          guidanceGroups={guidanceGroups}
-          formatDecimal={formatDecimal}
-          onOpenChange={setGuidanceOpen}
-          onToggleFullscreen={() => setGuidanceFullscreen((current: boolean) => !current)}
-          onOpenSettings={() => {
-            setGuidanceOpen(false);
-            openSettingsDialog();
-          }}
-        />
-      </Suspense>
+      {guidanceOpen ? (
+        <Suspense fallback={null}>
+          <KpiAdjustmentGuidanceDialog
+            open={guidanceOpen}
+            fullscreen={guidanceFullscreen}
+            guidanceGroups={guidanceGroups}
+            formatDecimal={formatDecimal}
+            onOpenChange={setGuidanceOpen}
+            onToggleFullscreen={() => setGuidanceFullscreen((current: boolean) => !current)}
+            onOpenSettings={() => {
+              setGuidanceOpen(false);
+              openSettingsDialog();
+            }}
+          />
+        </Suspense>
+      ) : null}
 
-      <Suspense fallback={null}>
-        <KpiAdjustmentSettingsDialog
-          open={settingsOpen}
-          focusCategory={settingsFocusCategory}
-          settingsDraft={settingsDraft}
-          settingsError={settingsError}
-          settingsSaving={settingsSaving}
-          onOpenChange={(open: boolean) => (open ? setSettingsOpen(true) : closeSettingsDialog())}
-          onClose={closeSettingsDialog}
-          onReset={handleSettingsReset}
-          onSubmit={handleSettingsSubmit}
-          onUpdateDraft={updateSettingsDraft}
-          buildSettingsFieldId={buildSettingsFieldId}
-          buildLicenseFieldId={buildLicenseFieldId}
-        />
-      </Suspense>
+      {settingsOpen ? (
+        <Suspense fallback={null}>
+          <KpiAdjustmentSettingsDialog
+            open={settingsOpen}
+            focusCategory={settingsFocusCategory}
+            settingsDraft={settingsDraft}
+            settingsError={settingsError}
+            settingsSaving={settingsSaving}
+            onOpenChange={(open: boolean) => (open ? setSettingsOpen(true) : closeSettingsDialog())}
+            onClose={closeSettingsDialog}
+            onReset={handleSettingsReset}
+            onSubmit={handleSettingsSubmit}
+            onUpdateDraft={updateSettingsDraft}
+            buildSettingsFieldId={buildSettingsFieldId}
+            buildLicenseFieldId={buildLicenseFieldId}
+          />
+        </Suspense>
+      ) : null}
 
       <PageHeader
         eyebrow="HIỆU SUẤT"

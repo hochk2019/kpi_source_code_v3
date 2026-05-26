@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Download, ChevronDown, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -38,19 +38,24 @@ export function ExportDropdown({
   className,
 }: ExportDropdownProps) {
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const busyRef = useRef(false);
 
   const handleSelect = async (item: ExportItem) => {
-    if (item.disabled || busy) return;
+    if (item.disabled || busyRef.current) return;
+    setOpen(false);
+    busyRef.current = true;
     setBusy(true);
     try {
       await onExport(item);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild disabled={disabled || busy}>
         <button
           type="button"
@@ -81,7 +86,14 @@ export function ExportDropdown({
           <DropdownMenuItem
             key={item.id}
             disabled={item.disabled || busy}
-            onSelect={() => handleSelect(item)}
+            onClick={(event) => {
+              event.preventDefault();
+              void handleSelect(item);
+            }}
+            onSelect={(event) => {
+              event.preventDefault();
+              void handleSelect(item);
+            }}
             className={cn(
               "flex flex-col items-start gap-0.5 cursor-pointer",
               item.disabled && "opacity-60"
