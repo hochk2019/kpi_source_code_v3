@@ -10,6 +10,10 @@ import { fileURLToPath } from 'node:url'
 
 import process from 'node:process'
 
+import { manualChunks } from './src/build/chunkStrategy.js'
+
+import { buildManifestPlugin } from './src/build/buildManifestPlugin.js'
+
 
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -59,6 +63,7 @@ export default defineConfig({
         }
       },
     },
+    buildManifestPlugin(),
   ],
 
   resolve: {
@@ -77,41 +82,7 @@ export default defineConfig({
 
       output: {
 
-        manualChunks(id) {
-
-          if (id.includes('node_modules')) {
-
-            if (id.includes('react-dom') || id.includes('scheduler')) {
-
-              return 'vendor-react-dom';
-
-            }
-
-            if (id.includes('lucide-react')) {
-              return 'vendor-lucide';
-            }
-
-            if (id.includes('radix-ui')) {
-              return 'vendor-radix';
-            }
-
-            if (id.includes('recharts')) {
-              return 'vendor-recharts';
-            }
-
-            if (id.includes('zod') || id.includes('hookform')) {
-              return 'vendor-form';
-            }
-
-            if (id.includes('framer-motion')) {
-              return 'vendor-motion';
-            }
-
-          }
-
-          return undefined;
-
-        },
+        manualChunks,
 
       },
 

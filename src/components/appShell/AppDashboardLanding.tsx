@@ -8,6 +8,7 @@ import { useChartPalette } from '@/designSystem/hooks.js';
 import { SummaryCard, TeamPieWidget, TopStaffWidget, TrendLineChart } from '@/components/reporting/ReportingOverviewWidgets.jsx';
 import { formatInt, formatDecimal } from '@/components/reporting/reportingDetailUtils.js';
 import { PageHeader } from '@/components/designSystem/PageHeader';
+import { PageLayout } from '@/components/layout/PageLayout';
 import { EmptyState } from '@/components/designSystem/primitives';
 import { t } from '@/lib/i18n.js';
 import type { AuthAccountView } from '@/types';
@@ -130,6 +131,7 @@ export default function AppDashboardLanding({
   ];
 
   return (
+    <PageLayout title={t('dashboard.title') || "Dashboard"}>
     <section
       id="app-workflow-dashboard-landing"
       tabIndex={-1}
@@ -242,5 +244,6 @@ export default function AppDashboardLanding({
         </div>
       )}
     </section>
+    </PageLayout>
   );
 }

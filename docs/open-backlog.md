@@ -133,6 +133,12 @@ Frozen inventory: `docs/server-retirement-inventory.json`
 - `cng-sr1.5` - legacy-test-and-orphan-helper-migration (closed; all direct runtime/test imports from `server/**` are removed and the verifier baseline is fully zeroed)
 - `cng-sr1.6` - server-entrypoint-retirement-and-delete (in progress; replace the temporary `@kpi/backend-shared/testing` quarantine that still forwards to `server/index.js`, then delete `server/`)
 
+## System Redesign 2026 — Backend Coverage
+
+Spec: `.kiro/specs/system-redesign-2026`
+
+- `cng-4gc` - Reconstruct full AI assistant backend in Server_V4 (open; task 7.4 audit shipped a thin `/api/v4/ai/*` module returning 503 `AI_NOT_CONFIGURED` in `server-v4/src/modules/ai/aiRoutes.ts` because the legacy AI backend was deleted with `server/`. Rebuild provider dispatch, config persistence, KPI snapshot, insights generation, and cache, then wire `registerAiRoutes` deps into the AI domain module.)
+
 ## Hard-gate Cutover Program
 
 Epic: `cng-m2r` (closed)  

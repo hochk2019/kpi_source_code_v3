@@ -1,0 +1,41 @@
+{
+  "description": "Recorded inventory of Legacy_Server (`server/`) HTTP endpoints used for endpoint-by-endpoint parity verification against Server_V4 (`server-v4/`). The legacy `server/` directory was physically removed during the server-retirement program (epic cng-sr1, bead cng-sr1.6), so this frozen snapshot is the source of truth for the legacy API surface. Provenance: derived from the legacy-compatibility layer that Server_V4 preserves verbatim (`server-v4/src/app/legacyCompatRoutes.ts` + `server-v4/src/app/legacy-compat/*`) plus the canonical `/api/v4/*` domain modules that replaced each legacy handler. Each entry declares how Server_V4 satisfies the legacy contract: `canonical` (a `/api/v4/*` route registered by a domain module) or `legacy-compat` (the legacy path is still served by the compatibility router shim).",
+  "legacyDirectory": "server",
+  "legacyDirectoryRemoved": true,
+  "retirementEpic": "cng-sr1",
+  "generatedFrom": [
+    "server-v4/src/app/legacyCompatRoutes.ts",
+    "server-v4/src/app/legacy-compat/legacyCompatAuthRoutes.ts",
+    "server-v4/src/app/legacy-compat/legacyCompatBootstrapRoutes.ts",
+    "server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts",
+    "server-v4/src/app/legacy-compat/legacyCompatImporterRoutes.ts",
+    "server-v4/src/modules/auth/auth.module.ts"
+  ],
+  "routes": [
+    { "method": "POST", "legacyPath": "/api/auth/login", "coverage": "canonical", "v4Path": "/api/v4/auth/login", "module": "auth" },
+    { "method": "GET", "legacyPath": "/api/auth/session", "coverage": "canonical", "v4Path": "/api/v4/auth/session", "module": "auth" },
+    { "method": "POST", "legacyPath": "/api/auth/logout", "coverage": "canonical", "v4Path": "/api/v4/auth/logout", "module": "auth" },
+    { "method": "GET", "legacyPath": "/api/auth/accounts", "coverage": "canonical", "v4Path": "/api/v4/auth/accounts", "module": "auth" },
+    { "method": "POST", "legacyPath": "/api/auth/accounts", "coverage": "canonical", "v4Path": "/api/v4/auth/accounts", "module": "auth" },
+    { "method": "PATCH", "legacyPath": "/api/auth/accounts/:username", "coverage": "canonical", "v4Path": "/api/v4/auth/accounts/:username", "module": "auth" },
+    { "method": "POST", "legacyPath": "/api/auth/accounts/:username/password", "coverage": "legacy-compat", "module": "auth" },
+    { "method": "DELETE", "legacyPath": "/api/auth/accounts/:username", "coverage": "legacy-compat", "module": "auth" },
+    { "method": "POST", "legacyPath": "/api/auth/password/change", "coverage": "legacy-compat", "module": "auth" },
+    { "method": "GET", "legacyPath": "/api/bootstrap", "coverage": "legacy-compat", "module": "auth" },
+    { "method": "GET", "legacyPath": "/api/health", "coverage": "legacy-compat", "module": "app" },
+    { "method": "GET", "legacyPath": "/api/storage/:key", "coverage": "legacy-compat", "module": "storage" },
+    { "method": "PUT", "legacyPath": "/api/storage/:key", "coverage": "legacy-compat", "module": "storage" },
+    { "method": "POST", "legacyPath": "/api/import/ecus/preview", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "POST", "legacyPath": "/api/import/ecus/run", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "GET", "legacyPath": "/api/import/alerts", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "GET", "legacyPath": "/api/import/alerts/config", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "PUT", "legacyPath": "/api/import/alerts/config", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "POST", "legacyPath": "/api/import/alerts/review", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "POST", "legacyPath": "/api/import/alerts/unreview", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "GET", "legacyPath": "/api/import/co-codes", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "PUT", "legacyPath": "/api/import/co-codes", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "GET", "legacyPath": "/api/import/co-discrepancy", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "POST", "legacyPath": "/api/import/co-discrepancy/run", "coverage": "legacy-compat", "module": "declarations" },
+    { "method": "PUT", "legacyPath": "/api/import/co-discrepancy/config", "coverage": "legacy-compat", "module": "declarations" }
+  ]
+}

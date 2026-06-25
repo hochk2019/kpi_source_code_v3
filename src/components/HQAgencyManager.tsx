@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAppDialog } from '@/hooks/useAppDialog';
 import { t } from '@/lib/i18n.js';
 import type { AuthAccountView } from '@/types';
+import { PageLayout } from "@/components/layout/PageLayout";
 
 import {
   upsertHQAgencies,
@@ -885,6 +886,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }: 
   }, []);
 
   return (
+    <PageLayout title="Đại lý HQ">
     <section className="hq-agency-view space-y-4">
       <HQAgencyManagerControls
         agencyFilter={agencyFilter}
@@ -951,5 +953,6 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }: 
         thủ công từng dòng.
       </p>
     </section>
+    </PageLayout>
   );
 }

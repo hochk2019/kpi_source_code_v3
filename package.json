@@ -14,8 +14,8 @@
     "prelint": "node scripts/check-server.mjs",
     "lint": "eslint .",
     "lint:server-v4": "eslint \"server-v4/src/**/*.ts\"",
-    "format:check": "prettier --check eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\" \"server/ecus/**/*.js\" \"server/https/**/*.js\"",
-    "format:write": "prettier --write eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\" \"server/ecus/**/*.js\" \"server/https/**/*.js\"",
+    "format:check": "prettier --check eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\"",
+    "format:write": "prettier --write eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\"",
     "preview": "vite preview",
     "test": "vitest run --config vitest.frontend.config.mjs",
     "test:all": "vitest run",
@@ -32,6 +32,7 @@
     "typecheck:server-v4": "tsc -p tsconfig.server-v4.json --noEmit",
     "verify:server-v4": "pnpm run lint:server-v4 && pnpm run typecheck:server-v4 && pnpm run test:server-v4",
     "verify:server-retirement": "node scripts/check-server-retirement.mjs",
+    "verify:legacy-parity": "node --experimental-strip-types scripts/verify-legacy-parity.ts",
     "verify:smoke:core": "pnpm run verify:server-v4 && pnpm run test:smoke:core",
     "verify:v4:parity": "node scripts/v4-parity-suite.mjs --scope full",
     "verify:v4:parity:quick": "node scripts/v4-parity-suite.mjs --scope quick",
@@ -58,7 +59,8 @@
     "bd:safe": "node scripts/bd-safe.mjs",
     "bd:check": "node scripts/check-bd-consistency.mjs",
     "api:contract:report": "node scripts/check-frontend-api-contract.mjs",
-    "api:contract:gate": "node scripts/check-frontend-api-contract.mjs --fail-on-legacy"
+    "api:contract:gate": "node scripts/check-frontend-api-contract.mjs --fail-on-legacy",
+    "api:contract:ci": "node scripts/check-frontend-api-contract.mjs --fail-on-new-gaps"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -146,6 +148,7 @@
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
+    "fast-check": "^4.8.0",
     "fast-xml-parser": "^4.5.1",
     "gitnexus": "1.6.3",
     "globals": "^16.0.0",

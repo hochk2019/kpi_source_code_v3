@@ -137,6 +137,7 @@ function mapRouteError(error) {
 export function createStandaloneEcusBridgeHttpHandler({
   host,
   controlToken = '',
+  healthMonitor = null,
 } = {}) {
   ensureHostContract(host);
 
@@ -147,6 +148,18 @@ export function createStandaloneEcusBridgeHttpHandler({
 
     try {
       if (method === 'GET' && path === '/health') {
+        // When a HealthMonitor is wired in, return the full HealthReport
+        // (Requirements 10.1, 10.5). Otherwise fall back to legacy status.
+        if (healthMonitor && typeof healthMonitor.getHealth === 'function') {
+          const report = await healthMonitor.getHealth();
+          const isHealthy = report.status !== 'unhealthy';
+          return toJson(response, isHealthy ? 200 : 503, {
+            ok: isHealthy,
+            service: 'ecus-bridge',
+            ...report,
+          });
+        }
+
         const status = await host.getStatus({ refreshHealth: true });
         const isHealthy = status?.health?.ok !== false;
         return toJson(response, 200, {
@@ -198,11 +211,12 @@ export function createStandaloneEcusBridgeHttpHandler({
 export function createStandaloneEcusBridgeHttpServer({
   host,
   controlToken = '',
+  healthMonitor = null,
   hostname = DEFAULT_HOSTNAME,
   port = DEFAULT_PORT,
   createServerImpl = http.createServer,
 } = {}) {
-  const handler = createStandaloneEcusBridgeHttpHandler({ host, controlToken });
+  const handler = createStandaloneEcusBridgeHttpHandler({ host, controlToken, healthMonitor });
   const server = createServerImpl(handler);
 
   return {

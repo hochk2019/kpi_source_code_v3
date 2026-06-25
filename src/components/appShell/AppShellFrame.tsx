@@ -3,6 +3,7 @@ import React from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import RuntimeErrorBoundary from '@/components/errorBoundaries/RuntimeErrorBoundary.jsx';
 import { PageHeader } from '@/components/designSystem/PageHeader';
+import { BackgroundStatusIndicator } from '@/components/appShell/BackgroundStatusIndicator';
 
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
@@ -230,6 +231,9 @@ export default function AppShellFrame({
           </div>
         </div>
       </div>
+
+      {/* Persistent, non-blocking background operation indicator (Req 4.5) */}
+      <BackgroundStatusIndicator />
     </Tabs>
   );
 }

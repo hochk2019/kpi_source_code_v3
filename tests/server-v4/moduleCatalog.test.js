@@ -19,6 +19,7 @@ describe('server-v4 module catalog', () => {
       'kpi-rules',
       'kpi-adjustments',
       'reporting',
+      'ai',
     ]);
   });
 

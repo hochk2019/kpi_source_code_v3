@@ -5,6 +5,7 @@ import CommandCenterFooter from '@/components/command-center/CommandCenterFooter
 import CommandCenterResultsList from '@/components/command-center/CommandCenterResultsList.jsx';
 import CommandCenterSearchInput from '@/components/command-center/CommandCenterSearchInput.jsx';
 import useCommandCenterState from '@/components/command-center/useCommandCenterState.js';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useTheme } from '@/designSystem/useTheme.js';
 import { t } from '@/lib/i18n.js';
 import type { AuthAccountView } from '@/types/index.js';
@@ -105,6 +106,15 @@ export default function CommandCenter({
     }
   }, [updateQuery, openDialog]);
 
+  // WCAG 2.1 AA focus management (Req 5.5): trap Tab focus inside the modal
+  // and restore focus to the trigger on close. `autoFocus` is disabled because
+  // useCommandCenterState already moves focus to the search input on open.
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    active: open,
+    onEscape: closeDialog,
+    autoFocus: false,
+  });
+
   return (
     <>
       {/* UX-005: Inline search bar in collapsed header */}
@@ -126,6 +136,7 @@ export default function CommandCenter({
       {open ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 px-4 py-24 backdrop-blur-sm">
           <div
+            ref={dialogRef}
             id={dialogId}
             role="dialog"
             aria-modal="true"

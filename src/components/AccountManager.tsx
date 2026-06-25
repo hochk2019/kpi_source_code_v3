@@ -57,6 +57,7 @@ import {
 
 } from "@/components/designSystem/primitives.jsx";
 import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import {
   SearchField,
   SectionHeader,
@@ -1239,6 +1240,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   return (
+    <PageLayout title={t('account.title') || "Quản lý Tài khoản"}>
     <div className="p-6 space-y-4">
       {/* Page Header */}
       <PageHeader
@@ -1372,6 +1374,7 @@ export default function AccountManager({ currentUser }: AccountManagerProps) {
       />
 
     </div>
+    </PageLayout>
 
   );
 

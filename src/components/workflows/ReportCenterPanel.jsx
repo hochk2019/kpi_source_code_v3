@@ -7,6 +7,7 @@ import {
   APP_SHELL_WORKFLOW_TARGETS,
 } from "@/components/appShell/appShellWorkflowState.js";
 import { Info, Download } from "lucide-react";
+import { PageLayout } from "@/components/layout/PageLayout";
 
 const ReportViewer = React.lazy(() => import("@/components/ReportViewer"));
 const ExportAuditReport = React.lazy(() => import("@/components/ExportAuditReport"));
@@ -29,6 +30,7 @@ export default function ReportCenterPanel({
   onNavigate,
 }) {
   return (
+    <PageLayout title="Report Center">
     <div className="space-y-6">
 
       {/* Lumina Ivory Master Header */}
@@ -96,5 +98,6 @@ export default function ReportCenterPanel({
       </div>
 
     </div>
+    </PageLayout>
   );
 }

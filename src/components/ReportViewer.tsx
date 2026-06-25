@@ -33,6 +33,7 @@ import useReportViewerReadModel from "@/components/reporting/useReportViewerRead
 import useReportViewerTemplates from "@/components/reporting/useReportViewerTemplates.js";
 import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.tsx";
 import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { FilterBar, ExportDropdown } from "@/components/designSystem/primitives";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -517,6 +518,7 @@ export default function ReportViewer({
   const [activeReportTab, setActiveReportTab] = useState('overview');
 
   return (
+    <PageLayout title="Báo cáo KPI">
     <div className="space-y-4">
       <PageHeader
         eyebrow="HIỆU SUẤT"
@@ -699,5 +701,6 @@ export default function ReportViewer({
         </div>
       </SectionSurface>
     </div>
+    </PageLayout>
   );
 }

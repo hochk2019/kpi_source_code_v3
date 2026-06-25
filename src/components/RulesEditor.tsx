@@ -18,6 +18,7 @@ import type { AuthAccountView } from '@/types';
 import { PageHeader } from "@/components/designSystem/PageHeader";
 import { PermissionBanner } from "@/components/designSystem/primitives";
 import { FileText, History, TestTube } from "lucide-react";
+import { PageLayout } from "@/components/layout/PageLayout";
 
 function formatHistoryTimestamp(value: string | null | undefined): string {
   if (!value) return "—";
@@ -109,6 +110,7 @@ export default function RulesEditor({ canEdit = true, currentUser = null }: Rule
   ];
 
   return (
+    <PageLayout title="Quy tắc KPI">
     <div className="p-6 space-y-4">
       {/* Page Header */}
       <PageHeader
@@ -255,5 +257,6 @@ export default function RulesEditor({ canEdit = true, currentUser = null }: Rule
         )}
       </div>
     </div>
+    </PageLayout>
   );
 }

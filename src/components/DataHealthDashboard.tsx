@@ -22,6 +22,7 @@ import {
 } from '@/lib/frontendPerformanceTelemetry.js';
 import type { AuthAccountView } from '@/types';
 import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { PermissionBanner } from "@/components/designSystem/primitives";
 import { LayoutDashboard, AlertTriangle, Database, Server, Bell } from "lucide-react";
 
@@ -1534,6 +1535,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }: 
   ];
 
   return (
+    <PageLayout title="Sức khỏe Dữ liệu">
     <div className="p-6 space-y-4">
       {/* Page Header */}
       <PageHeader
@@ -1689,6 +1691,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }: 
         )}
       </div>
     </div>
+    </PageLayout>
 
   );
 

@@ -55,6 +55,37 @@ describe('server-v4 KPI rules history route wiring', () => {
     });
     expect(historyHandler).toHaveBeenCalledTimes(1);
   });
+
+  it('serves /api/v4/rules/history as legacy alias for /api/v4/kpi-rules/history', async () => {
+    const historyHandler = vi.fn(async (_req, res) => {
+      res.json({
+        ok: true,
+        history: [{ id: 'alias-entry', actor: 'admin', action: 'kpi.rules.activate' }],
+      });
+    });
+
+    const app = buildV4App({
+      modules: [kpiRulesModule],
+      kpiRules: {
+        getRulesHistory: historyHandler,
+      },
+      persistence: {
+        mode: 'postgres',
+        sourceKind: 'relational-store',
+        kpiRulesReader: createKpiRulesReaderStub(),
+        dispose: async () => {},
+      },
+    });
+
+    const response = await request(app).get('/api/v4/rules/history');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      ok: true,
+      history: [{ id: 'alias-entry', actor: 'admin', action: 'kpi.rules.activate' }],
+    });
+    expect(historyHandler).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createKpiRulesReaderStub() {

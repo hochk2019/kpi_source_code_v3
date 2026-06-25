@@ -3,6 +3,7 @@ import { useAppDialog } from '@/hooks/useAppDialog';
 
 import { t } from '@/lib/i18n.js';
 import { PageHeader } from '@/components/designSystem/PageHeader';
+import { PageLayout } from '@/components/layout/PageLayout';
 import { PermissionBanner, FilterBar } from '@/components/designSystem/primitives';
 import { Settings, BarChart3, List } from "lucide-react";
 
@@ -555,6 +556,7 @@ export default function KPIAdjustments({ currentUser }: KPIAdjustmentsProps) {
   const detailLabel = detailIntent === "approve" ? "Duyệt điểm" : detailIntent === "reject" ? "Từ chối điểm" : "Chi tiết mục điểm";
 
   return (
+    <PageLayout title="Điểm KPI +/- Thêm">
     <div className="space-y-6">
       {detailEntry ? (
         <Suspense fallback={null}>
@@ -806,5 +808,6 @@ export default function KPIAdjustments({ currentUser }: KPIAdjustmentsProps) {
 
       </Tabs>
     </div>
+    </PageLayout>
   );
 }

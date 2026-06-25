@@ -70,3 +70,6 @@ jobs:
 
       - name: Run repo smoke gate
         run: pnpm run test:smoke:core
+
+      - name: Contract verification (fail on new gaps)
+        run: pnpm run api:contract:ci

@@ -19,3 +19,4 @@ test-results/
 /node
 .claude/
 !.claude/skills/gitnexus/
+reports/contract-report.json

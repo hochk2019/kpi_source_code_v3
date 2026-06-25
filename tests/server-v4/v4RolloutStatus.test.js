@@ -26,6 +26,7 @@ const implementedModuleIds = [
   'mst-assignments',
   'reporting',
   'teams',
+  'ai',
 ];
 const implementedModules = moduleCatalog.filter((entry) => implementedModuleIds.includes(entry.id));
 const catalogRoutes = moduleCatalog.flatMap((entry) => entry.routeGroups.flatMap((group) => group.routes));

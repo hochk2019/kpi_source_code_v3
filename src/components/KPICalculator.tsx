@@ -5,45 +5,42 @@ import { TabsContent } from '@/components/ui/tabs';
 import { useKpiPermissions } from '@/hooks/useKpiPermissions.js';
 import type { AuthAccountView } from '@/types/index.js';
 
-const DataImporter = React.lazy(() => import('./DataImporter.tsx'));
-
-const RulesEditor = React.lazy(() => import('./RulesEditor.tsx'));
-
-const TeamManager = React.lazy(() => import('./TeamManager.tsx'));
-
-const AccountManager = React.lazy(() => import('./AccountManager.tsx'));
-
-
-
-const AiAssistant = React.lazy(() => import('./AiAssistant'));
-
-const DataHealthDashboard = React.lazy(() => import('./DataHealthDashboard.tsx'));
-
-const ExportAuditReport = React.lazy(() => import('./ExportAuditReport'));
-
-const AuditLog = React.lazy(() => import('./AuditLog.tsx'));
-
 import {
   APP_SHELL_FALLBACK_TAB,
 } from '@/lib/appShellNavigation';
 import { getAppTabRootId } from '@/components/appShell/appShellWorkflowState.js';
-import { AppShellLoadingState } from '@/components/appShell/AppShellAsyncStates.jsx';
 import AppShellFrame from '@/components/appShell/AppShellFrame';
-import AppDashboardLanding from '@/components/appShell/AppDashboardLanding.tsx';
 import useKpiShellState from '@/components/appShell/useKpiShellState.js';
+import { useNavigationState } from '@/hooks/useNavigationState';
 import { emitCommand } from '@/lib/commandBus.js';
-const MstHqContainer = React.lazy(() => import('./MstHqContainer'));
-const KPIAdjustmentsWorkflowPanel = React.lazy(() =>
-  import('@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx'),
-);
-const ReportCenterPanel = React.lazy(() => import('@/components/workflows/ReportCenterPanel.jsx'));
 import { SectionHeader, SectionSurface } from '@/components/designSystem/shellPrimitives.tsx';
 import RuntimeErrorBoundary from '@/components/errorBoundaries/RuntimeErrorBoundary.jsx';
+import PageSkeleton from '@/components/PageSkeleton';
 import {
   getDefaultDeviceHint,
   recordScreenRenderMetric,
   startWebVitalsCapture,
 } from '@/lib/frontendPerformanceTelemetry.js';
+
+// ─── Route-Level Lazy Loading (all 13 Page_Modules) ────────────────────────
+
+export const PAGE_MODULES = {
+  DataImporter: React.lazy(() => import('./DataImporter.tsx')),
+  RulesEditor: React.lazy(() => import('./RulesEditor.tsx')),
+  ReportViewer: React.lazy(() => import('./ReportViewer')),
+  TeamManager: React.lazy(() => import('./TeamManager.tsx')),
+  MSTAssignment: React.lazy(() => import('./MstHqContainer')),
+  KPIAdjustments: React.lazy(() => import('@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx')),
+  AccountManager: React.lazy(() => import('./AccountManager.tsx')),
+  HQAgencyManager: React.lazy(() => import('./HQAgencyManager')),
+  DataHealthDashboard: React.lazy(() => import('./DataHealthDashboard.tsx')),
+  AuditLog: React.lazy(() => import('./AuditLog.tsx')),
+  AiAssistant: React.lazy(() => import('./AiAssistant')),
+  ReportCenter: React.lazy(() => import('@/components/workflows/ReportCenterPanel.jsx')),
+  AppDashboardLanding: React.lazy(() => import('./appShell/AppDashboardLanding.tsx')),
+} as const;
+
+const ExportAuditReport = React.lazy(() => import('./ExportAuditReport'));
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -69,10 +66,8 @@ interface KPICalculatorProps {
 
 const TabPanelLoadingState = ({ tabLabel }: TabPanelLoadingStateProps) => (
   <div aria-live="polite" role="status">
-    <AppShellLoadingState
-      title={t('shell.loading', { module: tabLabel })}
-      description={t('shell.loadingDesc')}
-    />
+    <span className="sr-only">{t('shell.loading', { module: tabLabel })}</span>
+    <PageSkeleton />
   </div>
 );
 
@@ -127,7 +122,9 @@ const KPICalculator = ({
     navigationIntent,
   });
 
-
+  // Preserve scroll/filter state per Page_Module across same-session tab
+  // navigation: auto-saves on tab leave, auto-restores on return. (Req 4.4)
+  useNavigationState(tabValue);
 
   useEffect(() => {
 
@@ -215,7 +212,7 @@ const KPICalculator = ({
           {loadedTabs.has('dashboard') ? (
             <TabPanel panelRootId={getAppTabRootId('dashboard')} tabLabel="Tổng quan KPI">
 
-              <AppDashboardLanding
+              <PAGE_MODULES.AppDashboardLanding
                 currentUser={effectiveAuth}
                 sections={navigationSections}
                 onNavigate={requestTabNavigation}
@@ -235,7 +232,7 @@ const KPICalculator = ({
           {loadedTabs.has('mst-hq') ? (
             <TabPanel panelRootId={getAppTabRootId('mst-hq')} tabLabel="Gán MST & HQ">
 
-              <MstHqContainer
+              <PAGE_MODULES.MSTAssignment
                 currentUser={effectiveAuth}
                 canManageMst={canMstEdit}
                 canManageHq={true}
@@ -253,7 +250,7 @@ const KPICalculator = ({
           {loadedTabs.has('import') ? (
             <TabPanel panelRootId={getAppTabRootId('import')} tabLabel="Import Data">
 
-              <DataImporter
+              <PAGE_MODULES.DataImporter
                 canEdit={canImportEdit}
                 canImportUpload={canImportUpload}
                 currentUser={effectiveAuth}
@@ -273,7 +270,7 @@ const KPICalculator = ({
           {loadedTabs.has('teams') ? (
             <TabPanel panelRootId={getAppTabRootId('teams')} tabLabel="Quản lý tổ đội">
 
-              <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
+              <PAGE_MODULES.TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
 
             </TabPanel>
           ) : null}
@@ -287,7 +284,7 @@ const KPICalculator = ({
           {loadedTabs.has('rules') ? (
             <TabPanel panelRootId={getAppTabRootId('rules')} tabLabel="Quy tắc KPI">
 
-              <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
+              <PAGE_MODULES.RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
 
             </TabPanel>
           ) : null}
@@ -301,7 +298,7 @@ const KPICalculator = ({
           {loadedTabs.has('adjustments') ? (
             <TabPanel panelRootId={getAppTabRootId('adjustments')} tabLabel="Điểm KPI +/- Thêm">
 
-              <KPIAdjustmentsWorkflowPanel
+              <PAGE_MODULES.KPIAdjustments
                 currentUser={effectiveAuth}
                 onNavigate={requestTabNavigation}
               />
@@ -318,7 +315,7 @@ const KPICalculator = ({
           {loadedTabs.has('reports') ? (
             <TabPanel panelRootId={getAppTabRootId('reports')} tabLabel="Báo cáo KPI">
 
-              <ReportCenterPanel
+              <PAGE_MODULES.ReportCenter
                 canExport={canExportReports}
                 canViewAudit={canViewAudit}
                 currentUser={effectiveAuth}
@@ -348,7 +345,7 @@ const KPICalculator = ({
                     title="Health & sync triage"
                     info="Kiểm tra đồng bộ, cảnh báo dữ liệu và backlog trước khi chuyển sang module xử lý tương ứng."
                   />
-                  <DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
+                  <PAGE_MODULES.DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
                 </SectionSurface>
 
               </TabPanel>
@@ -367,7 +364,7 @@ const KPICalculator = ({
             {loadedTabs.has('ai') ? (
               <TabPanel panelRootId={getAppTabRootId('ai')} tabLabel="Trợ lý AI">
 
-                <AiAssistant currentUser={effectiveAuth} />
+                <PAGE_MODULES.AiAssistant currentUser={effectiveAuth} />
 
               </TabPanel>
             ) : null}
@@ -385,7 +382,7 @@ const KPICalculator = ({
             {loadedTabs.has('accounts') ? (
               <TabPanel panelRootId={getAppTabRootId('accounts')} tabLabel="Tài khoản">
 
-                <AccountManager currentUser={effectiveAuth} />
+                <PAGE_MODULES.AccountManager currentUser={effectiveAuth} />
 
               </TabPanel>
             ) : null}
@@ -409,7 +406,7 @@ const KPICalculator = ({
 
                 <div className="space-y-6">
 
-                  <AuditLog currentUser={effectiveAuth} />
+                  <PAGE_MODULES.AuditLog currentUser={effectiveAuth} />
 
                 </div>
 

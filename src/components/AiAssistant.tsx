@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { AuthAccountView, AccountPermissions } from '@/types';
 import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { PermissionBanner } from "@/components/designSystem/primitives";
 
 import AiAssistantChatPanel from '@/components/ai-assistant/panels/AiAssistantChatPanel.jsx';
@@ -303,6 +304,7 @@ export default function AiAssistant({ currentUser }: AiAssistantProps) {
   );
 
   return (
+    <PageLayout title="AI Assistant">
     <div className="p-6 space-y-4">
       {/* Page Header */}
       <PageHeader
@@ -365,5 +367,6 @@ export default function AiAssistant({ currentUser }: AiAssistantProps) {
         </div>
       ) : null}
     </div>
+    </PageLayout>
   );
 }

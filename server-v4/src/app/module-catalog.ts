@@ -1,4 +1,5 @@
 import type { DomainModule } from './domain-module.js';
+import { aiModule } from '../modules/ai/ai.module.js';
 import { alertsModule } from '../modules/alerts/alerts.module.js';
 import { authModule } from '../modules/auth/auth.module.js';
 import { backupModule } from '../modules/backup/backup.module.js';
@@ -29,4 +30,5 @@ export const moduleCatalog: readonly DomainModule[] = Object.freeze([
   kpiRulesModule,
   kpiAdjustmentsModule,
   reportingModule,
+  aiModule,
 ]);

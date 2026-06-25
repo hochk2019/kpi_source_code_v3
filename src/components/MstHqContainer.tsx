@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Building2, FileSpreadsheet, History } from "lucide-react";
 import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { PermissionBanner } from "@/components/designSystem/primitives";
 import { t } from "@/lib/i18n.js";
 import type { AuthAccountView } from "@/types";
@@ -57,6 +58,7 @@ export default function MstHqContainer({
   }
 
   return (
+    <PageLayout title="Gán MST & Đại lý HQ">
     <div className="mst-hq-container space-y-3">
       <PageHeader
         eyebrow="VẬN HÀNH"
@@ -114,5 +116,6 @@ export default function MstHqContainer({
         )}
       </div>
     </div>
+    </PageLayout>
   );
 }

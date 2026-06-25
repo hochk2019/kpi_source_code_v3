@@ -603,6 +603,21 @@ const translations = {
     'shell.hero.commandCenterAriaLabel': 'Mở Command Center (Ctrl+K)',
     'shell.hero.searchPlaceholder': 'Tìm kiếm...',
     'shell.error.description': 'Đã xảy ra lỗi khi hiển thị nội dung. Bạn có thể thử hiển thị lại hoặc chuyển sang tab khác.',
+    'shell.background.ariaLabel': 'Trạng thái tác vụ nền',
+    'shell.background.activeCount': 'Đang xử lý {count} tác vụ nền',
+
+    // Destructive action confirmation (Req 4.3)
+    'destructive.delete.title': 'Xác nhận xóa',
+    'destructive.delete.confirm': 'Xóa',
+    'destructive.overwrite.title': 'Xác nhận ghi đè',
+    'destructive.overwrite.confirm': 'Ghi đè',
+    'destructive.reset.title': 'Xác nhận đặt lại',
+    'destructive.reset.confirm': 'Đặt lại',
+
+    // Unsaved changes navigation guard (Req 5.1)
+    'unsaved.title': 'Thay đổi chưa được lưu',
+    'unsaved.message': 'Bạn có thay đổi chưa được lưu. Nếu rời đi, các thay đổi này sẽ bị mất. Bạn có chắc chắn muốn tiếp tục?',
+    'unsaved.confirm': 'Rời đi',
 
     // Login
     'login.title': 'Đăng nhập hệ thống KPI',

@@ -1,6 +1,8 @@
 import express, { type Request, type Response, type Router } from 'express';
+import { z } from 'zod';
 
 import type { DomainModule } from '../../app/domain-module.js';
+import { validateBody } from '../../middleware/validateBody.js';
 import type { AuthStore } from '../auth/authStore.js';
 import { KpiRulesController } from './KpiRulesController.js';
 import { KpiRulesRepository } from './KpiRulesRepository.js';
@@ -12,6 +14,15 @@ import type { KpiRulesStore } from './kpiRulesStore.js';
 export type KpiRulesRuntime = {
   getRulesHistory?: (req: Request, res: Response) => Promise<void> | void;
 };
+
+const createRuleSetRouteSchema = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().trim().optional(),
+  applyFrom: z.string().trim().optional(),
+  groups: z.record(z.string(), z.object({}).passthrough()).optional(),
+  license: z.object({}).passthrough().optional(),
+  bonuses: z.object({}).passthrough().optional(),
+});
 
 export function buildKpiRulesRouter(
   domainModule: DomainModule,
@@ -40,7 +51,7 @@ export function buildKpiRulesRouter(
   });
 
   router.get('/', (req, res) => void controller.list(req, res));
-  router.post('/', (req, res) => void controller.create(req, res));
+  router.post('/', validateBody(createRuleSetRouteSchema), (req, res) => void controller.create(req, res));
   router.post('/:ruleSetId/activate', (req, res) => void controller.activate(req, res));
 
   return router;

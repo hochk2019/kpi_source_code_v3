@@ -11,6 +11,7 @@ import {
   translateBackupFailure,
 } from '../../packages/domain/src/backupMessages.js';
 import type { AuthAccountView } from '@/types';
+import { PageLayout } from "@/components/layout/PageLayout";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -554,6 +555,7 @@ export default function AuditLog({ currentUser }: AuditLogProps) {
   })();
 
   return (
+    <PageLayout title={t('audit.title')}>
     <div className="audit-log-view space-y-6">
       {/* Master Header */}
       <div className="group/hq-header relative mb-6">
@@ -969,6 +971,7 @@ export default function AuditLog({ currentUser }: AuditLogProps) {
         </div>
       </section>
     </div>
+    </PageLayout>
   );
 }
 

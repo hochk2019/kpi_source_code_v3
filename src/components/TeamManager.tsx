@@ -22,6 +22,7 @@ import EmptyState from "@/components/shared/EmptyState.tsx";
 import { loadXlsx } from "@/lib/loadXlsx.js";
 import type { AuthAccountView, TeamRecord, TeamRoster } from '@/types';
 import { PageHeader } from "@/components/designSystem/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { PermissionBanner } from "@/components/designSystem/primitives";
 import { Users, Building2, History } from "lucide-react";
 
@@ -578,6 +579,7 @@ function TeamManager({ canEdit = true, currentUser = null }: TeamManagerProps) {
   );
 
   return (
+    <PageLayout title="Quản lý Tổ đội">
     <div className="p-6 space-y-4">
       {/* Page Header */}
       <PageHeader
@@ -758,6 +760,7 @@ function TeamManager({ canEdit = true, currentUser = null }: TeamManagerProps) {
         </div>
       )}
     </div>
+    </PageLayout>
   );
 }
 

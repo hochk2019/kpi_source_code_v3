@@ -2,8 +2,10 @@ import express, { type Express, type Router } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 
+import { apiVersionHeaders, notFoundHandler, errorFormatter } from '../middleware/apiContract.js';
 import { resolveServerV4Config, type ServerV4ConfigInput } from '../config/server-v4-config.js';
 import { buildAlertsRouter } from '../modules/alerts/alertsRoutes.js';
+import { buildAiRouter } from '../modules/ai/aiRoutes.js';
 import { createAlertsRuntime, type AlertsRuntime } from '../modules/alerts/alertsRuntime.js';
 import { buildAuthRouter } from '../modules/auth/authRoutes.js';
 import { buildBackupRouter } from '../modules/backup/backupRoutes.js';
@@ -142,6 +144,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     'mst-assignments',
     'teams',
     'reporting',
+    'ai',
   ]);
 
   app.disable('x-powered-by');
@@ -150,6 +153,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(express.json());
   app.use(createCsrfProtection());
+  app.use(apiVersionHeaders);
   app.locals.runtimePersistenceDispose = async () => {
     await alertsRuntime.dispose?.();
     await persistence.dispose();
@@ -206,6 +210,11 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
       continue;
     }
 
+    if (domainModule.id === 'ai') {
+      app.use(domainModule.basePath, buildAiRouter(domainModule));
+      continue;
+    }
+
     if (domainModule.id === 'auth') {
       app.use(domainModule.basePath, buildAuthRouter(domainModule, persistence.authStore));
       continue;
@@ -249,16 +258,16 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     }
 
     if (domainModule.id === 'kpi-rules') {
-      app.use(
-        domainModule.basePath,
-        buildKpiRulesRouter(
-          domainModule,
-          persistence.kpiRulesReader,
-          persistence.kpiRulesStore,
-          persistence.authStore,
-          options.kpiRules,
-        ),
+      const kpiRulesRouter = buildKpiRulesRouter(
+        domainModule,
+        persistence.kpiRulesReader,
+        persistence.kpiRulesStore,
+        persistence.authStore,
+        options.kpiRules,
       );
+      app.use(domainModule.basePath, kpiRulesRouter);
+      // Legacy alias: frontend calls /api/v4/rules/history (basePath mismatch)
+      app.use('/api/v4/rules', kpiRulesRouter);
       continue;
     }
 
@@ -335,6 +344,10 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
 
     app.use(domainModule.basePath, buildDefaultModuleRouter(domainModule));
   }
+
+  // --- API Contract: 404 catch-all and error formatter (must be last) ---
+  app.use(notFoundHandler);
+  app.use(errorFormatter);
 
   return app;
 }
